@@ -247,19 +247,51 @@ class LeitorXLS:
             # Limpa espaços em branco e mete os títulos em minúsculas
             df.columns = [str(col).strip().lower() for col in df.columns]
             
-            # Mapeia 'val' para 'numero' e 'color' para 'cor' (Padrão exato do teu ficheiro)
+            # Mapeamento FLEXÍVEL com múltiplas possibilidades
             mapeamento_colunas = {
-                'val': 'numero', 
-                'color': 'cor',
+                'val': 'numero',
+                'value': 'numero',
+                'num': 'numero',
+                'number': 'numero',
+                'resultado': 'numero',
                 'roll': 'numero',
-                'resultado': 'numero'
+                'giro': 'numero',
+                'rodada': 'numero',
+                'spin': 'numero',
+                'color': 'cor',
+                'cor': 'cor',
+                'colour': 'cor',
+                'resultado_cor': 'cor',
+                'color_result': 'cor',
+                'result': 'cor'
             }
             df = df.rename(columns=mapeamento_colunas)
             
-            # Validação estrita: se não achar as colunas, o disjuntor trava
-            if 'numero' not in df.columns or 'cor' not in df.columns:
+            # Procura por colunas usando prefixos/sufixos se renomeação direta falhar
+            colunas_atuais = df.columns.tolist()
+            col_numero = None
+            col_cor = None
+            
+            for col in colunas_atuais:
+                col_lower = str(col).lower().strip()
+                if any(x in col_lower for x in ['val', 'num', 'number', 'roll', 'giro', 'rodada', 'spin', 'result']) and not any(x in col_lower for x in ['color', 'cor']):
+                    col_numero = col
+                if any(x in col_lower for x in ['color', 'cor', 'colour']):
+                    col_cor = col
+            
+            # Se ainda não encontrou, tenta as primeiras 2 colunas
+            if col_numero is None and len(colunas_atuais) >= 1:
+                col_numero = colunas_atuais[0]
+            if col_cor is None and len(colunas_atuais) >= 2:
+                col_cor = colunas_atuais[1]
+            
+            # Validação final
+            if col_numero is None or col_cor is None:
                 return None
-                
+            
+            # Renomeia as colunas encontradas para padrão
+            df = df.rename(columns={col_numero: 'numero', col_cor: 'cor'})
+            
             # Inverte o arquivo para ordem cronológica (do mais antigo para o mais recente)
             df_cronologico = df.iloc[::-1].reset_index(drop=True)
             if len(df_cronologico) < 15: 
@@ -275,11 +307,11 @@ class LeitorXLS:
                     # Se a cor for '1' ou 'red' -> Vermelho (V)
                     # Se a cor for '2' ou 'black' -> Preto (P)
                     # Se a cor for '0' ou 'white' -> Branco (B)
-                    if cor_original in ['1', 'red', 'vermelho', 'v']:
+                    if cor_original in ['1', 'red', 'vermelho', 'v', 'true']:
                         cor_final = 'V'
-                    elif cor_original in ['2', 'black', 'preto', 'p']:
+                    elif cor_original in ['2', 'black', 'preto', 'p', 'false']:
                         cor_final = 'P'
-                    elif cor_original in ['0', 'white', 'branco', 'b']:
+                    elif cor_original in ['0', 'white', 'branco', 'b', 'none']:
                         cor_final = 'B'
                     else:
                         # Segurança baseada estritamente no número do giro
