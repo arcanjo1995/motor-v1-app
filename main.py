@@ -235,11 +235,68 @@ class LeitorXLS:
         self.caminho = caminho_arquivo
 
     def ler_e_validar(self):
-        if not os.path.exists(self.caminho): return None
+        if not os.path.exists(self.caminho): 
+            return None
         try:
-            df = pd.read_excel(self.caminho)
+            # Tenta ler como Excel, se falhar (como no iPad), lê como CSV
+            try:
+                df = pd.read_excel(self.caminho)
+            except:
+                df = pd.read_csv(self.caminho)
+                
+            # Limpa espaços em branco e mete os títulos em minúsculas
             df.columns = [str(col).strip().lower() for col in df.columns]
+            
+            # Mapeia 'val' para 'numero' e 'color' para 'cor' (Padrão exato do teu ficheiro)
+            mapeamento_colunas = {
+                'val': 'numero', 
+                'color': 'cor',
+                'roll': 'numero',
+                'resultado': 'numero'
+            }
+            df = df.rename(columns=mapeamento_colunas)
+            
+            # Validação estrita: se não achar as colunas, o disjuntor trava
+            if 'numero' not in df.columns or 'cor' not in df.columns:
+                return None
+                
+            # Inverte o arquivo para ordem cronológica (do mais antigo para o mais recente)
             df_cronologico = df.iloc[::-1].reset_index(drop=True)
-            if len(df_cronologico) < 15: return None
-            return [{"numero": int(l["numero"]), "cor": str(l["cor"]).strip().upper()} for _, l in df_cronologico.iterrows()]
-        except: return None
+            if len(df_cronologico) < 15: 
+                return None
+                
+            dados_limpos = []
+            for _, l in df_cronologico.iterrows():
+                try:
+                    num_val = int(l["numero"])
+                    cor_original = str(l["cor"]).strip().lower()
+                    
+                    # Tradução inteligente baseada no teu ficheiro:
+                    # Se a cor for '1' ou 'red' -> Vermelho (V)
+                    # Se a cor for '2' ou 'black' -> Preto (P)
+                    # Se a cor for '0' ou 'white' -> Branco (B)
+                    if cor_original in ['1', 'red', 'vermelho', 'v']:
+                        cor_final = 'V'
+                    elif cor_original in ['2', 'black', 'preto', 'p']:
+                        cor_final = 'P'
+                    elif cor_original in ['0', 'white', 'branco', 'b']:
+                        cor_final = 'B'
+                    else:
+                        # Segurança baseada estritamente no número do giro
+                        if num_val == 0: cor_final = 'B'
+                        elif 1 <= num_val <= 7: cor_final = 'V'
+                        else: cor_final = 'P'
+                        
+                    dados_limpos.append({
+                        "numero": num_val,
+                        "cor": cor_final
+                    })
+                except:
+                    continue
+                    
+            if not dados_limpos:
+                return None
+                
+            return dados_limpos
+        except: 
+            return None
