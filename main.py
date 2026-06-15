@@ -121,6 +121,7 @@ class MotorNoCall:
         return False, "Evento Neutro Operacional"
 
 class MotorContagensProjetivas:
+    """Módulo de Coexistência e Avaliação de Consequências Futuras Combinadas (Volume 3 e 12)"""
     @staticmethod
     def mapear_janela(sub_num, sub_pol, geometria_mercado):
         lista_bruta = []
@@ -130,24 +131,31 @@ class MotorContagensProjetivas:
             num_atual = sub_num[i]
             if num_atual in REGRAS_PROJECAO:
                 passo = REGRAS_PROJECAO[num_atual]
+                
+                # RELEITURA CRONOLÓGICA CONSEQUENCIAL (Volume 3, Cap 2):
+                # Caso A: O ativador atinge diretamente a casa de fechamento (12ª casa)
                 if i + passo == 11:
-                    if i < 10 and 0 in sub_num[i:11]:
-                        continue
-                    if num_atual == 4:
-                        direcao_sinal = "VERMELHO" if sub_pol[i] == "P" else "PRETO"
-                        identificador_regra = "V3_ATIVADOR_4"
-                    elif num_atual == 6:
-                        direcao_sinal = "PRETO" if "VERMELHO" not in geometria_mercado else "VERMELHO"
-                        identificador_regra = "V3_ATIVADOR_6"
-                    else:
-                        direcao_sinal = "VERMELHO" if sub_pol[i] == "P" else "PRETO"
-                        identificador_regra = f"V3_ATIVADOR_{num_atual}"
-                    
+                    if i < 10 and 0 in sub_num[i:11]: continue
+                    direcao_sinal = "VERMELHO" if sub_pol[i] == "P" else "PRETO"
                     lista_bruta.append({
                         "direcao": direcao_sinal,
-                        "tipo_regra": identificador_regra,
-                        "origem": f"Volume 3: Ativador {num_atual} na {i+1}ª casa"
+                        "tipo_regra": f"V3_ATIVADOR_{num_atual}",
+                        "origem": f"Volume 3: Ativador {num_atual} direto no fechamento"
                     })
+                
+                # Caso B (O CASO DA JANELA 8 REPARADO): O ativador cai dentro da janela, 
+                # mas gera impacto cumulativo de inversão para o final do bloco
+                elif i + passo < 11:
+                    alvo_interno_idx = i + passo
+                    cor_alvo_interno = sub_pol[alvo_interno_idx]
+                    # Se o alvo interno bate com a polaridade do ativador, estende a força de quebra para o final
+                    if cor_alvo_interno == sub_pol[i]:
+                        direcao_sinal = "VERMELHO" if cor_alvo_interno == "P" else "PRETO"
+                        lista_bruta.append({
+                            "direcao": direcao_sinal,
+                            "tipo_regra": f"V3_CADEIA_{num_atual}",
+                            "origem": f"Volume 3: Repercussão em Cadeia do Ativador {num_atual} da {i+1}ª para a {alvo_interno_idx+1}ª casa"
+                        })
 
         if sub_num[11] == 4 and sub_pol[10] == "P":
             lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V12_RETENCAO_4", "origem": "Volume 12: Cap 5 - Retenção do 4 sob Base Preta"})
@@ -235,7 +243,6 @@ class AnalisadorContextoAvancado:
         return chance, atraso_atual
 
 class JuizHierarquicoModificado:
-    """Juiz de Aprendizado de Eficácia de Regras por Recência Viva"""
     @staticmethod
     def arbitrar_sinal(no_call_ativo, motivo_nc, expectations, inclinacao_num, geometria_mercado, previsao_ia, status_inversao, historico_revalida_regras):
         if no_call_ativo: 
@@ -256,11 +263,10 @@ class JuizHierarquicoModificado:
             
             for item in expectations:
                 id_r = item["tipo_regra"]
-                # CALIBRALÇÃO DE PESO VIVO POR RECÊNCIA: Se a regra estiver performando bem no XLS, o peso dela sobe dinamicamente
                 taxa_acerto_recente = historico_revalida_regras[id_r]["acertos"] / max(1, historico_revalida_regras[id_r]["total"])
                 
-                # Base de soberania do manual multiplicada pela taxa real de eficácia do momento atual do arquivo
-                base_soberania = 3.0 if "V12_" in id_r else 2.0
+                # Ativadores de Volume 3 e Cadeias agora têm o mesmo peso base dos acoplamentos do V12 para permitir o cruzamento real
+                base_soberania = 3.0
                 peso_vivo = base_soberania * (1.0 + taxa_acerto_recente)
                 
                 forcas[item["direcao"]] += peso_vivo
@@ -273,10 +279,10 @@ class JuizHierarquicoModificado:
                 sinal_dominante = "VERMELHO" if forcas["VERMELHO"] > forcas["PRETO"] else "PRETO"
                 regra_vencedora_id = maior_peso_id[sinal_dominante][0]
                 
-                # Intercepção flexível se a IA recente detectar a quebra do ciclo dominante enfraquecido
+                # Se houver conflito de forças, a IA desempatará baseando-se estritamente na tendência viva das fatias de recência
                 if direcao_ia != "NEUTRO" and direcao_ia != sinal_dominante and confianca_ia >= 59.0:
                     sinal_projetado = direcao_ia
-                    justificativa_proj = f"Intercepção por IA de Recência ({confianca_ia:.1f}%) quebrando dominância enfraquecida de {sinal_dominante}."
+                    justificativa_proj = f"Intercepção por IA de Recência ({confianca_ia:.1f}%) equilibrando o conflito com {sinal_dominante}."
                     regra_vencedora_id = "IA_INTERCEPCAO"
                 else:
                     sinal_projetado = sinal_dominante
@@ -328,8 +334,6 @@ class MotorV1Completo:
         self.dados_longo = lista_dados_xls[:corte_recencia]
         self.dados_curto = lista_dados_xls[corte_recencia:]
         self.ia = IAPreditivaV1(self.dados_longo, self.dados_curto)
-        
-        # Criação da tabela viva de revalidação de regras por recência em tempo real
         self.historico_regras = defaultdict(lambda: {"acertos": 1, "total": 1})
 
     def processar_auditoria(self):
@@ -377,7 +381,6 @@ class MotorV1Completo:
                     salto = 3
                 stats[classificacao] += 1
 
-            # ALIMENTAÇÃO DA TABELA DE EFICÁCIA VIVA DAS REGRAS (Foco total em G0 e G1)
             if regra_ativa_id != "NENHUMA" and regra_ativa_id != "SISTEMA_TRAVADO":
                 self.historico_regras[regra_ativa_id]["total"] += 1
                 if classificacao in ["G0", "G1"]:
@@ -461,7 +464,6 @@ class ProcessadorTipoB:
         num_fechamento = self.entrada_usuario[-1]
         inclinacao_num = AnalisadorContextoAvancado.calcular_numerologia_pos_numero(num_fechamento, num_global, pol_global)
         
-        # Criação de tabela dummy neutra apenas para manter compatibilidade com o Tipo B vivo
         regras_b = defaultdict(lambda: {"acertos": 1, "total": 1})
         sinal_final, justificativa, _ = JuizHierarquicoModificado.arbitrar_sinal(
             nc_ativo, motivo_nc, expectativas, inclinacao_num, saturacao, previsao_ia, status_inv, regras_b
