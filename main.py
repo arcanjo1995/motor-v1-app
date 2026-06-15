@@ -95,7 +95,6 @@ class GerenciadorMemoriaViva:
 class MotorNoCall:
     @staticmethod
     def checar_no_call(sub_num, sub_pol):
-        # TRAVAS DE SISTEMA IMUTÁVEIS (Mantidas estritamente para segurança contra Brancos e Duplas repetidas nas casas oficiais)
         cenarios_duplas = [(7, 8), (8, 9), (9, 10), (10, 11)]
         for idx1, idx2 in cenarios_duplas:
             if sub_num[idx1] == sub_num[idx2]:
@@ -153,7 +152,8 @@ class MotorContagensProjetivas:
         elif sub_num[10] == 5 and sub_num[11] == 10:
             expectativas.append({"direcao": "PRETO", "origem": "Volume 12: Cap 4 - Acoplamento 5-10"})
 
-        return expectations
+        # CORREÇÃO DO NAMEERROR: Agora retorna a variável correta em português
+        return expectativas
 
 class AnalisadorContextoAvancado:
     @staticmethod
@@ -239,45 +239,35 @@ class JuizHierarquicoModificado:
         direcao_inclinacao, porc = inclinacao_num
         direcoes_projetadas = list(set([e["direcao"] for e in expectativas]))
 
-        # 1. CRUZAMENTO SEGURO DE CICLOS GEOMÉTRICOS VPPV / PVVP (Volume 6)
-        # Se houver conflito com a contagem estrutural, desempatamos usando a força direcional da IA de Recência
         if geometria_mercado == "CICLO_FECHADO_VPPV":
             if "VERMELHO" in direcoes_projetadas and direcao_ia == "PRETO":
-                return "PRETO", "Fusão Normativa: Ciclo VPPV + Validação da IA convergem para PRETO em G0"
+                return "PRETO", "Fusão Normativa: Ciclo VPPV + Validação da IA convergem para PRETO"
             return "PRETO", "Volume 6 Cap 2: Fechamento de Ciclo Simétrico VPPV -> Forçando PRETO"
             
         if geometria_mercado == "CICLO_FECHADO_PVVP":
             if "PRETO" in direcoes_projetadas and direcao_ia == "VERMELHO":
-                return "VERMELHO", "Fusão Normativa: Ciclo PVVP + Validação da IA convergem para VERMELHO em G0"
+                return "VERMELHO", "Fusão Normativa: Ciclo PVVP + Validação da IA convergem para VERMELHO"
             return "VERMELHO", "Volume 6 Cap 2: Fechamento de Ciclo Simétrico PVVP -> Forçando VERMELHO"
 
-        # 2. CRUZAMENTO CRÍTICO DE INVERSÃO E CONTAGEM (O erro da Janela 7 resolvido)
         if risco_ativo and tipo_inversao == "FALSO_RESPIRO":
             if expectativas:
-                # Se a projeção ativa for contrária, ela anula o antirespiro e vira a mão buscando acerto rápido
                 return direcoes_projetadas[0], f"Filtro Cruzado Supremacia: Projeção quebra Antirespiro -> {expectativas[0]['origem']}"
             cor_dominante = "VERMELHO" if "VERMELHO" in justificativa_inv else "PRETO"
-            return cor_dominante, f"Volume 14 Cap 4 (Filtro Antirespiro): Mantendo {cor_dominante} por recência de bloco."
+            return cor_dominante, f"Volume 14 Cap 4 (Filtro Antirespiro): Mantendo {cor_dominante}."
 
         if risco_ativo and tipo_inversao == "INVERSÃO":
-            if expectativas and direcoes_projetadas[0] != ("PRETO" if "Vermelhos Seguidos" in justificativa_inv else "VERMELHO"):
-                # Se a projeção mandar seguir a exaustão, aceita a quebra estrutural para G0/G1
-                return direcoes_projetadas[0], f"Filtro Cruzado: Projeção Ativa valida Inversão Crítica -> {expectativas[0]['origem']}"
             sinal_inverso = "PRETO" if "Vermelhos Seguidos" in justificativa_inv else "VERMELHO"
             return sinal_inverso, f"Volume 14 Cap 2 (Intercepção de Exaustão): {justificativa_inv}"
 
-        # 3. RESOLUÇÃO AGRESSIVA DE CONFLITOS (Fim do No Call por conflito de regras)
         if expectativas:
             if len(direcoes_projetadas) > 1:
-                # Se houver conflito entre projeções, a IA de recência desempata na hora para buscar G0/G1
                 if direcao_ia in direcoes_projetadas:
                     return direcao_ia, f"Volume 18 (Resolução Agressiva): IA arbitra conflito para {direcao_ia} ({confianca_ia:.1f}%)"
                 if direcao_inclinacao in direcoes_projetadas and porc >= 60.0:
                     return direcao_inclinacao, f"Volume 18: Conflito resolvido por Inclinação Histórica ({porc:.1f}%)"
-                return direcoes_projetadas[0], f"Vetor Inercial Incondicional: Escolha inercial de prioridade de entrada -> {expectativas[0]['origem']}"
+                return direcoes_projetadas[0], f"Vetor Inercial Incondicional -> {expectativas[0]['origem']}"
             return direcoes_projetadas[0], expectativas[0]["origem"]
             
-        # 4. ALINHAMENTO COM A IA E MATRIZ PÓS-NÚMERO
         if direcao_inclinacao != "NEUTRO" and porc >= 60.0:
             return direcao_inclinacao, f"Matriz Pós-Número: {porc:.1f}%"
         if direcao_ia != "NEUTRO" and confianca_ia >= 62.0:
@@ -418,7 +408,6 @@ class ProcessadorTipoB:
         )
 
         chance_branco, casas_atraso = AnalisadorContextoAvancado.preditor_estatistico_branco(num_fechamento, num_global, pol_global)
-        status_recencia = "ATIVA (Peso Triplicado e Balanceamento de 75% Recente)" if base_recencia else "INATIVA"
 
         output_memoria = (
             f"- Mapeamento: Sequência {self.entrada_usuario}\n"
