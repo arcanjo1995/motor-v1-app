@@ -63,14 +63,13 @@ with aba_tipo_b:
             except Exception as e:
                 st.error(f"Erro Crítico no processamento da sequência: {e}")
 
-    # Painel interativo de exibição cruzada e auditoria ao vivo no iPad
+    # Painel interativo de exibição cruzada e auditoria ao vivo no iPad (Linha 81 Corrigida)
     if st.session_state.sinal_pendente:
         st.write("---")
         col1, col2 = st.columns(2)
         
         with col1:
             st.subheader("📝 Rascunho Analítico Interno")
-            # Divide a memória antes do cabeçalho final do Tipo B
             memoria_limpa = st.session_state.log_completo.split("[RESULTADO FINAL TIPO B]")[0]
             st.text_area("Memória de Cálculo", value=memoria_limpa, height=300)
             
@@ -78,4 +77,33 @@ with aba_tipo_b:
             st.subheader("📊 Veredito e Correção Operacional")
             sinal = st.session_state.sinal_pendente
             
-            if sinal
+            if sinal == "NO CALL":
+                st.warning(f"**EXPECTATIVA:** {sinal}")
+                st.caption(f"Motivo: {st.session_state.justificativa_pendente}")
+            else:
+                st.info(f"**EXPECTATIVA ATIVA:** Operar no {sinal}")
+                st.caption(f"Origem: {st.session_state.justificativa_pendente}")
+                
+                st.write("---")
+                st.write("### 🎛️ Registrar Resultado Real da Entrada:")
+                
+                # Botões de clique rápido para salvar o resultado da rodada
+                c1, c2, c3, c4 = st.columns(4)
+                if c1.button("🟢 G0"):
+                    st.success(f"Registrado: Sinal no {sinal} pago em G0!")
+                    st.session_state.sinal_pendente = None
+                if c2.button("🟡 G1"):
+                    st.success(f"Registrado: Sinal no {sinal} pago em G1!")
+                    st.session_state.sinal_pendente = None
+                if c3.button("🟠 G2"):
+                    st.success(f"Registrado: Sinal no {sinal} pago em G2!")
+                    st.session_state.sinal_pendente = None
+                if c4.button("🔴 FALHA"):
+                    st.error(f"Registrado: Estrutura resultou em Falha.")
+                    st.session_state.sinal_pendente = None
+
+# =========================================================================
+# ABA TIPO D — AUDITORIA CRONOLÓGICA DE LONGO PRAZO
+# =========================================================================
+with aba_tipo_d:
+    st.header("📊 Auditoria Cronológica
