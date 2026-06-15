@@ -81,7 +81,18 @@ class MotorContagensProjetivas:
     @staticmethod
     def mapear_janela(sub_num, sub_pol, geometria_mercado):
         expectativas = []
-        REGRAS_PROJECAO = {1: 1, 2: 6, 3: 6, 4: 3, 5: 4, 6: 5, 7: 7}
+        
+        # ALINHAMENTO GEOMÉTRICO ESTREITO CONFORME O VOLUME 3, CAPÍTULO 2 DO MANUAL
+        # O passo mapeia a distância exata até o fechamento da contagem temporal
+        REGRAS_PROJECAO = {
+            1: 1,  # Contagem 1: Imediata
+            2: 2,  # Contagem 2: 2-X -> Fecha em 2 casas
+            3: 3,  # Contagem 3: 3-X-X -> Fecha em 3 casas
+            4: 4,  # Contagem 4: 4-X-X-X -> Fecha em 4 casas
+            5: 5,  # Contagem 5: 5-X-X-X-X -> Fecha em 5 casas
+            6: 6,  # Contagem 6: 6-X-X-X-X-X -> Fecha em 6 casas
+            7: 7   # Contagem 7: 7-X-X-X-X-X-X -> Fecha em 7 casas
+        }
 
         for i in range(12):
             num_atual = sub_num[i]
@@ -99,12 +110,22 @@ class MotorContagensProjetivas:
                         "origem": f"Volume 3: Ativador {num_atual} na {i+1}ª casa"
                     })
 
+        # =========================================================================
+        # ALINHAMENTO INTEGRAL DA REGRA DO NÚMERO 4 (Volume 2 e Volume 12)
+        # =========================================================================
+        # Cenário 1 e 2: O 4 está no fechamento (posição 12) sustentado por base preta
+        if sub_num[11] == 4 and sub_pol[10] == "P":
+            expectativas.append({"direcao": "PRETO", "origem": "Volume 12: Cap 5 - Retenção do 4 sob Base Preta (Cenário 1/2)"})
+            
+        # Cenário 3: O 4 aparece na 10ª casa (idx 9) sustentando a sequência 4-P-P
+        elif sub_num[9] == 4 and sub_pol[10] == "P" and sub_pol[11] == "P":
+            expectativas.append({"direcao": "PRETO", "origem": "Volume 12: Cap 5 - Acoplamento Posicional 4-P-P (Cenário 3)"})
+
+        # Gatilhos Residuais Fixos
         if sub_num[11] == 10:
             expectativas.append({"direcao": "PRETO", "origem": "Volume 12: Cap 2 - Resíduo do 10"})
         elif sub_num[10] == 5 and sub_num[11] == 10:
             expectativas.append({"direcao": "PRETO", "origem": "Volume 12: Cap 4 - Acoplamento 5-10"})
-        if sub_num[11] == 4 and sub_pol[10] == "P":
-            expectativas.append({"direcao": "PRETO", "origem": "Volume 2: Cap 3 - Retenção do 4 sob Base Preta"})
 
         return expectativas
 
@@ -161,7 +182,6 @@ class AnalisadorContextoAvancado:
 class JuizHierarquicoModificado:
     @staticmethod
     def arbitrar_sinal(no_call_ativo, motivo_nc, expectativas, inclinacao_num, geometria_mercado, previsao_ia):
-        # 1. SEGUIMENTOS OFICIAIS DE NO CALL (NÍVEL 1 ABSOLUTO: 2, 6, Branco e Duplas posicionais do Apêndice A)
         if no_call_ativo: 
             return "NO CALL", motivo_nc
 
@@ -169,7 +189,6 @@ class JuizHierarquicoModificado:
         direcao_inclinacao, porc = inclinacao_num
         direcoes_projetadas = list(set([e["direcao"] for e in expectativas]))
 
-        # 2. RESOLUÇÃO COM EXPECTATIVAS DE VOLUME 3 ATIVAS
         if expectativas:
             if len(direcoes_projetadas) > 1:
                 if direcao_ia in direcoes_projetadas:
@@ -179,7 +198,6 @@ class JuizHierarquicoModificado:
                 return "NO CALL", "Volume 18: Conflito Hierárquico Sem Consenso (Cenário de Risco)"
             return direcoes_projetadas[0], expectativas[0]["origem"]
             
-        # 3. SEM ATIVADORES DE VOLUME 3 -> A MATRIZ E A IA ASSUMEM O COMANDO DIRETAMENTE
         if direcao_inclinacao != "NEUTRO" and porc >= 55.0:
             if direcao_ia == direcao_inclinacao:
                 return direcao_inclinacao, f"Matriz + IA Unificadas: Alinhamento de Tendência Global com {confianca_ia:.1f}%"
@@ -188,14 +206,11 @@ class JuizHierarquicoModificado:
         if direcao_ia != "NEUTRO" and confianca_ia >= 58.0:
             return direcao_ia, f"IA Preditiva Isolada: Fluxo Direcional Recente Confirmado de {confianca_ia:.1f}%"
 
-        # 4. EXPURGO ABSOLUTO DE NO CALL POR FALTA DE SINAL (Mapeamento do Mercado Majoritário)
-        # Se chegamos aqui sem travas de nível 1, o Juiz extrai a cor mais provável para cumprir a regra de veredito obrigatório
         if direcao_inclinacao != "NEUTRO":
             return direcao_inclinacao, f"Desempate de Bloco Inercial: Inclinação Majoritária de {porc:.1f}%"
         if direcao_ia != "NEUTRO":
             return direcao_ia, f"Desempate de Bloco Inercial: Vetor Direcional da IA de {confianca_ia:.1f}%"
             
-        # Último recurso absoluto: se tudo for perfeitamente simétrico, desempata pela paridade inercial da última pedra
         return "PRETO", "Arbitragem de Bloco Inercial de Fechamento por Consenso"
 
 class MotorV1Completo:
