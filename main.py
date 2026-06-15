@@ -140,9 +140,6 @@ class MotorContagensProjetivas:
                     alvo_interno_idx = i + passo
                     cor_alvo_interno = sub_pol[alvo_interno_idx]
                     
-                    # REGRA PURA DE CADEIA CONSEQUENCIAL (Volume 3, Cap 3):
-                    # Se o alvo interno for oposto à origem, força a cor base da origem para romper o bloqueio.
-                    # Se as cores forem iguais, mantém a progressão natural de fluxo do ativador.
                     if cor_alvo_interno != sub_pol[i]:
                         direcao_sinal = "VERMELHO" if sub_pol[i] == "V" else "PRETO"
                     else:
@@ -245,7 +242,6 @@ class JuizHierarquicoModificado:
         if no_call_ativo: 
             return "NO CALL", motivo_nc, "SISTEMA_TRAVADO"
 
-        # Correção ortográfica definitiva de escopo
         if geometria_mercado == "CICLO_FECHADO_VPPV":
             return "PRETO", "Geometria VPPV -> Alvo PRETO", "GEOMETRIA"
             
@@ -353,7 +349,7 @@ class MotorV1Completo:
             previsao_ia = self.ia.predizer_proxima_casa(sub_num, sub_pol)
             
             expectativa_final, justificativa, regra_ativa_id = JuizHierarquicoModificado.arbitrar_sinal(
-                nc_ativo, motivo_nc, expectativas, inclinacao_num, geometria, previsao_ia, status_inv, self.historico_regras
+                nc_ativo, motivo_nc, expectations, inclinacao_num, geometria, previsao_ia, status_inv, self.historico_regras
             )
 
             horizonte_max = min(3, self.seq.total - (idx + 12))
@@ -450,33 +446,68 @@ class ProcessadorTipoB:
         num_global = [d['numero'] for d in base_longo]
         pol_global = [d['cor'] for d in base_longo]
 
+        # Instancia a IA contendo a Recência Ativa salva previamente pela Auditoria
         ia_operacional = IAPreditivaV1(base_longo, base_recencia)
-        previsao_ia = ia_operacional.predizer_proxima_casa(self.entrada_usuario, self.polaridades_usuario)
-
+        
+        # Mapeia travas estáticas iniciais
         saturacao = AnalisadorContextoAvancado.mapear_padroes_geometria(self.polaridades_usuario)
         status_inv = AnalisadorContextoAvancado.detectar_chance_inversao(self.polaridades_usuario)
         nc_ativo, motivo_nc = MotorNoCall.checar_no_call(self.entrada_usuario, self.polaridades_usuario)
-        expectativas = MotorContagensProjetivas.mapear_janela(self.entrada_usuario, self.polaridades_usuario, saturacao)
-        
         num_fechamento = self.entrada_usuario[-1]
-        inclinacao_num = AnalisadorContextoAvancado.calcular_numerologia_pos_numero(num_fechamento, num_global, pol_global)
         
+        # Inicializa dicionário dinâmico persistente de pesos para as regras ativas/projetivas
         regras_b = defaultdict(lambda: {"acertos": 1, "total": 1})
-        sinal_final, justificativa, _ = JuizHierarquicoModificado.arbitrar_sinal(
-            nc_ativo, motivo_nc, expectativas, inclinacao_num, saturacao, previsao_ia, status_inv, regras_b
-        )
+        
+        sinal_final = None
+        justificativa_final = ""
+        historico_iteraçoes_log = []
+
+        # =========================================================================
+        # REQUISITO EXCLUSIVO VOL. 22: LOOP DE 15 RELEITURAS CONSECUTIVAS DE VALIDAÇÃO
+        # =========================================================================
+        for ciclo in range(1, 16):
+            # 1. Faz a leitura atual da IA recalculando probabilidades de mercado
+            previsao_ia = ia_operacional.predizer_proxima_casa(self.entrada_usuario, self.polaridades_usuario)
+            
+            # 2. Re-mapeia os ativadores e acoplamentos projetivos vigentes nos 12 números
+            expectativas = MotorContagensProjetivas.mapear_janela(self.entrada_usuario, self.polaridades_usuario, saturacao)
+            
+            # 3. Executa o cálculo numérico posicional
+            inclinacao_num = AnalisadorContextoAvancado.calcular_numerologia_pos_numero(num_fechamento, num_global, pol_global)
+            
+            # 4. O Juiz arbitra o sinal balanceando os acertos acumulados pelas regras até aqui
+            sinal_ciclo, justificativa_ciclo, regra_ativa_id = JuizHierarquicoModificado.arbitrar_sinal(
+                nc_ativo, motivo_nc, expectativas, inclinacao_num, saturacao, previsao_ia, status_inv, regras_b
+            )
+            
+            # 5. Evolução cumulativa interna de pesos: Se uma regra gerou o sinal estabilizado, 
+            # ela ganha score incremental para a próxima releitura, blindando e consolidando o sinal.
+            if regra_ativa_id != "NENHUMA" and regra_ativa_id != "SISTEMA_TRAVADO":
+                regras_b[regra_ativa_id]["total"] += 1
+                regras_b[regra_ativa_id]["acertos"] += 1
+
+            historico_iteraçoes_log.append(f" Releitura {ciclo:02d}/15 -> Sinal: {sinal_ciclo} | Id Regra: {regra_ativa_id}")
+            
+            # Trava os resultados obtidos na última iteração de refinamento como veredito oficial
+            if ciclo == 15:
+                sinal_final = sinal_ciclo
+                justificativa_final = justificativa_ciclo
 
         chance_branco, casas_atraso = AnalisadorContextoAvancado.preditor_estatistico_branco(num_fechamento, num_global, pol_global)
 
+        # Constrói o rascunho de memória de cálculo detalhando as 15 iterações feitas
         output_memoria = (
-            f"- Mapeamento: Sequência {self.entrada_usuario}\n"
-            f"- Geometria da Janela: {saturacao}\n"
-            f"- Resolução de Conflitos: {justificativa}\n"
+            f"[PROCESSO DE 15 RELEITURAS DE VALIDAÇÃO]\n"
+            + "\n".join(historico_iteraçoes_log) + "\n\n"
+            f"[ANÁLISE DE FECHAMENTO]\n"
+            f"- Sequência de Entrada: {self.entrada_usuario}\n"
+            f"- Geometria Detectada: {saturacao}\n"
+            f"- Resolução Final do Juiz: {justificativa_final}\n"
         )
 
         return {
             "sinal": sinal_final,
-            "justificativa": justificativa,
+            "justificativa": justificativa_final,
             "memoria": output_memoria,
             "chance_branco": chance_branco,
             "atraso_branco": casas_atraso,
