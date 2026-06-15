@@ -121,7 +121,6 @@ class MotorNoCall:
         return False, "Evento Neutro Operacional"
 
 class MotorContagensProjetivas:
-    """Módulo de Coexistência e Avaliação Consequencial Combinada (Volume 3 e 12)"""
     @staticmethod
     def mapear_janela(sub_num, sub_pol, geometria_mercado):
         lista_bruta = []
@@ -141,9 +140,9 @@ class MotorContagensProjetivas:
                         direcao_sinal = "PRETO" if "VERMELHO" not in geometria_mercado else "VERMELHO"
                         soberania = 1
                     else:
-                        # Regra Geral do Volume 3 corrigida: Mapeia a inversão baseada na cor do ativador original
+                        # CALIBRALÇÃO SUPREMA (Volume 3): Ajuste de peso de dominância de 1 para 2 para equilibrar conflitos
                         direcao_sinal = "VERMELHO" if sub_pol[i] == "P" else "PRETO"
-                        soberania = 1
+                        soberania = 2
                     
                     lista_bruta.append({
                         "direcao": direcao_sinal,
@@ -246,33 +245,28 @@ class JuizHierarquicoModificado:
         direcao_ia, confianca_ia = previsao_ia
         direcao_inclinacao, porc = inclinacao_num
 
-        # 1. PROCESSAMENTO DE COEXISTÊNCIA E CONFLITO DE REGRAS PROJETIVAS
         sinal_projetado = None
         justificativa_proj = ""
         
         if expectations:
-            # Ponderação Consequencial: Separa os vetores de força para Vermelho e Preto
             forcas = {"VERMELHO": 0, "PRETO": 0}
             origens = {"VERMELHO": [], "PRETO": []}
             
             for item in expectations:
-                # Cada regra contribui com pontos baseados no seu nível de Soberania do manual
                 forcas[item["direcao"]] += item["soberania"]
                 origens[item["direcao"]].append(item["origem"])
                 
-            # CRUZA COM A IA DE RECENCIA PARA DESEMPATAR OU VALIDAR A TENDÊNCIA FUTURA REAL
             if forcas["VERMELHO"] != forcas["PRETO"]:
-                # Se houver uma direção majoritária por peso, avalia se a IA apoia o movimento
                 sinal_dominante = "VERMELHO" if forcas["VERMELHO"] > forcas["PRETO"] else "PRETO"
-                if direcao_ia != "NEUTRO" and direcao_ia != sinal_dominante and confianca_ia >= 65.0:
-                    # Se a IA de recência viva tiver confiança extrema contra a dominância, ela assume para buscar G0/G1
+                
+                # CALIBRAÇÃO DE PROTEÇÃO (Volume 18): Redução da barreira de 65% para 59% para permitir intercepções da IA recente
+                if direcao_ia != "NEUTRO" and direcao_ia != sinal_dominante and confianca_ia >= 59.0:
                     sinal_projetado = direcao_ia
-                    justificativa_proj = f"Intercepção por IA de Recência ({confianca_ia:.1f}%) quebrando a dominância das contagens."
+                    justificativa_proj = f"Intercepção por IA de Recência ({confianca_ia:.1f}%) equilibrando o conflito com {sinal_dominante}."
                 else:
                     sinal_projetado = sinal_dominante
                     justificativa_proj = f"Dominância Combinada Ponderada: " + " + ".join(origens[sinal_dominante])
             else:
-                # Coexistência Perfeita Oposta (Empate de pesos): A IA de recência dita a consequência futura real
                 if direcao_ia != "NEUTRO":
                     sinal_projetado = direcao_ia
                     justificativa_proj = f"Coexistência Oposta resolvida por Vetor Recente da IA ({confianca_ia:.1f}%)"
@@ -280,7 +274,6 @@ class JuizHierarquicoModificado:
                     sinal_projetado = expectations[-1]["direcao"]
                     justificativa_proj = f"Coexistência Oposta resolvida por Proximidade Cronológica: {expectations[-1]['origem']}"
 
-        # 2. HIERARQUIA DE DECISÃO SOBERANA
         if geometria_mercado == "CICLO_FECHADO_VPPV":
             return "PRETO", "Geometria VPPV -> Alvo PRETO"
             
