@@ -269,32 +269,56 @@ class MotorV1Completo:
 
         return self._gerar_relatorio_texto(memorias_calculo, stats, len(janelas_auditadas))
 
-    def _gerar_relatorio_texto(self, memorias, stats, qtd_janelas):
+    def    def _gerar_relatorio_texto(self, memorias, stats, qtd_janelas):
+        # 1. Base Estatística: Segregação das janelas com sinal (Volume 8, Cap 5D)
         total_com_sinal = sum([stats["G0"], stats["G1"], stats["G2"], stats["FALHA"]])
-        denominator = total_com_sinal if total_com_sinal > 0 else 1
-        denominator_nc = qtd_janelas if qtd_janelas > 0 else 1
+        denominador = total_com_sinal if total_com_sinal > 0 else 1
+        denominador_nc = qtd_janelas if qtd_janelas > 0 else 1
 
-        p_g0, p_g1, p_g2, p_fa = (stats["G0"]/denominator)*100, (stats["G1"]/denominator)*100, (stats["G2"]/denominator)*100, (stats["FALHA"]/denominator)*100
-        p_nc = (stats["NO CALL"]/denominator_nc)*100
-        total_v, total_p, total_b = self.seq.polaridades.count("V"), self.seq.polaridades.count("P"), self.seq.polaridades.count("B")
+        # 2. Cálculo Oficial das Taxas de Recência (Volume 8, Cap 5B2)
+        p_g0 = (stats["G0"] / denominador) * 100
+        p_g1 = (stats["G1"] / denominador) * 100
+        p_g2 = (stats["G2"] / denominador) * 100
+        p_fa = (stats["FALHA"] / denominador) * 100
+        p_nc = (stats["NO CALL"] / denominador_nc) * 100
 
-        estado_mercado = "ESTÁVEL" if p_fa < 22 else "INSTABILIDADE"
+        # 3. Classificação Evolutiva do Estágio do Mercado (Volume 8, Cap 14)
+        if p_fa >= 25.0:
+            condicao_mercado = "MERCADO EM DEGRADAÇÃO (Risco Elevado de Falhas)"
+            degradacao = "FORTE"
+            recuperacao = "INEXISTENTE"
+        elif p_g0 >= 50.0:
+            condicao_mercado = "MERCADO PAGADOR (Predominância de G0 Ativo)"
+            degradacao = "INEXISTENTE"
+            recuperacao = "FORTE"
+        elif p_g1 >= 40.0:
+            condicao_mercado = "MERCADO COM ATRASO CONTROLADO (Foco em G1)"
+            degradacao = "LEVE"
+            recuperacao = "MODERADA"
+        elif p_g2 >= 30.0:
+            condicao_mercado = "MERCADO DESLOCADO (G0 Enfraquecido / Alerta G2)"
+            degradacao = "MODERADA"
+            recuperacao = "FRACA"
+        else:
+            condicao_mercado = "MERCADO INSTÁVEL (Oscilação Excessiva de Vetores)"
+            degradacao = "MEDIANA"
+            recuperacao = "MEDIANA"
 
-        output = "[MEMÓRIA DE CÁLCULO DAS JANELAS]\n" + "\n".join(memorias) + "\n\n"
-        output += "[RESULTADO FINAL ESTATÍSTICO]\n"
-        output += f"CRONOLOGIA VALIDADA: {self.seq.total}\n"
-        output += "CONSOLIDAÇÃO DAS JANELAS:\n"
-        output += f" - Janelas Extraídas (Saltos): {qtd_janelas}\n"
+        # 4. Formatação do Bloco de Saída Conforme Protocolo do Volume 22
+        output = "[MEMÓRIA DE CÁLCULO DAS JANELAS MÓVEIS]\n" + "\n".join(memorias) + "\n\n"
+        output += "[RESULTADO FINAL ESTATÍSTICO - BASE DE RECÊNCIA]\n"
+        output += f"CRONOLOGIA VALIDADA: {self.seq.total} Resultados Reconstruídos\n"
+        output += f"TOTAL DE JANELAS AUDITADAS: {qtd_janelas} Saltos Sequenciais\n"
         output += f" - Taxa G0: {stats['G0']} Ocorrências ({p_g0:.2f}%)\n"
         output += f" - Taxa G1: {stats['G1']} Ocorrências ({p_g1:.2f}%)\n"
         output += f" - Taxa G2: {stats['G2']} Ocorrências ({p_g2:.2f}%)\n"
         output += f" - Taxa de Falha: {stats['FALHA']} Ocorrências ({p_fa:.2f}%)\n"
-        output += f" - Taxa de NO CALL: {stats['NO CALL']} Ocorrências ({p_nc:.2f}%)\n"
-        output += f"MACROANÁLISE: Fluxo linear com {total_v}V, {total_p}P e {total_b}B mapeados.\n"
-        output += f"DEGRADAÇÃO: {'FORTE' if p_fa >= 25 else 'INEXISTENTE'}\n"
-        output += f"RECUPERAÇÃO: {'FORTE' if p_g0 >= 45 else 'INEXISTENTE'}\n"
-        output += f"ESTADO ATUAL DO MERCADO: {estado_mercado}\n"
+        output += f" - Taxa de NO CALL: {stats['NO CALL']} Ocorrências ({p_nc:.2f}%)\n\n"
+        output += f"DEGRADAÇÃO EVOLUTIVA: {degradacao}\n"
+        output += f"RECUPERAÇÃO EVOLUTIVA: {recuperacao}\n"
+        output += f"ESTADO ATUAL DO MERCADO: {condicao_mercado}\n"
         return output
+
 
 class LeitorXLS:
     def __init__(self, caminho_arquivo):
