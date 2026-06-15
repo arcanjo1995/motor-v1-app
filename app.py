@@ -1,10 +1,10 @@
 import streamlit as st
 import os
-from main import LeitorXLS, MotorV1Completo, ProcessadorTipoB
+from main import LeitorXLS, MotorV1Completo, ProcessadorTipoB, GerenciadorMemoriaViva
 
 st.set_page_config(page_title="MOTOR V1 - Painel Operacional", page_icon="🛡️", layout="wide")
 st.title("🛡️ Sistema de Auditoria Analítica - MOTOR V1")
-st.caption("Versão Integrada Unificada — Em conformidade com o Volume 22")
+st.caption("Versão Autoaprendizado de Precisão Real — Em conformidade com o Volume 22")
 
 aba_tipo_b, aba_tipo_d = st.tabs([
     "🎯 TIPO B — Sequência Operacional (Sinal Real)", 
@@ -15,7 +15,7 @@ NOME_BASE_DEFINITIVA = "resultados_blaze.xlsx"
 NOME_RECENCIA_ATIVA = "base_recencia_ativa.xlsx"
 
 # =========================================================================
-# ABA TIPO B — SEQUÊNCIA OPERACIONAL E CORREÇÃO MANUAL
+# ABA TIPO B — SEQUÊNCIA OPERACIONAL E ALIMENTAÇÃO REAL
 # =========================================================================
 with aba_tipo_b:
     st.header("🎯 Processamento Operacional Tipo B")
@@ -32,6 +32,8 @@ with aba_tipo_b:
         st.session_state.justificativa_pendente = None
     if "log_completo" not in st.session_state:
         st.session_state.log_completo = ""
+    if "sequencia_em_uso" not in st.session_state:
+        st.session_state.sequencia_em_uso = []
 
     if st.button("🚀 Executar Releituras e Gerar Sinal"):
         if not entrada_numeros:
@@ -50,6 +52,7 @@ with aba_tipo_b:
                     st.session_state.log_completo = output_texto
                     st.session_state.sinal_pendente = None
                     st.session_state.justificativa_pendente = None
+                    st.session_state.sequencia_em_uso = lista_numeros
                     
                     for linha in output_texto.split("\n"):
                         if "SINAL:" in linha:
@@ -68,34 +71,49 @@ with aba_tipo_b:
         with col1:
             st.subheader("📝 Rascunho Analítico Interno")
             memoria_limpa = st.session_state.log_completo.split("[RESULTADO FINAL TIPO B]")[0]
-            st.text_area("Memória de Cálculo", value=memoria_limpa, height=300)
+            st.text_area("Memória de Cálculo", value=memoria_limpa, height=320)
             
         with col2:
-            st.subheader("📊 Veredito e Correção Operacional")
+            st.subheader("📊 Veredito e Alimentação Real")
             sinal = st.session_state.sinal_pendente
             
             if sinal == "NO CALL":
                 st.warning(f"**EXPECTATIVA:** {sinal}")
                 st.caption(f"Motivo: {st.session_state.justificativa_pendente}")
+                if st.button("🔄 Limpar Painel"):
+                    st.session_state.sinal_pendente = None
             else:
                 st.info(f"**EXPECTATIVA ATIVA:** Operar no {sinal}")
                 st.caption(f"Origem: {st.session_state.justificativa_pendente}")
                 
                 st.write("---")
-                st.write("### 🎛️ Registrar Resultado Real da Entrada:")
+                st.write("### 🎛️ Painel de Injeção de Dados Reais:")
                 
-                c1, c2, c3, c4 = st.columns(4)
-                if c1.button("🟢 G0"):
-                    st.success(f"Registrado: Sinal no {sinal} pago em G0!")
-                    st.session_state.sinal_pendente = None
-                if c2.button("🟡 G1"):
-                    st.success(f"Registrado: Sinal no {sinal} pago em G1!")
-                    st.session_state.sinal_pendente = None
-                if c3.button("🟠 G2"):
-                    st.success(f"Registrado: Sinal no {sinal} pago em G2!")
-                    st.session_state.sinal_pendente = None
-                if c4.button("🔴 FALHA"):
-                    st.error(f"Registrado: Estrutura resultou em Falha.")
+                # Interface estruturada de seleção e digitação dos números da rodada
+                tipo_resultado = st.radio("Selecione o resultado real da operação:", ["G0", "G1", "G2", "FALHA"], horizontal=True)
+                
+                numeros_reais = []
+                if tipo_resultado == "G0":
+                    n1 = st.number_input("Digite o número que saiu na 1ª rodada (G0):", min_value=0, max_value=14, step=1, key="n1")
+                    numeros_reais = [n1]
+                elif tipo_resultado == "G1":
+                    n1 = st.number_input("Número que saiu na 1ª rodada (Erro):", min_value=0, max_value=14, step=1, key="n1")
+                    n2 = st.number_input("Número que saiu na 2ª rodada (G1 - Acerto):", min_value=0, max_value=14, step=1, key="n2")
+                    numeros_reais = [n1, n2]
+                elif tipo_resultado == "G2":
+                    n1 = st.number_input("Número que saiu na 1ª rodada (Erro):", min_value=0, max_value=14, step=1, key="n1")
+                    n2 = st.number_input("Número que saiu na 2ª rodada (Erro):", min_value=0, max_value=14, step=1, key="n2")
+                    n3 = st.number_input("Número que saiu na 3ª rodada (G2 - Acerto):", min_value=0, max_value=14, step=1, key="n3")
+                    numeros_reais = [n1, n2, n3]
+                elif tipo_resultado == "FALHA":
+                    n1 = st.number_input("Número que saiu na 1ª rodada (Erro):", min_value=0, max_value=14, step=1, key="n1")
+                    n2 = st.number_input("Número que saiu na 2ª rodada (Erro):", min_value=0, max_value=14, step=1, key="n2")
+                    n3 = st.number_input("Número que saiu na 3ª rodada (Erro):", min_value=0, max_value=14, step=1, key="n3")
+                    numeros_reais = [n1, n2, n3]
+                
+                if st.button("💾 Gravar Números Reais e Evoluir IA"):
+                    GerenciadorMemoriaViva.injetar_rodadas_reais(st.session_state.sequencia_em_uso, numeros_reais, NOME_RECENCIA_ATIVA)
+                    st.success(f"Sucesso! Sequência e as rodadas seguintes {numeros_reais} foram injetadas com 100% de exatidão na IA.")
                     st.session_state.sinal_pendente = None
 
 # =========================================================================
@@ -116,7 +134,6 @@ with aba_tipo_d:
             salvar_como_base = st.button("💾 Definir como Nova Base de Longo Prazo")
 
         if rodar_auditoria:
-            # Salva o arquivo como temporário E também como Memória Ativa de Recência
             with open(caminho_temp, "wb") as f:
                 f.write(arquivo_upload.getbuffer())
             if os.path.exists(NOME_RECENCIA_ATIVA): os.remove(NOME_RECENCIA_ATIVA)
