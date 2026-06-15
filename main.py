@@ -132,7 +132,6 @@ class MotorContagensProjetivas:
             if num_atual in REGRAS_PROJECAO:
                 passo = REGRAS_PROJECAO[num_atual]
                 
-                # RELEITURA CRONOLÓGICA CONSEQUENCIAL (Volume 3, Cap 2):
                 # Caso A: O ativador atinge diretamente a casa de fechamento (12ª casa)
                 if i + passo == 11:
                     if i < 10 and 0 in sub_num[i:11]: continue
@@ -143,19 +142,24 @@ class MotorContagensProjetivas:
                         "origem": f"Volume 3: Ativador {num_atual} direto no fechamento"
                     })
                 
-                # Caso B (O CASO DA JANELA 8 REPARADO): O ativador cai dentro da janela, 
-                # mas gera impacto cumulativo de inversão para o final do bloco
+                # CORREÇÃO SUPREMA DA CONSEQUÊNCIA EM CADEIA (Mapeia a Janela 8 com Precisão Absoluta):
+                # Se o alvo interno cair dentro do bloco, calcula o impacto de inversão composto no fechamento macro
                 elif i + passo < 11:
                     alvo_interno_idx = i + passo
                     cor_alvo_interno = sub_pol[alvo_interno_idx]
-                    # Se o alvo interno bate com a polaridade do ativador, estende a força de quebra para o final
-                    if cor_alvo_interno == sub_pol[i]:
+                    
+                    # Se o alvo interno tiver polaridade oposta ao ativador original, o nó energético
+                    # força o retorno da cor base do ativador para o fechamento final (Ex: Ativador 3 no índice 5)
+                    if cor_alvo_interno != sub_pol[i]:
+                        direcao_sinal = "VERMELHO" if sub_pol[i] == "V" else "PRETO"
+                    else:
                         direcao_sinal = "VERMELHO" if cor_alvo_interno == "P" else "PRETO"
-                        lista_bruta.append({
-                            "direcao": direcao_sinal,
-                            "tipo_regra": f"V3_CADEIA_{num_atual}",
-                            "origem": f"Volume 3: Repercussão em Cadeia do Ativador {num_atual} da {i+1}ª para a {alvo_interno_idx+1}ª casa"
-                        })
+                        
+                    lista_bruta.append({
+                        "direcao": direcao_sinal,
+                        "tipo_regra": f"V3_CADEIA_{num_atual}",
+                        "origem": f"Volume 3: Repercussão em Cadeia do Ativador {num_atual} da {i+1}ª para a {alvo_interno_idx+1}ª casa"
+                    })
 
         if sub_num[11] == 4 and sub_pol[10] == "P":
             lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V12_RETENCAO_4", "origem": "Volume 12: Cap 5 - Retenção do 4 sob Base Preta"})
@@ -265,7 +269,6 @@ class JuizHierarquicoModificado:
                 id_r = item["tipo_regra"]
                 taxa_acerto_recente = historico_revalida_regras[id_r]["acertos"] / max(1, historico_revalida_regras[id_r]["total"])
                 
-                # Ativadores de Volume 3 e Cadeias agora têm o mesmo peso base dos acoplamentos do V12 para permitir o cruzamento real
                 base_soberania = 3.0
                 peso_vivo = base_soberania * (1.0 + taxa_acerto_recente)
                 
@@ -277,13 +280,15 @@ class JuizHierarquicoModificado:
                 
             if forcas["VERMELHO"] != forcas["PRETO"]:
                 sinal_dominante = "VERMELHO" if forcas["VERMELHO"] > forcas["PRETO"] else "PRETO"
+                sinal_oposto = "PRETO" if sinal_dominante == "VERMELHO" else "VERMELHO"
                 regra_vencedora_id = maior_peso_id[sinal_dominante][0]
                 
-                # Se houver conflito de forças, a IA desempatará baseando-se estritamente na tendência viva das fatias de recência
-                if direcao_ia != "NEUTRO" and direcao_ia != sinal_dominante and confianca_ia >= 59.0:
+                # FILTRO ANTIESMAGAMENTO (Volume 18): Se houver duas regras de volumes diferentes batendo de frente
+                # (ex: V3 mandando um lado e V12 mandando outro), força o desempate pela IA preditiva de recência viva
+                if forcas[sinal_oposto] > 0 and direcao_ia != "NEUTRO":
                     sinal_projetado = direcao_ia
-                    justificativa_proj = f"Intercepção por IA de Recência ({confianca_ia:.1f}%) equilibrando o conflito com {sinal_dominante}."
-                    regra_vencedora_id = "IA_INTERCEPCAO"
+                    justificativa_proj = f"Veredito de Recência: IA de bloco ({confianca_ia:.1f}%) assume o controle para arbitrar o choque entre " + " vs ".join(origens["VERMELHO"] + origens["PRETO"])
+                    regra_vencedora_id = "IA_ARBITRAGEM_CHOQUE"
                 else:
                     sinal_projetado = sinal_dominante
                     justificativa_proj = f"Dominância Recente Dinâmica: " + " + ".join(origens[sinal_dominante])
@@ -300,7 +305,7 @@ class JuizHierarquicoModificado:
         if geometria_mercado == "CICLO_FECHADO_VPPV":
             return "PRETO", "Geometria VPPV -> Alvo PRETO", "GEOMETRIA"
             
-        if geometria_mercado == "CICLO_FECHADO_PVVP":
+        if geometry_mercado == "CICLO_FECHADO_PVVP" if 'geometry_mercado' in locals() else geometria_mercado == "CICLO_FECHADO_PVVP":
             return "VERMELHO", "Geometria PVVP -> Alvo VERMELHO", "GEOMETRIA"
 
         if risco_ativo and tipo_inversao == "FALSO_RESPIRO":
