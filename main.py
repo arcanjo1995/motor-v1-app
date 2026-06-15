@@ -10,38 +10,54 @@ class SequenciaOperacional:
         self.total = len(self.numerica)
 
 class IAPreditivaV1:
-    def __init__(self, dados_limpos):
-        self.dados = dados_limpos
+    def __init__(self, dados_longo_prazo, dados_recencia=None):
+        self.dados_longo = dados_longo_prazo
+        self.dados_recencia = dados_recencia
         self.modelo_transicao = defaultdict(list)
         self.modelo_numerico = defaultdict(list)
         self._treinar_modelo()
 
     def _treinar_modelo(self):
-        if not self.dados or len(self.dados) < 5:
-            return
-        for i in range(len(self.dados) - 2):
-            estado_atual_cor = (self.dados[i]['cor'], self.dados[i+1]['cor'])
-            proxima_cor = self.dados[i+2]['cor']
-            self.modelo_transicao[estado_atual_cor].append(proxima_cor)
-            num_atual = self.dados[i+1]['numero']
-            self.modelo_numerico[num_atual].append(proxima_cor)
+        # 1. Treina com a base histórica de Longo Prazo (Peso Base)
+        if self.dados_longo and len(self.dados_longo) >= 5:
+            self._processar_bloco_dados(self.dados_longo, multiplicador_peso=1)
+            
+        # 2. SE EXISTIR AUDITORIA DE RECÊNCIA: Treina por cima injetando Peso Triplicado (Volume 16)
+        if self.dados_recencia and len(self.dados_recencia) >= 5:
+            self._processar_bloco_dados(self.dados_recencia, multiplicador_peso=3)
+
+    def _processar_bloco_dados(self, dados, multiplicador_peso):
+        for i in range(len(dados) - 2):
+            estado_atual_cor = (dados[i]['cor'], dados[i+1]['cor'])
+            proxima_cor = dados[i+2]['cor']
+            num_atual = dados[i+1]['numero']
+            
+            # Aplica o multiplicador para dar mais importância aos dados de recência
+            for _ in range(multiplicador_peso):
+                self.modelo_transicao[estado_atual_cor].append(proxima_cor)
+                self.modelo_numerico[num_atual].append(proxima_cor)
 
     def predizer_proxima_casa(self, sub_num, sub_pol):
         if len(sub_num) < 12:
             return "NEUTRO", 0.0
         ultimo_num = sub_num[-1]
         ultimas_cores = (sub_pol[-2], sub_pol[-1])
+        
         proximas_cores_historicas = self.modelo_transicao.get(ultimas_cores, [])
         proximas_cores_por_num = self.modelo_numerico.get(ultimo_num, [])
+        
         total_v = (proximas_cores_historicas.count('V') * 0.6) + (proximas_cores_por_num.count('V') * 0.4)
         total_p = (proximas_cores_historicas.count('P') * 0.6) + (proximas_cores_por_num.count('P') * 0.4)
         total_b = (proximas_cores_historicas.count('B') * 0.6) + (proximas_cores_por_num.count('B') * 0.4)
+        
         soma_pesos = total_v + total_p + total_b
         if soma_pesos == 0:
             return "NEUTRO", 0.0
+        
         prob_v = (total_v / soma_pesos) * 100
         prob_p = (total_p / soma_pesos) * 100
         BARREIRA_CONFIA_IA = 58.0
+        
         if prob_v >= BARREIRA_CONFIA_IA and prob_v > prob_p:
             return "VERMELHO", prob_v
         elif prob_p >= BARREIRA_CONFIA_IA and prob_p > prob_v:
@@ -174,7 +190,7 @@ class JuizHierarquicoModificado:
                 if direcao_inclinacao in direcoes_projetadas and porc >= 55.0:
                     return direcao_inclinacao, f"Volume 18: Conflito resolvido por Inclinação Histórica ({porc:.1f}%)"
                 return "NO CALL", "Volume 18: Conflito Hierárquico Sem Consenso (Cenário de Risco)"
-            return direcoes_projetadas[0], expectativas[0]["origem"]
+            return direcoes_projetadas[0], expectations[0]["origem"] if 'expectations' in locals() else expectativas[0]["origem"]
             
         if direcao_inclinacao != "NEUTRO" and porc >= 55.0:
             if direcao_ia == direcao_inclinacao:
@@ -222,7 +238,6 @@ class MotorV1Completo:
             if horizonte_max == 0: break
             
             correcoes_reais = self.seq.polaridades[idx + 12 : idx + 12 + horizonte_max]
-
             classificacao = "FALHA"
             salto = 1
 
@@ -298,6 +313,7 @@ class ProcessadorTipoB:
     def __init__(self, sequencia_12_numeros, caminho_base_dados):
         self.entrada_usuario = sequencia_12_numeros
         self.caminho_base = caminho_base_dados
+        self.caminho_recencia = "base_recencia_ativa.xlsx" # Arquivo de memória rápida
         
         self.polaridades_usuario = []
         for num in self.entrada_usuario:
@@ -312,15 +328,22 @@ class ProcessadorTipoB:
         if len(self.entrada_usuario) != 12: 
             return "[ERRO] Requisito de exatamente 12 números violado."
             
-        leitor = LeitorXLS(self.caminho_base)
-        base_historica = leitor.ler_e_validar()
-        if not base_historica: 
+        leitor_longo = LeitorXLS(self.caminho_base)
+        base_longo = leitor_longo.ler_e_validar()
+        if not base_longo: 
             return "[ERRO] Base de dados resultados_blaze.xlsx ausente."
 
-        num_global = [d['numero'] for d in base_historica]
-        pol_global = [d['cor'] for d in base_historica]
+        # Verifica se existe um aprendizado de recência ativo salvo no servidor
+        base_recencia = None
+        if os.path.exists(self.caminho_recencia):
+            leitor_recencia = LeitorXLS(self.caminho_recencia)
+            base_recencia = leitor_recencia.ler_e_validar()
 
-        ia_operacional = IAPreditivaV1(base_historica)
+        num_global = [d['numero'] for d in base_longo]
+        pol_global = [d['cor'] for d in base_longo]
+
+        # INSTANCIA A IA INTERLIGANDO AS DUAS MEMÓRIAS (Longo Prazo + Recência)
+        ia_operacional = IAPreditivaV1(base_longo, base_recencia)
         previsao_ia = ia_operacional.predizer_proxima_casa(self.entrada_usuario, self.polaridades_usuario)
 
         saturacao = AnalisadorContextoAvancado.mapear_padroes_geometria(self.polaridades_usuario)
@@ -331,14 +354,18 @@ class ProcessadorTipoB:
         inclinacao_num = AnalisadorContextoAvancado.calcular_numerologia_pos_numero(num_fechamento, num_global, pol_global)
         
         sinal_final, justificativa = JuizHierarquicoModificado.arbitrar_sinal(
-            nc_ativo, motivo_nc, expectativas, inclinacao_num, saturacao, previsao_ia
+            nc_ativo, motivo_nc, expectations if 'expectations' in locals() else expectativas, inclinacao_num, saturacao, previsao_ia
         )
 
         chance_branco, casas_atraso = AnalisadorContextoAvancado.preditor_estatistico_branco(num_fechamento, num_global, pol_global)
 
+        # Informa no log se a IA usou a calibração de recência ativa
+        status_recencia = "ATIVA (Peso Triplicado)" if base_recencia else "INATIVA (Apenas Longo Prazo)"
+
         output = "[MEMÓRIA DE CÁLCULO]\n"
         output += f"- Mapeamento: Sequência {self.entrada_usuario} processada.\n"
         output += f"- Geometria da Janela: {saturacao}\n"
+        output += f"- Calibração de Recência: {status_recencia}\n"
         output += f"- Previsão IA: {previsao_ia[0]} ({previsao_ia[1]:.1f}%)\n"
         output += f"- Inclinação Histórica ({num_fechamento}): {inclinacao_num[0]} ({inclinacao_num[1]:.1f}%)\n"
         output += f"- Resolução de Conflitos: {justificativa}\n\n"
