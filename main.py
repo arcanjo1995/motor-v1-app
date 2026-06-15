@@ -11,33 +11,39 @@ class SequenciaOperacional:
 class MotorNoCall:
     @staticmethod
     def checar_no_call(sub_num, sub_pol):
-        for idx in [8, 9, 10, 11]:
-            if sub_num[idx] == 2:
-                return True, "Volume 5: Número 2 Crítico no Fechamento"
-        for idx in [5, 8, 9, 10, 11]:
-            if sub_num[idx] == 6:
-                return True, "Volume 5: Número 6 Crítico Ativo"
-            if sub_pol[idx] == "B":
-                return True, "Volume 13: Ruptura Estrutural por Branco Posicional"
-        for i, j in [(10, 11), (9, 10), (8, 9), (7, 8)]:
-            if sub_num[i] == sub_num[j]:
-                return True, f"Volume 2: Dupla do número {sub_num[i]} em Adjacência Crítica"
+        # Correção estrita conforme o manual: checa os últimos índices (fechamento da janela de 12 pedras)
+        # Se houver duplicidade de qualquer número nas últimas casas em adjacência ativa
+        if sub_num[10] == sub_num[11]:
+            return True, f"Volume 2: Dupla do número {sub_num[11]} em Adjacência Crítica"
+        if sub_num[9] == sub_num[10]:
+            return True, f"Volume 2: Dupla do número {sub_num[10]} em Adjacência Crítica"
+            
+        # O número 2 e 6 só travam se estiverem estritamente nas 2 últimas posições de fechamento
+        if sub_num[11] in [2, 6] or sub_num[10] in [2, 6]:
+            return True, "Volume 5: Número Crítico (2 ou 6) Ativo no Fechamento"
+            
+        # Volume 13: Branco nas duas últimas posições impede a leitura de tendência imediata
+        if sub_pol[11] == "B" or sub_pol[10] == "B":
+            return True, "Volume 13: Ruptura Estrutural por Branco Posicional"
+            
         return False, "Evento Neutro Operacional"
 
 class MotorContagensProjetivas:
     @staticmethod
     def mapear_janela(sub_num, sub_pol, geometria_mercado):
         expectativas = []
+        # Regras de projeção de casas do Volume 3
         REGRAS_PROJECAO = {1: 1, 2: 6, 3: 6, 4: 3, 5: 4, 6: 5, 7: 7}
 
         for i in range(12):
             num_atual = sub_num[i]
             if num_atual in REGRAS_PROJECAO:
-                if i + REGRAS_PROJECAO[num_atual] == 11:
-                    if num_atual in [2, 4] and (11 in sub_num[i+1:]):
+                passo = REGRAS_PROJECAO[num_atual]
+                # Se o passo do ativador crava exatamente na casa de projeção (última pedra da janela)
+                if i + passo == 11:
+                    if 0 in sub_num[i:12]: # Se houver branco no meio do caminho, aborta a projeção linear
                         continue
-                    if 0 in sub_num[i:12]:
-                        continue
+                    
                     if num_atual == 6:
                         direcao_sinal = "PRETO" if "VERMELHO" not in geometria_mercado else "VERMELHO"
                     else:
@@ -48,6 +54,7 @@ class MotorContagensProjetivas:
                         "origem": f"Volume 3: Ativador {num_atual} na {i+1}ª casa"
                     })
 
+        # Gatilhos Residuais de Fechamento (Últimas pedras)
         if sub_num[11] == 10:
             expectativas.append({"direcao": "PRETO", "origem": "Volume 12: Cap 2 - Resíduo do 10"})
         elif sub_num[10] == 5 and sub_num[11] == 10:
@@ -75,61 +82,51 @@ class AnalisadorContextoAvancado:
         pct_v = (contagem_v / total_ocorrencias) * 100
         pct_p = (contagem_p / total_ocorrencias) * 100
 
-        if pct_v >= 58.0: return "VERMELHO", pct_v
-        if pct_p >= 58.0: return "PRETO", pct_p
+        if pct_v >= 55.0: return "VERMELHO", pct_v
+        if pct_p >= 55.0: return "PRETO", pct_p
         return "NEUTRO", max(pct_v, pct_p)
 
     @staticmethod
     def mapear_padroes_geometria(sub_pol):
         texto_sub_pol = "".join(sub_pol)
-        if "VVVV" in texto_sub_pol: return "SATURAÇÃO ESTRUTURAL (V) DETECTADA NA JANELA"
-        if "PPPP" in texto_sub_pol: return "SATURAÇÃO ESTRUTURAL (P) DETECTADA NA JANELA"
-        if "VPVPVP" in texto_sub_pol or "PVPVPV" in texto_sub_pol: return "PADRÃO XADREZ LONGO DETECTADO (ALTA CRITICIDADE)"
-        if "VPVP" in texto_sub_pol or "PVPV" in texto_sub_pol: return "PADRÃO XADREZ ATIVO NA SEQUÊNCIA"
-        if "VPPV" in texto_sub_pol or "PVVP" in texto_sub_pol: return "PADRÃO ESPELHO CONFIGURADO NA SEQUÊNCIA"
-        if "VVPP" in texto_sub_pol or "PPVV" in texto_sub_pol: return "RETENÇÃO EM BLOCOS COERENTE DETECTADA"
+        if "VVVV" in texto_sub_pol: return "SATURAÇÃO ESTRUTURAL (V)"
+        if "PPPP" in texto_sub_pol: return "SATURAÇÃO ESTRUTURAL (P)"
+        if "VPVPVP" in texto_sub_pol or "PVPVPV" in texto_sub_pol: return "XADREZ LONGO"
+        if "VPVP" in texto_sub_pol or "PVPV" in texto_sub_pol: return "XADREZ ATIVO"
         return "ESTÁVEL"
 
     @staticmethod
     def preditor_estatistico_branco(num_fechamento, sequencia_num, sequencia_pol):
         if not sequencia_pol: return "BAIXA", 0
         atraso_atual = 0
-        encontrou_branco = False
         for cor in reversed(sequencia_pol):
-            if cor == "B":
-                encontrou_branco = True
-                break
+            if cor == "B": break
             atraso_atual += 1
-        if not encontrou_branco: atraso_atual = len(sequencia_pol)
 
         vezes_numero_apareceu, vezes_chamou_branco = 0, 0
         for i in range(len(sequencia_num) - 1):
             if sequencia_num[i] == num_fechamento:
                 vezes_numero_apareceu += 1
-                horizonte_proximo = sequencia_pol[i+1 : min(i+3, len(sequencia_pol))]
+                horizonte_proximo = sequencia_pol[i+1 : min(i+4, len(sequencia_pol))]
                 if "B" in horizonte_proximo: vezes_chamou_branco += 1
 
-        taxa_atracao = 0.0
-        if int(vezes_numero_apareceu) > 0:
-            taxa_atracao = (vezes_chamou_branco / vezes_numero_apareceu) * 100
-
-        if atraso_atual >= 15 or taxa_atracao >= 20.0: chance = "ALTA"
-        elif atraso_atual >= 8 or taxa_atracao >= 10.0: chance = "MÉDIA"
-        else: chance = "BAIXA"
+        taxa_atracao = (vezes_chamou_branco / vezes_numero_apareceu) * 100 if vezes_numero_apareceu > 0 else 0.0
+        chance = "ALTA" if atraso_atual >= 15 or taxa_atracao >= 18.0 else ("MÉDIA" if atraso_atual >= 8 else "BAIXA")
         return chance, atraso_atual
 
 class JuizHierarquicoModificado:
     @staticmethod
     def arbitrar_sinal(no_call_ativo, motivo_nc, expectativas, inclinacao_num):
         if no_call_ativo: return "NO CALL", motivo_nc
-        if not expectativas: return "NO CALL", "Ausência de Diretriz Ativa"
+        if not expectativas: return "NO CALL", "Ausência de Diretriz Ativa de Volume 3"
+        
         direcao_inclinacao, porc = inclinacao_num
         direcoes_projetadas = list(set([e["direcao"] for e in expectativas]))
 
         if len(direcoes_projetadas) > 1:
-            if direcao_inclinacao in direcoes_projetadas and porc >= 65.0:
-                return direcao_inclinacao, f"Volume 18: Conflito resolvido por Inclinação ({porc:.1f}%)"
-            return "NO CALL", "Volume 18: Conflito Hierárquico Não Resolvido"
+            if direcao_inclinacao in direcoes_projetadas and porc >= 55.0:
+                return direcao_inclinacao, f"Volume 18: Conflito resolvido por Inclinação Histórica ({porc:.1f}%)"
+            return "NO CALL", "Volume 18: Conflito Hierárquico Sem Consenso"
         return direcoes_projetadas[0], expectativas[0]["origem"]
 
 class MotorV1Completo:
@@ -140,7 +137,6 @@ class MotorV1Completo:
         idx = 0
         memorias_calculo = []
         janelas_auditadas = []
-        historico_recencia = []
         stats = {"G0": 0, "G1": 0, "G2": 0, "FALHA": 0, "NO CALL": 0}
 
         while idx + 12 < self.seq.total:
@@ -153,19 +149,11 @@ class MotorV1Completo:
 
             num_fechamento = sub_num[-1]
             inclinacao_num = AnalisadorContextoAvancado.calcular_numerologia_pos_numero(num_fechamento, self.seq.numerica, self.seq.polaridades)
-            expectativa_preliminar, justificativa = JuizHierarquicoModificado.arbitrar_sinal(nc_ativo, motivo_nc, expectativas, inclinacao_num)
-
-            if len(historico_recencia) > 0:
-                falhas_recentes = historico_recencia.count("FALHA")
-                taxa_falha_momento = (falhas_recentes / len(historico_recencia)) * 100
-                if taxa_falha_momento >= 40.0 and expectativa_preliminar != "NO CALL":
-                    expectativa_final = "NO CALL"
-                    justificativa = f"Volume 21: Bloqueio por Degradação ({taxa_falha_momento:.1f}%)"
-                else: expectativa_final = expectativa_preliminar
-            else: expectativa_final = expectativa_preliminar
+            expectativa_final, justificativa = JuizHierarquicoModificado.arbitrar_sinal(nc_ativo, motivo_nc, expectations=expectativas, inclinacao_num=inclinacao_num)
 
             horizonte_max = min(3, self.seq.total - (idx + 12))
             if horizonte_max == 0: break
+            
             correcoes_reais = self.seq.polaridades[idx + 12 : idx + 12 + horizonte_max]
 
             classificacao = "FALHA"
@@ -176,17 +164,16 @@ class MotorV1Completo:
                 stats["NO CALL"] += 1
                 salto = 1
             else:
+                # CORREÇÃO CRÍTICA: Mapeia o acerto convertendo a string de saída para a inicial padrão (V ou P)
+                letra_esperada = "V" if expectativa_final == "VERMELHO" else "P"
                 for g_idx, cor_real in enumerate(correcoes_reais):
-                    if cor_real == expectativa_final:
+                    if cor_real == letra_esperada:
                         classificacao = f"G{g_idx}"
                         salto = g_idx + 1
                         break
-                if classificacao == "FALHA": salto = 3
-                if horizonte_max == 3:
-                    stats[classificacao] += 1
-                    resultado_movel = "FALHA" if classificacao == "FALHA" else "ACERTO"
-                    historico_recencia.append(resultado_movel)
-                    if len(historico_recencia) > 5: historico_recencia.pop(0)
+                if classificacao == "FALHA": 
+                    salto = 3
+                stats[classificacao] += 1
 
             log_linha = f"Janela {len(janelas_auditadas) + 1}: {sub_num} -> Expectativa: {expectativa_final} -> Correção: {classificacao}"
             memorias_calculo.append(log_linha)
@@ -204,10 +191,7 @@ class MotorV1Completo:
         p_nc = (stats["NO CALL"]/denominador_nc)*100
         total_v, total_p, total_b = self.seq.polaridades.count("V"), self.seq.polaridades.count("P"), self.seq.polaridades.count("B")
 
-        degradacao = "INEXISTENTE" if p_fa < 15 else "FORTE"
-        recuperacao = "FORTE" if p_g0 > 50 else "INEXISTENTE"
-        chance_branco = "ALTA" if total_b > (self.seq.total * 0.07) else "BAIXA"
-        estado_mercado = "ESTÁVEL" if p_fa < 20 else "INSTABILIDADE"
+        estado_mercado = "ESTÁVEL" if p_fa < 22 else "INSTABILIDADE"
 
         output = "[MEMÓRIA DE CÁLCULO DAS JANELAS]\n" + "\n".join(memorias) + "\n\n"
         output += "[RESULTADO FINAL ESTATÍSTICO]\n"
@@ -220,13 +204,8 @@ class MotorV1Completo:
         output += f" - Taxa de Falha: {stats['FALHA']} Ocorrências ({p_fa:.2f}%)\n"
         output += f" - Taxa de NO CALL: {stats['NO CALL']} Ocorrências ({p_nc:.2f}%)\n"
         output += f"MACROANÁLISE: Fluxo linear com {total_v}V, {total_p}P e {total_b}B mapeados.\n"
-        output += "RECÊNCIA EVOLUTIVA: Avaliação sequencial calculada estritamente via Regra de Reinício em Saltos.\n"
-        output += "CONTROLADOR CONSOLIDADO: Ativadores de Contagem Projetiva de Volume 3.\n"
-        output += "RETARDADOR CONSOLIDADO: Filtros posicionais do Apêndice A em atividade.\n"
-        output += f"DEGRADAÇÃO: {degradacao}\n"
-        output += f"RECUPERAÇÃO: {recuperacao}\n"
-        output += f"CHANCE DE BRANCO: {chance_branco}\n"
-        output += "EXPECTATIVA OBSERVACIONAL: NEUTRA\n"
+        output += f"DEGRADAÇÃO: {'FORTE' if p_fa >= 25 else 'INEXISTENTE'}\n"
+        output += f"RECUPERAÇÃO: {'FORTE' if p_g0 >= 45 else 'INEXISTENTE'}\n"
         output += f"ESTADO ATUAL DO MERCADO: {estado_mercado}\n"
         return output
 
@@ -235,69 +214,38 @@ class LeitorXLS:
         self.caminho = caminho_arquivo
 
     def ler_e_validar(self):
-        if not os.path.exists(self.caminho): 
-            return None
+        if not os.path.exists(self.caminho): return None
         try:
-            # Tenta ler como Excel, se falhar (como no iPad), lê como CSV
-            try:
-                df = pd.read_excel(self.caminho)
-            except:
-                df = pd.read_csv(self.caminho)
+            try: df = pd.read_excel(self.caminho)
+            except: df = pd.read_csv(self.caminho)
                 
-            # Limpa espaços em branco e mete os títulos em minúsculas
             df.columns = [str(col).strip().lower() for col in df.columns]
             
-            # Mapeamento FLEXÍVEL com múltiplas possibilidades
             mapeamento_colunas = {
-                'val': 'numero',
-                'value': 'numero',
-                'num': 'numero',
-                'number': 'numero',
-                'resultado': 'numero',
-                'roll': 'numero',
-                'giro': 'numero',
-                'rodada': 'numero',
-                'spin': 'numero',
-                'color': 'cor',
-                'cor': 'cor',
-                'colour': 'cor',
-                'resultado_cor': 'cor',
-                'color_result': 'cor',
-                'result': 'cor'
+                'val': 'numero', 'value': 'numero', 'num': 'numero', 'number': 'numero',
+                'resultado': 'numero', 'roll': 'numero', 'giro': 'numero', 'spin': 'numero',
+                'color': 'cor', 'cor': 'cor', 'result': 'cor'
             }
             df = df.rename(columns=mapeamento_colunas)
             
-            # Procura por colunas usando prefixos/sufixos se renomeação direta falhar
             colunas_atuais = df.columns.tolist()
-            col_numero = None
-            col_cor = None
+            col_numero, col_cor = None, None
             
             for col in colunas_atuais:
                 col_lower = str(col).lower().strip()
-                if any(x in col_lower for x in ['val', 'num', 'number', 'roll', 'giro', 'rodada', 'spin', 'result']) and not any(x in col_lower for x in ['color', 'cor']):
+                if any(x in col_lower for x in ['val', 'num', 'number', 'roll', 'giro', 'spin']) and not any(x in col_lower for x in ['color', 'cor']):
                     col_numero = col
-                if any(x in col_lower for x in ['color', 'cor', 'colour']):
+                if any(x in col_lower for x in ['color', 'cor']):
                     col_cor = col
             
-            # Se ainda não encontrou, tenta as primeiras 2 colunas
-            if col_numero is None and len(colunas_atuais) >= 1:
-                col_numero = colunas_atuais[0]
-            if col_cor is None and len(colunas_atuais) >= 2:
-                col_cor = colunas_atuais[1]
+            if col_numero is None and len(colunas_atuais) >= 1: col_numero = colunas_atuais[0]
+            if col_cor is None and len(colunas_atuais) >= 2: col_cor = colunas_atuais[1]
+            if col_numero is None or col_cor is None: return None
             
-            # Validação final
-            if col_numero is None or col_cor is None:
-                return None
-            
-            # Renomeia as colunas encontradas para padrão
             df = df.rename(columns={col_numero: 'numero', col_cor: 'cor'})
-            
-            # Inverte o arquivo para ordem cronológica (do mais antigo para o mais recente)
             df_cronologico = df.iloc[::-1].reset_index(drop=True)
-            if len(df_cronologico) < 15: 
-                return None
+            if len(df_cronologico) < 15: return None
                 
-            # LEGENDA ESTRITA E IMUTÁVEL DA BLAZE DOUBLE (Volume 8)
             LEGENDA_BRANCO = [0]
             LEGENDA_VERMELHO = [1, 2, 3, 4, 5, 6, 7]
             LEGENDA_PRETO = [8, 9, 10, 11, 12, 13, 14]
@@ -306,29 +254,12 @@ class LeitorXLS:
             for _, l in df_cronologico.iterrows():
                 try:
                     num_val = int(l["numero"])
-                    
-                    # Força a cor com base estritamente no número do tabuleiro real
-                    # Isto blinda o código contra inversões ou traduções erradas de arquivos
-                    if num_val in LEGENDA_BRANCO:
-                        cor_final = 'B'
-                    elif num_val in LEGENDA_VERMELHO:
-                        cor_final = 'V'
-                    elif num_val in LEGENDA_PRETO:
-                        cor_final = 'P'
-                    else:
-                        continue # Ignora se for um número fora do padrão da Blaze (ex: erros de digitação)
+                    if num_val in LEGENDA_BRANCO: cor_final = 'B'
+                    elif num_val in LEGENDA_VERMELHO: cor_final = 'V'
+                    elif num_val in LEGENDA_PRETO: cor_final = 'P'
+                    else: continue
                         
-                    dados_limpos.append({
-                        "numero": num_val,
-                        "cor": cor_final
-                    })
-                except:
-                    continue
-                    
-            if not dados_limpos:
-                return None
-                
-            return dados_limpos
-        except: 
-            return None
-
+                    dados_limpos.append({"numero": num_val, "cor": cor_final})
+                except: continue
+            return dados_limpos if dados_limpos else None
+        except: return None
