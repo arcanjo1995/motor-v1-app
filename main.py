@@ -127,22 +127,27 @@ class MotorContagensProjetivas:
             num_atual = sub_num[i]
             if num_atual in REGRAS_PROJECAO:
                 passo = REGRAS_PROJECAO[num_atual]
+                # MATRIZ CORRIGIDA: Se i + passo for igual a 11, projeta perfeitamente na casa de fechamento (12ª pedra)
                 if i + passo == 11:
                     if i < 10 and 0 in sub_num[i:11]:
                         continue
-                    if num_atual == 6:
+                    if num_atual == 4:
+                        # O 4 quebra tendências inerciais locais
+                        direcao_sinal = "VERMELHO" if sub_pol[i] == "P" else "PRETO"
+                    elif num_atual == 6:
                         direcao_sinal = "PRETO" if "VERMELHO" not in geometria_mercado else "VERMELHO"
                     else:
                         direcao_sinal = "PRETO" if "PRETO" in geometria_mercado else "VERMELHO"
+                    
                     expectativas.append({
                         "direcao": direcao_sinal,
-                        "origem": f"Volume 3: Ativador {num_atual} na {i+1}ª casa"
+                        "origem": f"Volume 3: Ativador {num_atual} na {i+1}ª casa (Projeção Direta)"
                     })
 
         if sub_num[11] == 4 and sub_pol[10] == "P":
-            expectativas.append({"direcao": "PRETO", "origem": "Volume 12: Cap 5 - Retenção do 4 sob Base Preta (Cenário 1/2)"})
+            expectativas.append({"direcao": "PRETO", "origem": "Volume 12: Cap 5 - Retenção do 4 sob Base Preta"})
         elif sub_num[9] == 4 and sub_pol[10] == "P" and sub_pol[11] == "P":
-            expectativas.append({"direcao": "PRETO", "origem": "Volume 12: Cap 5 - Acoplamento Posicional 4-P-P (Cenário 3)"})
+            expectativas.append({"direcao": "PRETO", "origem": "Volume 12: Cap 5 - Acoplamento Posicional 4-P-P"})
 
         if sub_num[11] == 10:
             expectativas.append({"direcao": "PRETO", "origem": "Volume 12: Cap 2 - Resíduo do 10"})
@@ -176,6 +181,11 @@ class AnalisadorContextoAvancado:
     @staticmethod
     def mapear_padroes_geometria(sub_pol):
         texto_sub_pol = "".join(sub_pol)
+        
+        # Inclusão dos Padrões de Fechamento Geométrico Cíclicos (Volume 6, Cap 2)
+        if texto_sub_pol.endswith("VPPV"): return "CICLO_FECHADO_VPPV"
+        if texto_sub_pol.endswith("PVVP"): return "CICLO_FECHADO_PVVP"
+        
         if "VVVV" in texto_sub_pol: return "SATURAÇÃO ESTRUTURAL (V)"
         if "PPPP" in texto_sub_pol: return "SATURAÇÃO ESTRUTURAL (P)"
         if "VPVPVP" in texto_sub_pol or "PVPVPV" in texto_sub_pol: return "XADREZ LONGO"
@@ -184,23 +194,18 @@ class AnalisadorContextoAvancado:
 
     @staticmethod
     def detectar_chance_inversao(sub_pol):
-        """Mapeador Avançado: Diferencia Inversão Real de Falso Respiro (Volume 14, Cap 4)"""
         texto_sub_pol = "".join(sub_pol)
         
-        # Caso 1: Detecção na ponta da cauda para Vermelho
         if texto_sub_pol.endswith("VVVV"):
-            # Analisa o miolo anterior da janela para ver se o vermelho já vinha dominando antes
             bloco_anterior = texto_sub_pol[4:8]
             if bloco_anterior.count("V") >= 2:
-                # Se vinha dominando, ativa a proteção contra o FALSO RESPIRO (o mercado vai jogar uma cor oposta curta e voltar)
-                return True, "FALSO_RESPIRO", "Falso Respiro Detetado: Tendência macro forte de VERMELHO. Proteção de Gale Ativa."
+                return True, "FALSO_RESPIRO", "Falso Respiro Detetado: Tendência macro forte de VERMELHO."
             return True, "INVERSÃO", "Exaustão Crítica de Fluxo: 4 Vermelhos Seguidos. Alerta de Quebra para PRETO."
             
-        # Caso 2: Detecção na ponta da cauda para Preto
         if texto_sub_pol.endswith("PPPP"):
             bloco_anterior = texto_sub_pol[4:8]
             if bloco_anterior.count("P") >= 2:
-                return True, "FALSO_RESPIRO", "Falso Respiro Detetado: Tendência macro forte de PRETO. Proteção de Gale Ativa."
+                return True, "FALSO_RESPIRO", "Falso Respiro Detetado: Tendência macro forte de PRETO."
             return True, "INVERSÃO", "Exaustão Crítica de Fluxo: 4 Pretos Seguidos. Alerta de Quebra para VERMELHO."
         
         if texto_sub_pol.endswith("VPVPVP") or texto_sub_pol.endswith("PVPVPV"):
@@ -238,24 +243,35 @@ class JuizHierarquicoModificado:
         direcao_inclinacao, porc = inclinacao_num
         direcoes_projetadas = list(set([e["direcao"] for e in expectativas]))
 
-        # FILTRO SOBERANO 1: Se for FALSO RESPIRO, o robô manda manter a cor forte sabendo que o Gale 1 protege do respiro curto
-        if risco_ativo and tipo_inversao == "FALSO_RESPIRO":
-            cor_dominante = "VERMELHO" if "VERMELHO" in justificativa_inv else "PRETO"
-            return cor_dominante, f"Volume 14 Cap 4 (Filtro Antirespiro): Mantendo {cor_dominante} devido à pressão de bloco anterior."
+        # TRAVA SOBERANA DE CONFLITO GEOMÉTRICO (VPPV / PVVP)
+        if geometria_mercado == "CICLO_FECHADO_VPPV":
+            if "VERMELHO" in direcoes_projetadas:
+                return "NO CALL", "Bloqueio de Segurança: Geometria VPPV exige PRETO mas a Projeção pedia VERMELHO."
+            return "PRETO", "Volume 6 Cap 2: Fechamento de Ciclo Simétrico VPPV -> Alvo PRETO"
+            
+        if geometria_mercado == "CICLO_FECHADO_PVVP":
+            if "PRETO" in direcoes_projetadas:
+                return "NO CALL", "Bloqueio de Segurança: Geometria PVVP exige VERMELHO mas a Projeção pedia PRETO."
+            return "VERMELHO", "Volume 6 Cap 2: Fechamento de Ciclo Simétrico PVVP -> Alvo VERMELHO"
 
-        # FILTRO SOBERANO 2: Se for INVERSÃO REAL, vira o sinal de contra-ataque imediatamente
+        # FILTRO DE FALSO RESPIRO VERSUS CONTAGEM DO 4
+        if risco_ativo and tipo_inversao == "FALSO_RESPIRO":
+            # Se houver uma contagem projetiva ativa forçando a quebra, ela anula o antirespiro!
+            if expectativas:
+                return direcoes_projetadas[0], f"Contramedida Cruzada: Projeção Ativa substitui Antirespiro -> {expectativas[0]['origem']}"
+            cor_dominante = "VERMELHO" if "VERMELHO" in justificativa_inv else "PRETO"
+            return cor_dominante, f"Volume 14 Cap 4 (Filtro Antirespiro): Mantendo {cor_dominante}."
+
         if risco_ativo and tipo_inversao == "INVERSÃO":
             sinal_inverso = "PRETO" if "Vermelhos Seguidos" in justificativa_inv else "VERMELHO"
-            return sinal_inverso, f"Volume 14 Cap 2 (Gatilho Antiatraso - Intercepção de 4 Casas): {justificativa_inv}"
+            return sinal_inverso, f"Volume 14 Cap 2 (Intercepção de Exaustão): {justificativa_inv}"
 
         if expectativas:
             if len(direcoes_projetadas) > 1:
                 if direcao_ia in direcoes_projetadas:
-                    return direcao_ia, f"Volume 18: Conflito resolvido por Validação da IA ({confianca_ia:.1f}%)"
+                    return direcao_ia, f"Volume 18: Resolução por IA ({confianca_ia:.1f}%)"
                 if direcao_inclinacao in direcoes_projetadas and porc >= 60.0:
-                    return direcao_inclinacao, f"Volume 18: Conflito resolvido por Inclinação Histórica ({porc:.1f}%)"
-                if direcao_ia != "NEUTRO":
-                    return direcao_ia, f"Volume 18: Conflito estrutural arbitrado por Vetor Direcional da IA ({confianca_ia:.1f}%)"
+                    return direcao_inclinacao, f"Volume 18: Resolução por Inclinação Histórica ({porc:.1f}%)"
             
             if risco_ativo and tipo_inversao == "AVISO_XADREZ":
                 return "NO CALL", f"Bloqueio Preventivo: {justificativa_inv}"
@@ -263,19 +279,11 @@ class JuizHierarquicoModificado:
             return direcoes_projetadas[0], expectativas[0]["origem"]
             
         if direcao_inclinacao != "NEUTRO" and porc >= 60.0:
-            if direcao_ia == direcao_inclinacao:
-                return direcao_inclinacao, f"Matriz + IA Unificadas: Alinhamento de Tendência Global com {confianca_ia:.1f}%"
-            return direcao_inclinacao, f"Matriz Pós-Número Padrão: Tendência Proporcional de {porc:.1f}%"
-            
+            return direcao_inclinacao, f"Matriz Pós-Número: {porc:.1f}%"
         if direcao_ia != "NEUTRO" and confianca_ia >= 62.0:
-            return direcao_ia, f"IA Preditiva Isolada: Fluxo Direcional Recente Confirmado de {confianca_ia:.1f}%"
-
-        if direcao_ia != "NEUTRO":
-            return direcao_ia, f"Vetor Inercial Dominante: Decisão direcionada por Inteligência Artificial ({confianca_ia:.1f}%)"
-        if direcao_inclinacao != "NEUTRO":
-            return direcao_inclinacao, f"Vetor Inercial Dominante: Decisão baseada em Inclinação Majoritária de {porc:.1f}%"
+            return direcao_ia, f"IA Preditiva: {confianca_ia:.1f}%"
             
-        return "PRETO", "Veredito de Fechamento por Consenso Operacional"
+        return "PRETO", "Veredito por Consenso Operacional"
 
 class MotorV1Completo:
     def __init__(self, lista_dados_xls):
@@ -305,7 +313,8 @@ class MotorV1Completo:
             previsao_ia = self.ia.predizer_proxima_casa(sub_num, sub_pol)
             
             expectativa_final, justificativa = JuizHierarquicoModificado.arbitrar_sinal(
-                nc_ativo, motivo_nc, expectativas, inclinacao_num, geometria, previsao_ia, status_inv
+                nc_ativo, motivo_nc, expectations=expectativas, inclinacao_num=inclinacao_num, 
+                geometria_mercado=geometria, previsao_ia=previsao_ia, status_inversao=status_inv
             )
 
             horizonte_max = min(3, self.seq.total - (idx + 12))
@@ -348,38 +357,19 @@ class MotorV1Completo:
         p_fa = (stats["FALHA"] / denominador) * 100
         p_nc = (stats["NO CALL"] / denominador_nc) * 100
 
-        if p_fa >= 25.0:
-            condicao_mercado = "MERCADO EM DEGRADAÇÃO (Risco Elevado de Falhas)"
-            degradacao = "FORTE"
-            recuperacao = "INEXISTENTE"
-        elif p_g0 >= 50.0:
-            condicao_mercado = "MERCADO PAGADOR (Predominância de G0 Ativo)"
-            degradacao = "INEXISTENTE"
-            recuperacao = "FORTE"
-        elif p_g1 >= 40.0:
-            condicao_mercado = "MERCADO COM ATRASO CONTROLADO (Foco em G1)"
-            degradacao = "LEVE"
-            recuperacao = "MODERADA"
-        elif p_g2 >= 30.0:
-            condicao_mercado = "MERCADO DESLOCADO (G0 Enfraquecido / Alerta G2)"
-            degradacao = "MODERADA"
-            recuperacao = "FRACA"
-        else:
-            condicao_mercado = "MERCADO INSTÁVEL (Oscilação Excessive de Vetores)"
-            degradacao = "MEDIANA"
-            recuperacao = "MEDIANA"
+        if p_fa >= 25.0: condicao_mercado = "MERCADO EM DEGRADAÇÃO"
+        elif p_g0 >= 50.0: condicao_mercado = "MERCADO PAGADOR"
+        elif p_g1 >= 40.0: condicao_mercado = "MERCADO COM ATRASO CONTROLADO"
+        else: condicao_mercado = "MERCADO INSTÁVEL"
 
         output = "[MEMÓRIA DE CÁLCULO DAS JANELAS MÓVEIS]\n" + "\n".join(memorias) + "\n\n"
         output += "[RESULTADO FINAL TIPO D]\n"
-        output += f"CRONOLOGIA VALIDADA: {self.seq.total} Resultados Reconstruídos\n"
-        output += f"TOTAL DE JANELAS AUDITADAS: {qtd_janelas} Saltos Sequenciais\n"
-        output += f" - Taxa G0: {stats['G0']} Ocorrências ({p_g0:.2f}%)\n"
-        output += f" - Taxa G1: {stats['G1']} Ocorrências ({p_g1:.2f}%)\n"
-        output += f" - Taxa G2: {stats['G2']} Ocorrências ({p_g2:.2f}%)\n"
-        output += f" - Taxa de Falha: {stats['FALHA']} Ocorrências ({p_fa:.2f}%)\n"
-        output += f" - Taxa de NO CALL: {stats['NO CALL']} Ocorrências ({p_nc:.2f}%)\n\n"
-        output += f"DEGRADAÇÃO EVOLUTIVA: {degradacao}\n"
-        output += f"RECUPERAÇÃO EVOLUTIVA: {recuperacao}\n"
+        output += f"TOTAL DE JANELAS AUDITADAS: {qtd_janelas}\n"
+        output += f" - Taxa G0: {stats['G0']} ({p_g0:.2f}%)\n"
+        output += f" - Taxa G1: {stats['G1']} ({p_g1:.2f}%)\n"
+        output += f" - Taxa G2: {stats['G2']} ({p_g2:.2f}%)\n"
+        output += f" - Taxa de Falha: {stats['FALHA']} ({p_fa:.2f}%)\n"
+        output += f" - Taxa de NO CALL: {stats['NO CALL']} ({p_nc:.2f}%)\n\n"
         output += f"ESTADO ATUAL DO MERCADO: {condicao_mercado}\n"
         return output
 
@@ -395,14 +385,13 @@ class ProcessadorTipoB:
             elif 1 <= num <= 7: self.polaridades_usuario.append("V")
             else: self.polaridades_usuario.append("P")
 
-    def executar_sinal_real(self):
+    def ejecutar_sinal_real(self):
         if len(self.entrada_usuario) != 12: 
             return {"erro": "Requisito de exatamente 12 números violado."}
             
         leitor_longo = LeitorXLS(self.caminho_base)
         base_longo = leitor_longo.ler_e_validar()
-        if not base_longo: 
-            return {"erro": "Base de dados resultados_blaze.xlsx ausente."}
+        if not base_longo: return {"erro": "Base de dados ausente."}
 
         base_recencia = None
         if os.path.exists(self.caminho_recencia):
@@ -428,15 +417,10 @@ class ProcessadorTipoB:
         )
 
         chance_branco, casas_atraso = AnalisadorContextoAvancado.preditor_estatistico_branco(num_fechamento, num_global, pol_global)
-        status_recencia = "ATIVA (Peso Triplicado e Balanceamento de 75% Recente)" if base_recencia else "INATIVA"
 
         output_memoria = (
-            f"- Mapeamento: Sequência {self.entrada_usuario} processada.\n"
+            f"- Mapeamento: Sequência {self.entrada_usuario}\n"
             f"- Geometria da Janela: {saturacao}\n"
-            f"- Alerta de Inversão: {status_inv[2]}\n"
-            f"- Calibração de Recência: {status_recencia}\n"
-            f"- Previsão IA: {previsao_ia[0]} ({previsao_ia[1]:.1f}%)\n"
-            f"- Inclinação Histórica ({num_fechamento}): {inclinacao_num[0]} ({inclinacao_num[1]:.1f}%)\n"
             f"- Resolução de Conflitos: {justificativa}\n"
         )
 
