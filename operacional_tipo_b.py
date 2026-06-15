@@ -1,5 +1,4 @@
 import os
-import pandas as pd
 from main import LeitorXLS, MotorNoCall, MotorContagensProjetivas, AnalisadorContextoAvancado, JuizHierarquicoModificado, IAPreditivaV1
 
 class ProcessadorTipoB:
@@ -17,7 +16,8 @@ class ProcessadorTipoB:
             else: 
                 self.polaridades_usuario.append("P")
 
-    def ejecutar_sinal_real(self):
+    # CORREÇÃO CRÍTICA: Alterado de 'ejecutar' para 'executar' para alinhar com a interface
+    def executar_sinal_real(self):
         if len(self.entrada_usuario) != 12: 
             return "[ERRO] Requisito de exatamente 12 números violado."
             
@@ -34,7 +34,7 @@ class ProcessadorTipoB:
         ia_operacional = IAPreditivaV1(base_historica)
         previsao_ia = ia_operacional.predizer_proxima_casa(self.entrada_usuario, self.polaridades_usuario)
 
-        # 2. Mapeia a geometria de mercado com base na entrada atual do utilizador
+        # 2. Mapeia a geometria de mercado com base na entrada atual do usuário
         saturacao = AnalisadorContextoAvancado.mapear_padroes_geometria(self.polaridades_usuario)
         
         # 3. Executa a checagem rigorosa de travas de Nível 1 (Duplas, 2, 6 e Branco nas posições do manual)
@@ -55,14 +55,14 @@ class ProcessadorTipoB:
         # 7. Preditor de atraso do Branco estatístico
         chance_branco, casas_atraso = AnalisadorContextoAvancado.preditor_estatistico_branco(num_fechamento, num_global, pol_global)
 
-        # Construção da memória de cálculo formatada para a interface
+        # Construção da memória de cálculo formatada para a interface (Volume 22 - Capítulo 1)
         output = "[MEMÓRIA DE CÁLCULO]\n"
         output += f"- Mapeamento: Sequência {self.entrada_usuario} processada.\n"
         output += f"- Geometria da Janela: {saturacao}\n"
         output += f"- Previsão IA: {previsao_ia[0]} ({previsao_ia[1]:.1f}%)\n"
         output += f"- Inclinação Histórica ({num_fechamento}): {inclinacao_num[0]} ({inclinacao_num[1]:.1f}%)\n"
         output += f"- Resolução de Conflitos: {justificativa}\n\n"
-        output += "[RESULTADO FINAL]\n"
+        output += "[RESULTADO FINAL TIPO B]\n"
         output += f"SINAL: {sinal_final}\n"
         output += f"BRANCO: {chance_branco} CHANCE (Atraso: {casas_atraso} rodadas)\n"
         output += f"ESTADO DO MERCADO: {saturacao}\n"
