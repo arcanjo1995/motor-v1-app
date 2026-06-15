@@ -62,11 +62,9 @@ class IAPreditivaV1:
         return "NEUTRO", max(prob_v, prob_p)
 
 class GerenciadorMemoriaViva:
-    """Classe de Autoaprendizado Ativo alimentada com números reais digitados pelo usuário"""
     @staticmethod
     def injetar_rodadas_reais(sequencia_12, numeros_gales_reais, caminho_recencia="base_recencia_ativa.xlsx"):
         novas_linhas = []
-        
         for num in sequencia_12:
             if num == 0: cor = 'B'
             elif 1 <= num <= 7: cor = 'V'
@@ -181,6 +179,22 @@ class AnalisadorContextoAvancado:
         return "ESTÁVEL"
 
     @staticmethod
+    def detectar_chance_inversao(sub_pol):
+        """Mapeador de Exaustão de Tendência por Saturação de Fluxo (Volume 14)"""
+        texto_sub_pol = "".join(sub_pol)
+        # Se o final da sequência contiver 5 pedras seguidas da mesma cor, há risco iminente de inversão
+        if texto_sub_pol.endswith("VVVVV"):
+            return True, "INVERSÃO", "Exaustão Crítica de Fluxo: 5 Vermelhos Seguidos. Alerta de Quebra para PRETO."
+        if texto_sub_pol.endswith("PPPPP"):
+            return True, "INVERSÃO", "Exaustão Crítica de Fluxo: 5 Pretos Seguidos. Alerta de Quebra para VERMELHO."
+        
+        # Se houver um xadrez muito longo ativo no fechamento, detecta saturação alternada
+        if texto_sub_pol.endswith("VPVPVP") or texto_sub_pol.endswith("PVPVPV"):
+            return True, "AVISO_XADREZ", "Alerta de Fim de Ciclo de Alternância (Xadrez Longo Saturo)."
+            
+        return False, "NORMAL", "Fluxo Inercial Estável."
+
+    @staticmethod
     def preditor_estatistico_branco(num_fechamento, sequencia_num, sequencia_pol):
         if not sequencia_pol: return "BAIXA", 0
         atraso_atual = 0
@@ -201,13 +215,21 @@ class AnalisadorContextoAvancado:
 
 class JuizHierarquicoModificado:
     @staticmethod
-    def arbitrar_sinal(no_call_ativo, motivo_nc, expectativas, inclinacao_num, geometria_mercado, previsao_ia):
+    def arbitrar_sinal(no_call_ativo, motivo_nc, expectativas, inclinacao_num, geometria_mercado, previsao_ia, status_inversao):
         if no_call_ativo: 
             return "NO CALL", motivo_nc
 
+        # Desempacota o detector de inversão
+        risco_ativo, tipo_inversao, justificativa_inv = status_inversao
         direcao_ia, confianca_ia = previsao_ia
         direcao_inclinacao, porc = inclinacao_num
         direcoes_projetadas = list(set([e["direcao"] for e in expectativas]))
+
+        # SE HOUVER EXAUSTÃO CRÍTICA DE COR (Inversão Forçada do Manual Volume 14)
+        if risco_ativo and tipo_inversao == "INVERSÃO":
+            # Força o sinal contra a saturação do mercado
+            sinal_inverso = "PRETO" if "Vermelhos Seguidos" in justificativa_inv else "VERMELHO"
+            return sinal_inverso, f"Volume 14 Cap 2 (Gatilho Antiatraso): {justificativa_inv}"
 
         if expectativas:
             if len(direcoes_projetadas) > 1:
@@ -216,6 +238,11 @@ class JuizHierarquicoModificado:
                 if direcao_inclinacao in direcoes_projetadas and porc >= 55.0:
                     return direcao_inclinacao, f"Volume 18: Conflito resolvido por Inclinação Histórica ({porc:.1f}%)"
                 return "NO CALL", "Volume 18: Conflito Hierárquico Sem Consenso (Cenário de Risco)"
+            
+            # Se a projeção mandar seguir o xadrez mas ele estiver saturo, entra em NO CALL protetivo
+            if risco_ativo and tipo_inversao == "AVISO_XADREZ":
+                return "NO CALL", f"Bloqueio Preventivo: {justificativa_inv}"
+                
             return direcoes_projetadas[0], expectativas[0]["origem"]
             
         if direcao_inclinacao != "NEUTRO" and porc >= 55.0:
@@ -234,7 +261,6 @@ class JuizHierarquicoModificado:
         return "PRETO", "Arbitragem de Bloco Inercial de Fechamento por Consenso"
 
 class MotorV1Completo:
-    """Classe de Auditoria Cronológica em Massa (Tipo D) - Restaurada!"""
     def __init__(self, lista_dados_xls):
         self.seq = SequenciaOperacional(lista_dados_xls)
         self.ia = IAPreditivaV1(lista_dados_xls)
@@ -250,6 +276,7 @@ class MotorV1Completo:
             sub_pol = self.seq.polaridades[idx : idx + 12]
 
             geometria = AnalisadorContextoAvancado.mapear_padroes_geometria(sub_pol)
+            status_inv = AnalisadorContextoAvancado.detectar_chance_inversao(sub_pol)
             nc_ativo, motivo_nc = MotorNoCall.checar_no_call(sub_num, sub_pol)
             expectativas = MotorContagensProjetivas.mapear_janela(sub_num, sub_pol, geometria)
 
@@ -258,7 +285,7 @@ class MotorV1Completo:
             previsao_ia = self.ia.predizer_proxima_casa(sub_num, sub_pol)
             
             expectativa_final, justificativa = JuizHierarquicoModificado.arbitrar_sinal(
-                nc_ativo, motivo_nc, expectativas, inclinacao_num, geometria, previsao_ia
+                nc_ativo, motivo_nc, expectativas, inclinacao_num, geometria, previsao_ia, status_inv
             )
 
             horizonte_max = min(3, self.seq.total - (idx + 12))
@@ -372,6 +399,7 @@ class ProcessadorTipoB:
         previsao_ia = ia_operacional.predizer_proxima_casa(self.entrada_usuario, self.polaridades_usuario)
 
         saturacao = AnalisadorContextoAvancado.mapear_padroes_geometria(self.polaridades_usuario)
+        status_inv = AnalisadorContextoAvancado.detectar_chance_inversao(self.polaridades_usuario)
         nc_ativo, motivo_nc = MotorNoCall.checar_no_call(self.entrada_usuario, self.polaridades_usuario)
         expectativas = MotorContagensProjetivas.mapear_janela(self.entrada_usuario, self.polaridades_usuario, saturacao)
         
@@ -379,7 +407,7 @@ class ProcessadorTipoB:
         inclinacao_num = AnalisadorContextoAvancado.calcular_numerologia_pos_numero(num_fechamento, num_global, pol_global)
         
         sinal_final, justificativa = JuizHierarquicoModificado.arbitrar_sinal(
-            nc_ativo, motivo_nc, Forest_expectativas if 'Forest_expectativas' in locals() else expectativas, inclinacao_num, saturacao, previsao_ia
+            nc_ativo, motivo_nc, expectativas, inclinacao_num, saturacao, previsao_ia, status_inv
         )
 
         chance_branco, casas_atraso = AnalisadorContextoAvancado.preditor_estatistico_branco(num_fechamento, num_global, pol_global)
@@ -388,6 +416,7 @@ class ProcessadorTipoB:
         output = "[MEMÓRIA DE CÁLCULO]\n"
         output += f"- Mapeamento: Sequência {self.entrada_usuario} processada.\n"
         output += f"- Geometria da Janela: {saturacao}\n"
+        output += f"- Alerta de Inversão: {status_inv[2]}\n"
         output += f"- Calibração de Recência: {status_recencia}\n"
         output += f"- Previsão IA: {previsao_ia[0]} ({previsao_ia[1]:.1f}%)\n"
         output += f"- Inclinação Histórica ({num_fechamento}): {inclinacao_num[0]} ({inclinacao_num[1]:.1f}%)\n"
