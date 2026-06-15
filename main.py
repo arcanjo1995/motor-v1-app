@@ -18,11 +18,9 @@ class IAPreditivaV1:
         self._treinar_modelo()
 
     def _treinar_modelo(self):
-        # 1. Treina com a base histórica de Longo Prazo (Peso Base)
         if self.dados_longo and len(self.dados_longo) >= 5:
             self._processar_bloco_dados(self.dados_longo, multiplicador_peso=1)
             
-        # 2. SE EXISTIR AUDITORIA DE RECÊNCIA: Treina por cima injetando Peso Triplicado (Volume 16)
         if self.dados_recencia and len(self.dados_recencia) >= 5:
             self._processar_bloco_dados(self.dados_recencia, multiplicador_peso=3)
 
@@ -32,7 +30,6 @@ class IAPreditivaV1:
             proxima_cor = dados[i+2]['cor']
             num_atual = dados[i+1]['numero']
             
-            # Aplica o multiplicador para dar mais importância aos dados de recência
             for _ in range(multiplicador_peso):
                 self.modelo_transicao[estado_atual_cor].append(proxima_cor)
                 self.modelo_numerico[num_atual].append(proxima_cor)
@@ -63,6 +60,38 @@ class IAPreditivaV1:
         elif prob_p >= BARREIRA_CONFIA_IA and prob_p > prob_v:
             return "PRETO", prob_p
         return "NEUTRO", max(prob_v, prob_p)
+
+class GerenciadorMemoriaViva:
+    """Classe de Autoaprendizado Ativo alimentada com números reais digitados pelo usuário"""
+    @staticmethod
+    def injetar_rodadas_reais(sequencia_12, numeros_gales_reais, caminho_recencia="base_recencia_ativa.xlsx"):
+        novas_linhas = []
+        
+        # 1. Adiciona os 12 números da janela base
+        for num in sequencia_12:
+            if num == 0: cor = 'B'
+            elif 1 <= num <= 7: cor = 'V'
+            else: cor = 'P'
+            novas_linhas.append({"numero": int(num), "cor": cor})
+            
+        # 2. Adiciona os números reais das rodadas seguintes informadas pelo usuário
+        for num in numeros_gales_reais:
+            if num == 0: cor = 'B'
+            elif 1 <= num <= 7: cor = 'V'
+            else: cor = 'P'
+            novas_linhas.append({"numero": int(num), "cor": cor})
+
+        # 3. Consolida no arquivo Excel de recência ativa no servidor
+        df_novos = pd.DataFrame(novas_linhas)
+        if os.path.exists(caminho_recencia):
+            try:
+                df_atual = pd.read_excel(caminho_recencia)
+                df_consolidado = pd.concat([df_atual, df_novos], ignore_index=True)
+                df_consolidado.to_excel(caminho_recencia, index=False)
+            except:
+                df_novos.to_excel(caminho_recencia, index=False)
+        else:
+            df_novos.to_excel(caminho_recencia, index=False)
 
 class MotorNoCall:
     @staticmethod
@@ -190,7 +219,7 @@ class JuizHierarquicoModificado:
                 if direcao_inclinacao in direcoes_projetadas and porc >= 55.0:
                     return direcao_inclinacao, f"Volume 18: Conflito resolvido por Inclinação Histórica ({porc:.1f}%)"
                 return "NO CALL", "Volume 18: Conflito Hierárquico Sem Consenso (Cenário de Risco)"
-            return direcoes_projetadas[0], expectations[0]["origem"] if 'expectations' in locals() else expectativas[0]["origem"]
+            return direcoes_projetadas[0], expectativas[0]["origem"]
             
         if direcao_inclinacao != "NEUTRO" and porc >= 55.0:
             if direcao_ia == direcao_inclinacao:
@@ -313,7 +342,7 @@ class ProcessadorTipoB:
     def __init__(self, sequencia_12_numeros, caminho_base_dados):
         self.entrada_usuario = sequencia_12_numeros
         self.caminho_base = caminho_base_dados
-        self.caminho_recencia = "base_recencia_ativa.xlsx" # Arquivo de memória rápida
+        self.caminho_recencia = "base_recencia_ativa.xlsx"
         
         self.polaridades_usuario = []
         for num in self.entrada_usuario:
@@ -333,7 +362,6 @@ class ProcessadorTipoB:
         if not base_longo: 
             return "[ERRO] Base de dados resultados_blaze.xlsx ausente."
 
-        # Verifica se existe um aprendizado de recência ativo salvo no servidor
         base_recencia = None
         if os.path.exists(self.caminho_recencia):
             leitor_recencia = LeitorXLS(self.caminho_recencia)
@@ -342,7 +370,6 @@ class ProcessadorTipoB:
         num_global = [d['numero'] for d in base_longo]
         pol_global = [d['cor'] for d in base_longo]
 
-        # INSTANCIA A IA INTERLIGANDO AS DUAS MEMÓRIAS (Longo Prazo + Recência)
         ia_operacional = IAPreditivaV1(base_longo, base_recencia)
         previsao_ia = ia_operacional.predizer_proxima_casa(self.entrada_usuario, self.polaridades_usuario)
 
@@ -354,12 +381,10 @@ class ProcessadorTipoB:
         inclinacao_num = AnalisadorContextoAvancado.calcular_numerologia_pos_numero(num_fechamento, num_global, pol_global)
         
         sinal_final, justificativa = JuizHierarquicoModificado.arbitrar_sinal(
-            nc_ativo, motivo_nc, expectations if 'expectations' in locals() else expectativas, inclinacao_num, saturacao, previsao_ia
+            nc_ativo, motivo_nc, expectativas, inclinacao_num, saturacao, previsao_ia
         )
 
         chance_branco, casas_atraso = AnalisadorContextoAvancado.preditor_estatistico_branco(num_fechamento, num_global, pol_global)
-
-        # Informa no log se a IA usou a calibração de recência ativa
         status_recencia = "ATIVA (Peso Triplicado)" if base_recencia else "INATIVA (Apenas Longo Prazo)"
 
         output = "[MEMÓRIA DE CÁLCULO]\n"
