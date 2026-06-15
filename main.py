@@ -82,8 +82,6 @@ class MotorContagensProjetivas:
     def mapear_janela(sub_num, sub_pol, geometria_mercado):
         expectativas = []
         
-        # ALINHAMENTO GEOMÉTRICO ESTREITO CONFORME O VOLUME 3, CAPÍTULO 2 DO MANUAL
-        # O passo mapeia a distância exata até o fechamento da contagem temporal
         REGRAS_PROJECAO = {
             1: 1,  # Contagem 1: Imediata
             2: 2,  # Contagem 2: 2-X -> Fecha em 2 casas
@@ -110,9 +108,6 @@ class MotorContagensProjetivas:
                         "origem": f"Volume 3: Ativador {num_atual} na {i+1}ª casa"
                     })
 
-        # =========================================================================
-        # ALINHAMENTO INTEGRAL DA REGRA DO NÚMERO 4 (Volume 2 e Volume 12)
-        # =========================================================================
         # Cenário 1 e 2: O 4 está no fechamento (posição 12) sustentado por base preta
         if sub_num[11] == 4 and sub_pol[10] == "P":
             expectativas.append({"direcao": "PRETO", "origem": "Volume 12: Cap 5 - Retenção do 4 sob Base Preta (Cenário 1/2)"})
@@ -255,7 +250,11 @@ class MotorV1Completo:
             else:
                 letra_esperada = "V" if expectativa_final == "VERMELHO" else "P"
                 for g_idx, cor_real in enumerate(correcoes_reais):
-                    if g_idx < len(correcoes_reais) and correcoes_reais[g_idx] == letra_esperada:
+                    # =========================================================================
+                    # MODIFICAÇÃO SUPREMA: BRANCO ('B') ACEITO COMO GREEN (G0, G1, G2)
+                    # Se sair a cor que esperávamos OU se bater um Branco ('B'), valida o acerto.
+                    # =========================================================================
+                    if g_idx < len(correcoes_reais) and (correcoes_reais[g_idx] == letra_esperada or correcoes_reais[g_idx] == "B"):
                         classificacao = f"G{g_idx}"
                         salto = g_idx + 1
                         break
