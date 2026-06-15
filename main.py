@@ -11,104 +11,65 @@ class SequenciaOperacional:
 
 class IAPreditivaV1:
     def __init__(self, dados_limpos):
-        """
-        Inicializa a IA Preditiva utilizando a cronologia reconstruída.
-        Mapeia a probabilidade de transição de estados com base em pesos de contexto.
-        """
         self.dados = dados_limpos
         self.modelo_transicao = defaultdict(list)
         self.modelo_numerico = defaultdict(list)
         self._treinar_modelo()
 
     def _treinar_modelo(self):
-        """
-        Treina a IA analisando os padrões históricos de recência.
-        Mapeia sequências de cores e resíduos de fechamentos numéricos.
-        """
         if not self.dados or len(self.dados) < 5:
             return
-
         for i in range(len(self.dados) - 2):
-            # Padrão sequencial geométrico (últimas 2 pedras)
             estado_atual_cor = (self.dados[i]['cor'], self.dados[i+1]['cor'])
             proxima_cor = self.dados[i+2]['cor']
             self.modelo_transicao[estado_atual_cor].append(proxima_cor)
-
-            # Padrão de resíduo numérico imediato
             num_atual = self.dados[i+1]['numero']
             self.modelo_numerico[num_atual].append(proxima_cor)
 
     def predizer_proxima_casa(self, sub_num, sub_pol):
-        """
-        Executa a inferência cruzando a Geometria Atual com a tendência histórica.
-        Retorna o Veredito da IA e a sua taxa de confiança percentual.
-        """
         if len(sub_num) < 12:
             return "NEUTRO", 0.0
-
         ultimo_num = sub_num[-1]
         ultimas_cores = (sub_pol[-2], sub_pol[-1])
-
-        # 1. Probabilidade por Padrão de Polaridade (Peso 60%)
         proximas_cores_historicas = self.modelo_transicao.get(ultimas_cores, [])
-        # 2. Probabilidade por Resíduo de Fechamento (Peso 40%)
         proximas_cores_por_num = self.modelo_numerico.get(ultimo_num, [])
-
         total_v = (proximas_cores_historicas.count('V') * 0.6) + (proximas_cores_por_num.count('V') * 0.4)
         total_p = (proximas_cores_historicas.count('P') * 0.6) + (proximas_cores_por_num.count('P') * 0.4)
         total_b = (proximas_cores_historicas.count('B') * 0.6) + (proximas_cores_por_num.count('B') * 0.4)
-
         soma_pesos = total_v + total_p + total_b
         if soma_pesos == 0:
             return "NEUTRO", 0.0
-
         prob_v = (total_v / soma_pesos) * 100
         prob_p = (total_p / soma_pesos) * 100
-
-        # Barreira estatística de segurança para ativação do sinal da IA
         BARREIRA_CONFIA_IA = 58.0
-
         if prob_v >= BARREIRA_CONFIA_IA and prob_v > prob_p:
             return "VERMELHO", prob_v
         elif prob_p >= BARREIRA_CONFIA_IA and prob_p > prob_v:
             return "PRETO", prob_p
-        
         return "NEUTRO", max(prob_v, prob_p)
 
 class MotorNoCall:
     @staticmethod
     def checar_no_call(sub_num, sub_pol):
-        # =========================================================================
-        # 1. REGRA DAS DUPLAS (Volume 2, Capítulo 6) - Adjacência Cronológica Absoluta
-        # Estruturas oficiais mapeadas: [7-8], [8-9], [9-10], [10-11]
-        # =========================================================================
+        # 1. TRAVA DAS DUPLAS (Volume 2 Cap 6) - Adjacência Cronológica Absoluta nas posições oficiais
         cenarios_duplas = [(7, 8), (8, 9), (9, 10), (10, 11)]
         for idx1, idx2 in cenarios_duplas:
             if sub_num[idx1] == sub_num[idx2]:
                 return True, f"Volume 2 Cap 6: Trava das Duplas Ativa nas posições {idx1+1}º-{idx2+1}º ({sub_num[idx1]}-{sub_num[idx2]})"
 
-        # =========================================================================
-        # 2. TRAVA DE POSICIONAMENTO DO NÚMERO 6 (Volume 2, Capítulo 4)
-        # Estruturas oficiais mapeadas nas casas: 6ª(idx 5), 9ª(idx 8), 10ª(idx 9), 11ª(idx 10)
-        # =========================================================================
+        # 2. TRAVA DO NÚMERO 6 (Volume 2 Cap 4) - Posições Oficiais
         posicoes_criticas_6 = [5, 8, 9, 10]
         for pos in posicoes_criticas_6:
             if sub_num[pos] == 6:
                 return True, f"Volume 2 Cap 4: Trava Crítica do Número 6 Posicional na {pos+1}ª casa"
 
-        # =========================================================================
-        # 3. TRAVA DE POSICIONAMENTO DO NÚMERO 2 (Volume 2, Capítulo 3)
-        # Estruturas oficiais mapeadas nas casas: 9ª(idx 8), 10ª(idx 9), 11ª(idx 10), 12ª(idx 11)
-        # =========================================================================
+        # 3. TRAVA DO NÚMERO 2 (Volume 2 Cap 3) - Posições Oficiais
         posicoes_criticas_2 = [8, 9, 10, 11]
         for pos in posicoes_criticas_2:
             if sub_num[pos] == 2:
                 return True, f"Volume 2 Cap 3: Trava Crítica do Número 2 Posicional na {pos+1}ª casa"
 
-        # =========================================================================
-        # 4. TRAVA DE POSICIONAMENTO DO BRANCO (Volume 2, Capítulo 5)
-        # Estruturas oficiais mapeadas nas casas: 6ª(idx 5), 9ª(idx 8), 10ª(idx 9), 11ª(idx 10), 12ª(idx 11)
-        # =========================================================================
+        # 4. TRAVA DO BRANCO (Volume 2 Cap 5) - Posições Oficiais
         posicoes_criticas_b = [5, 8, 9, 10, 11]
         for pos in posicoes_criticas_b:
             if sub_pol[pos] == "B":
@@ -129,12 +90,10 @@ class MotorContagensProjetivas:
                 if i + passo == 11:
                     if i < 10 and 0 in sub_num[i:11]:
                         continue
-                    
                     if num_atual == 6:
                         direcao_sinal = "PRETO" if "VERMELHO" not in geometria_mercado else "VERMELHO"
                     else:
                         direcao_sinal = "PRETO" if "PRETO" in geometria_mercado else "VERMELHO"
-                    
                     expectativas.append({
                         "direcao": direcao_sinal,
                         "origem": f"Volume 3: Ativador {num_atual} na {i+1}ª casa"
@@ -202,19 +161,15 @@ class AnalisadorContextoAvancado:
 class JuizHierarquicoModificado:
     @staticmethod
     def arbitrar_sinal(no_call_ativo, motivo_nc, expectativas, inclinacao_num, geometria_mercado, previsao_ia):
-        # 1. TRAVAS DE NÍVEL 1 (Volume 1 e 2): Duplas, Brancos, 2 ou 6 posicionais nas zonas críticas
+        # 1. SEGUIMENTOS OFICIAIS DE NO CALL (NÍVEL 1 ABSOLUTO: 2, 6, Branco e Duplas posicionais)
         if no_call_ativo: 
             return "NO CALL", motivo_nc
-            
-        # 2. BLOQUEIO GEOMÉTRICO (Apenas o Xadrez Longo atua travando por indefinição de ciclo)
-        if geometria_mercado == "XADREZ LONGO":
-            return "NO CALL", f"Volume 22: Bloqueio Geométrico por Mapeamento de {geometria_mercado}"
 
         direcao_ia, confianca_ia = previsao_ia
         direcao_inclinacao, porc = inclinacao_num
         direcoes_projetadas = list(set([e["direcao"] for e in expectativas]))
 
-        # 3. CENÁRIO: Ativadores de Volume 3 Ativos com validação de desempate via IA
+        # 2. RESOLUÇÃO COM EXPECTATIVAS DE VOLUME 3 ATIVAS
         if expectativas:
             if len(direcoes_projetadas) > 1:
                 if direcao_ia in direcoes_projetadas:
@@ -224,22 +179,21 @@ class JuizHierarquicoModificado:
                 return "NO CALL", "Volume 18: Conflito Hierárquico Sem Consenso (Cenário de Risco)"
             return direcoes_projetadas[0], expectativas[0]["origem"]
             
-        # 4. CENÁRIO: Ausência de Projeção Linear -> Validação conjunta entre Inclinação e IA
+        # 3. SEM ATIVADORES DE VOLUME 3 -> A MATRIZ E A IA ASSUMEM O COMANDO DIRETAMENTE (Sem dar NO CALL por falta de regra)
         if direcao_inclinacao != "NEUTRO" and porc >= 55.0:
             if direcao_ia == direcao_inclinacao:
-                return direcao_inclinacao, f"Matriz + IA Confirmada: Alinhamento de Tendência com {confianca_ia:.1f}%"
+                return direcao_inclinacao, f"Matriz + IA Unificadas: Alinhamento de Tendência Global com {confianca_ia:.1f}%"
             return direcao_inclinacao, f"Matriz Pós-Número Padrão: Tendência Proporcional de {porc:.1f}%"
             
-        # 5. CENÁRIO DE SEGURANÇA: Se a Matriz for neutra mas a IA cravar convergência forte
-        if direcao_ia != "NEUTRO":
-            return direcao_ia, f"IA Preditiva Isolada: Convergência de Fluxo de {confianca_ia:.1f}%"
+        # 4. SE A MATRIZ FOR OPERACIONALMENTE NEUTRA, A IA PRENDE A DIRETRIZ ESTATÍSTICA
+        if direcao_ia != "NEUTRO" and confianca_ia >= 58.0:
+            return direcao_ia, f"IA Preditiva Isolada: Fluxo Direcional Recente Confirmado de {confianca_ia:.1f}%"
 
-        return "NO CALL", "Volume 18: Ausência de Diretriz Analítica Combinada"
+        return "NO CALL", f"Volume 18: Ausência de Diretriz Analítica Combinada (Mercado Sem Força Histórica ou IA)"
 
 class MotorV1Completo:
     def __init__(self, lista_dados_xls):
         self.seq = SequenciaOperacional(lista_dados_xls)
-        # Instancia e treina a Inteligência Artificial com a base de longo prazo reconstruída
         self.ia = IAPreditivaV1(lista_dados_xls)
 
     def processar_auditoria(self):
@@ -258,11 +212,8 @@ class MotorV1Completo:
 
             num_fechamento = sub_num[-1]
             inclinacao_num = AnalisadorContextoAvancado.calcular_numerologia_pos_numero(num_fechamento, self.seq.numerica, self.seq.polaridades)
-            
-            # Executa o cálculo probabilístico da IA Preditiva para a janela atual
             previsao_ia = self.ia.predizer_proxima_casa(sub_num, sub_pol)
             
-            # CHAMADA LIMPA E CORRIGIDA DO JUIZ
             expectativa_final, justificativa = JuizHierarquicoModificado.arbitrar_sinal(
                 nc_ativo, motivo_nc, expectativas, inclinacao_num, geometria, previsao_ia
             )
@@ -299,11 +250,11 @@ class MotorV1Completo:
 
     def _gerar_relatorio_texto(self, memorias, stats, qtd_janelas):
         total_com_sinal = sum([stats["G0"], stats["G1"], stats["G2"], stats["FALHA"]])
-        denominador = total_com_sinal if total_com_sinal > 0 else 1
-        denominador_nc = qtd_janelas if qtd_janelas > 0 else 1
+        denominator = total_com_sinal if total_com_sinal > 0 else 1
+        denominator_nc = qtd_janelas if qtd_janelas > 0 else 1
 
-        p_g0, p_g1, p_g2, p_fa = (stats["G0"]/denominador)*100, (stats["G1"]/denominador)*100, (stats["G2"]/denominador)*100, (stats["FALHA"]/denominador)*100
-        p_nc = (stats["NO CALL"]/denominador_nc)*100
+        p_g0, p_g1, p_g2, p_fa = (stats["G0"]/denominator)*100, (stats["G1"]/denominator)*100, (stats["G2"]/denominator)*100, (stats["FALHA"]/denominator)*100
+        p_nc = (stats["NO CALL"]/denominator_nc)*100
         total_v, total_p, total_b = self.seq.polaridades.count("V"), self.seq.polaridades.count("P"), self.seq.polaridades.count("B")
 
         estado_mercado = "ESTÁVEL" if p_fa < 22 else "INSTABILIDADE"
@@ -333,38 +284,30 @@ class LeitorXLS:
         try:
             try: df = pd.read_excel(self.caminho)
             except: df = pd.read_csv(self.caminho)
-                
             df.columns = [str(col).strip().lower() for col in df.columns]
-            
             mapeamento_colunas = {
                 'val': 'numero', 'value': 'numero', 'num': 'numero', 'number': 'numero',
                 'resultado': 'numero', 'roll': 'numero', 'giro': 'numero', 'spin': 'numero',
                 'color': 'cor', 'cor': 'cor', 'result': 'cor'
             }
             df = df.rename(columns=mapeamento_colunas)
-            
             colunas_atuais = df.columns.tolist()
             col_numero, col_cor = None, None
-            
             for col in colunas_atuais:
                 col_lower = str(col).lower().strip()
                 if any(x in col_lower for x in ['val', 'num', 'number', 'roll', 'giro', 'spin']) and not any(x in col_lower for x in ['color', 'cor']):
                     col_numero = col
                 if any(x in col_lower for x in ['color', 'cor']):
                     col_cor = col
-            
             if col_numero is None and len(colunas_atuais) >= 1: col_numero = colunas_atuais[0]
             if col_cor is None and len(colunas_atuais) >= 2: col_cor = colunas_atuais[1]
             if col_numero is None or col_cor is None: return None
-            
             df = df.rename(columns={col_numero: 'numero', col_cor: 'cor'})
             df_cronologico = df.iloc[::-1].reset_index(drop=True)
             if len(df_cronologico) < 15: return None
-                
             LEGENDA_BRANCO = [0]
             LEGENDA_VERMELHO = [1, 2, 3, 4, 5, 6, 7]
             LEGENDA_PRETO = [8, 9, 10, 11, 12, 13, 14]
-            
             dados_limpos = []
             for _, l in df_cronologico.iterrows():
                 try:
@@ -373,7 +316,6 @@ class LeitorXLS:
                     elif num_val in LEGENDA_VERMELHO: cor_final = 'V'
                     elif num_val in LEGENDA_PRETO: cor_final = 'P'
                     else: continue
-                        
                     dados_limpos.append({"numero": num_val, "cor": cor_final})
                 except: continue
             return dados_limpos if dados_limpos else None
