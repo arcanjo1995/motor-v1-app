@@ -5,13 +5,15 @@ class ProcessadorTipoB:
     def __init__(self, sequencia_12_numeros, caminho_base_dados):
         self.entrada_usuario = sequencia_12_numeros
         self.caminho_base = caminho_base_dados
+        
+        # LEGENDA REAL IMUTÁVEL PARA ENTRADA MANUAL
         self.polaridades_usuario = []
         for num in self.entrada_usuario:
             if num == 0: self.polaridades_usuario.append("B")
-            elif num in [1,2,3,4,5,6,7]: self.polaridades_usuario.append("V")
+            elif 1 <= num <= 7: self.polaridades_usuario.append("V")
             else: self.polaridades_usuario.append("P")
 
-    def executar_sinal_real(self):
+    def ejecutar_sinal_real(self):
         if len(self.entrada_usuario) != 12: return "[ERRO] Requisito de exatamente 12 números violado."
         leitor = LeitorXLS(self.caminho_base)
         base_historica = leitor.ler_e_validar()
@@ -30,17 +32,6 @@ class ProcessadorTipoB:
 
         chance_branco, casas_atraso = AnalisadorContextoAvancado.preditor_estatistico_branco(num_fechamento, num_global, pol_global)
 
-        if sinal_final == "NO CALL":
-            mercado, qualidade, risco, expectativa_saida, controlador = "INSTÁVEL", "CRÍTICA", "CRÍTICO", "NO CALL", "Nenhum"
-            retardador = motivo_nc if nc_ativo else "Contexto Indefinido"
-        else:
-            mercado = "MERCADO PAGADOR" if saturacao == "ESTÁVEL" else "SATURAÇÃO"
-            qualidade = "EXCELENTE" if "Consenso" in justificativa else "BOA"
-            risco = "BAIXO" if qualidade == "EXCELENTE" else "MÉDIO"
-            expectativa_saida = "G0"
-            controlador = justificativa.split("via ")[1] if "via" in justificativa else "Matriz Pós-Número"
-            retardador = "Evento Neutro Operacional"
-
         output = "[MEMÓRIA DE CÁLCULO]\n"
         output += f"- Mapeamento: Sequência {self.entrada_usuario} processada.\n"
         output += f"- Geometria da Janela: {saturacao}\n"
@@ -49,11 +40,5 @@ class ProcessadorTipoB:
         output += "[RESULTADO FINAL]\n"
         output += f"SINAL: {sinal_final}\n"
         output += f"BRANCO: {chance_branco} CHANCE (Atraso: {casas_atraso} rodadas)\n"
-        output += "RESUMO MOTOR V1: Validação analítica concluída sob restrições do Adendo Normativo.\n"
-        output += f"CONTROLADOR: {controlador}\n"
-        output += f"RETARDADOR: {retardador}\n"
-        output += f"MERCADO: {mercado}\n"
-        output += f"QUALIDADE: {qualidade}\n"
-        output += f"RISCO DE ATRASO: {risco}\n"
-        output += f"EXPECTATIVA: {expectativa_saida}\n"
+        output += f"ESTADO DO MERCADO: {saturacao}\n"
         return output
