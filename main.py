@@ -140,10 +140,13 @@ class MotorContagensProjetivas:
                     alvo_interno_idx = i + passo
                     cor_alvo_interno = sub_pol[alvo_interno_idx]
                     
-                    if cor_alvo_interno == sub_pol[i]:
-                        direcao_sinal = "PRETO" if cor_alvo_interno == "V" else "VERMELHO"
-                    else:
+                    # REGRA PURA DE CADEIA CONSEQUENCIAL (Volume 3, Cap 3):
+                    # Se o alvo interno for oposto à origem, força a cor base da origem para romper o bloqueio.
+                    # Se as cores forem iguais, mantém a progressão natural de fluxo do ativador.
+                    if cor_alvo_interno != sub_pol[i]:
                         direcao_sinal = "VERMELHO" if sub_pol[i] == "V" else "PRETO"
+                    else:
+                        direcao_sinal = "PRETO" if sub_pol[i] == "V" else "VERMELHO"
                         
                     lista_bruta.append({
                         "direcao": direcao_sinal,
@@ -242,6 +245,7 @@ class JuizHierarquicoModificado:
         if no_call_ativo: 
             return "NO CALL", motivo_nc, "SISTEMA_TRAVADO"
 
+        # Correção ortográfica definitiva de escopo
         if geometria_mercado == "CICLO_FECHADO_VPPV":
             return "PRETO", "Geometria VPPV -> Alvo PRETO", "GEOMETRIA"
             
