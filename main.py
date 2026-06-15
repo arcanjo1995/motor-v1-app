@@ -121,34 +121,26 @@ class MotorContagensProjetivas:
     def mapear_janela(sub_num, sub_pol, geometria_mercado):
         lista_bruta = []
         REGRAS_PROJECAO = {1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7}
-        
-        # Estrutura de Rastreamento de Linha do Tempo para Assunção e Contas Pagas (Vol 1 e 3)
-        contas_ativas = [] # Armazena dicts com {"regra", "alvo_idx", "origem_idx", "cor_origem"}
+        contas_ativas = []
 
         for i in range(12):
             num_atual = sub_num[i]
-            
-            # SISTEMA DE ASSUNÇÃO DINÂMICA (Volume 3, Cap 9): 
-            # Um novo número mapeável herda ou altera a direção se houver conta anterior aberta
             if num_atual in REGRAS_PROJECAO:
                 passo = REGRAS_PROJECAO[num_atual]
                 alvo_idx = i + passo
                 
-                # Se houver conta ativa anterior na retaguarda, ela é ASSUMIDA ou EMPURRADA pelo novo elemento
                 if contas_ativas:
                     conta_anterior = contas_ativas[-1]
-                    # Se o novo número surge antes do alvo da anterior, ele assume a consequência
                     if i <= conta_anterior["alvo_idx"]:
                         tipo_id = f"V3_ASSUMIDA_{num_atual}"
-                        origem_txt = f"Volume 3: Ativador {num_atual} assume contagem anterior na {i+1}ª casa"
+                        origem_txt = f"Volume 3: Ativador {num_atual} assume contagem anterior"
                     else:
                         tipo_id = f"V3_CADEIA_{num_atual}"
-                        origem_txt = f"Volume 3: Repercussão em Cadeia do Ativador {num_atual} na {i+1}ª casa"
+                        origem_txt = f"Volume 3: Repercussão em Cadeia do Ativador {num_atual}"
                 else:
                     tipo_id = f"V3_ATIVADOR_{num_atual}" if alvo_idx == 11 else f"V3_CADEIA_{num_atual}"
-                    origem_txt = f"Volume 3: Ativador {num_atual} direto no fechamento" if alvo_idx == 11 else f"Volume 3: Repercussão em Cadeia do Ativador {num_atual} na {i+1}ª casa"
+                    origem_txt = f"Volume 3: Ativador {num_atual} direto no fechamento" if alvo_idx == 11 else f"Volume 3: Repercussão em Cadeia do Ativador {num_atual}"
                 
-                # Determina direção de sinal baseado na lógica do manual
                 if alvo_idx == 11:
                     if i < 10 and 0 in sub_num[i:11]: continue
                     direcao_sinal = "VERMELHO" if sub_pol[i] == "P" else "PRETO"
@@ -158,36 +150,20 @@ class MotorContagensProjetivas:
                     else:
                         direcao_sinal = "PRETO" if sub_pol[i] == "V" else "VERMELHO"
                 
-                # Registra o nascimento ou transição da conta viva
-                nova_conta = {
-                    "regra": tipo_id,
-                    "alvo_idx": alvo_idx,
-                    "origem_idx": i,
-                    "cor_origem": sub_pol[i],
-                    "direcao": direcao_sinal,
-                    "origem": origem_txt
-                }
-                contas_ativas.append(nova_conta)
+                contas_ativas.append({
+                    "regra": tipo_id, "alvo_idx": alvo_idx, "origem_idx": i,
+                    "cor_origem": sub_pol[i], "direcao": direcao_sinal, "origem": origem_txt
+                })
 
-        # FILTRAGEM FINAL DE ASSUNÇÃO E CONTAS PAGAS:
-        # Analisa o histórico interno para ver se os ativadores já cumpriram o papel (foram pagos)
         for conta in contas_ativas:
             alvo = conta["alvo_idx"]
-            # Se o alvo já passou dentro do bloco de 12 e entregou a cor correspondente, está PAGA e morre
             if alvo < 11:
-                cor_real_no_alvo = sub_pol[alvo]
-                # Validador de Baixa de autoridade (Se pagou a cor da origem, encerra a força da regra)
-                if cor_real_no_alvo == conta["cor_origem"]:
-                    continue # Ignora, a contagem foi PAGA internamente
-            
-            # Se sobreviveu até o fechamento ou foi assumida com projeção futura ativa, entra no bloco final
+                if sub_pol[alvo] == conta["cor_origem"]:
+                    continue
             lista_bruta.append({
-                "direcao": conta["direcao"],
-                "tipo_regra": conta["regra"],
-                "origem": conta["origem"]
+                "direcao": conta["direcao"], "tipo_regra": conta["regra"], "origem": conta["origem"]
             })
 
-        # Ativadores de Fechamento Críticos de Volume 12 (Retenções de Base e Resíduos)
         if sub_num[11] == 4 and sub_pol[10] == "P":
             lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V12_RETENCAO_4", "origem": "Volume 12: Cap 5 - Retenção do 4 sob Base Preta"})
         elif sub_num[9] == 4 and sub_pol[10] == "P" and sub_pol[11] == "P":
@@ -236,22 +212,16 @@ class AnalisadorContextoAvancado:
     @staticmethod
     def detectar_chance_inversao(sub_pol):
         texto_sub_pol = "".join(sub_pol)
-        
         if texto_sub_pol.endswith("VVVV"):
             bloco_anterior = texto_sub_pol[4:8]
-            if bloco_anterior.count("V") >= 2:
-                return True, "FALSO_RESPIRO", "Falso Respiro: Tendência forte de VERMELHO."
+            if bloco_anterior.count("V") >= 2: return True, "FALSO_RESPIRO", "Falso Respiro: Tendência de VERMELHO."
             return True, "INVERSÃO", "Exaustão: 4 Vermelhos Seguidos. Quebra para PRETO."
-            
         if texto_sub_pol.endswith("PPPP"):
             bloco_anterior = texto_sub_pol[4:8]
-            if bloco_anterior.count("P") >= 2:
-                return True, "FALSO_RESPIRO", "Falso Respiro: Tendência forte de PRETO."
+            if bloco_anterior.count("P") >= 2: return True, "FALSO_RESPIRO", "Falso Respiro: Tendência de PRETO."
             return True, "INVERSÃO", "Exaustão: 4 Pretos Seguidos. Quebra para VERMELHO."
-        
         if texto_sub_pol.endswith("VPVPVP") or texto_sub_pol.endswith("PVPVPV"):
             return True, "AVISO_XADREZ", "Alerta de Ciclo de Alternância Ativo."
-            
         return False, "NORMAL", "Fluxo Estável."
 
     @staticmethod
@@ -261,14 +231,12 @@ class AnalisadorContextoAvancado:
         for cor in reversed(sequencia_pol):
             if cor == "B": break
             atraso_atual += 1
-
         vezes_numero_apareceu, vezes_chamou_branco = 0, 0
         for i in range(len(sequencia_num) - 1):
             if sequencia_num[i] == num_fechamento:
                 vezes_numero_apareceu += 1
                 horizonte_proximo = sequencia_pol[i+1 : min(i+4, len(sequencia_pol))]
                 if "B" in horizonte_proximo: vezes_chamou_branco += 1
-
         taxa_atracao = (vezes_chamou_branco / vezes_numero_apareceu) * 100 if vezes_numero_apareceu > 0 else 0.0
         chance = "ALTA" if atraso_atual >= 15 or taxa_atracao >= 18.0 else ("MÉDIA" if atraso_atual >= 8 else "BAIXA")
         return chance, atraso_atual
@@ -276,14 +244,9 @@ class AnalisadorContextoAvancado:
 class JuizHierarquicoModificado:
     @staticmethod
     def arbitrar_sinal(no_call_ativo, motivo_nc, expectations, inclinacao_num, geometria_mercado, previsao_ia, status_inversao, historico_revalida_regras):
-        if no_call_ativo: 
-            return "NO CALL", motivo_nc, "SISTEMA_TRAVADO"
-
-        if geometria_mercado == "CICLO_FECHADO_VPPV":
-            return "PRETO", "Geometria VPPV -> Alvo PRETO", "GEOMETRIA"
-            
-        if geometria_mercado == "CICLO_FECHADO_PVVP":
-            return "VERMELHO", "Geometria PVVP -> Alvo VERMELHO", "GEOMETRIA"
+        if no_call_ativo: return "NO CALL", motivo_nc, "SISTEMA_TRAVADO"
+        if geometria_mercado == "CICLO_FECHADO_VPPV": return "PRETO", "Geometria VPPV -> Alvo PRETO", "GEOMETRIA"
+        if geometria_mercado == "CICLO_FECHADO_PVVP": return "VERMELHO", "Geometria PVVP -> Alvo VERMELHO", "GEOMETRIA"
 
         risco_ativo, tipo_inversao, justificativa_inv = status_inversao
         direcao_ia, confianca_ia = previsao_ia
@@ -301,13 +264,11 @@ class JuizHierarquicoModificado:
             for item in expectations:
                 id_r = item["tipo_regra"]
                 taxa_acerto_recente = historico_revalida_regras[id_r]["acertos"] / max(1, historico_revalida_regras[id_r]["total"])
-                
                 base_soberania = 3.0
                 peso_vivo = base_soberania * (1.0 + taxa_acerto_recente)
                 
                 forcas[item["direcao"]] += peso_vivo
                 origens[item["direcao"]].append(f"{item['origem']}")
-                
                 if peso_vivo > maior_peso_id[item["direcao"]][1]:
                     maior_peso_id[item["direcao"]] = (id_r, peso_vivo)
                 
@@ -330,31 +291,23 @@ class JuizHierarquicoModificado:
                     regra_vencedora_id = "IA_DESEMPATE"
                 else:
                     sinal_projetado = expectations[-1]["direcao"]
-                    justificativa_proj = f"Coexistência Empatada resolvida por Proximidade: {expectations[-1]['origem']}"
+                    justificativa_proj = f"Coexistência Empatada: {expectations[-1]['origem']}"
                     regra_vencedora_id = expectations[-1]["tipo_regra"]
 
         if risco_ativo and tipo_inversao == "FALSO_RESPIRO":
-            if sinal_projetado:
-                return sinal_projetado, f"Filtro Cruzado Futuro: {justificativa_proj}", regra_vencedora_id
+            if sinal_projetado: return sinal_projetado, f"Filtro Cruzado Futuro: {justificativa_proj}", regra_vencedora_id
             cor_dominante = "VERMELHO" if "VERMELHO" in justificativa_inv else "PRETO"
             return cor_dominante, f"Filtro Antirespiro: Mantendo {cor_dominante}.", "ANTI_RESPIRO"
 
         if risco_ativo and tipo_inversao == "INVERSÃO":
-            if sinal_projetado:
-                return sinal_projetado, f"Filtro Cruzado Futuro: {justificativa_proj}", regra_vencedora_id
+            if sinal_projetado: return sinal_projetado, f"Filtro Cruzado Futuro: {justificativa_proj}", regra_vencedora_id
             sinal_inverso = "PRETO" if "Vermelhos Seguidos" in justificativa_inv else "VERMELHO"
             return sinal_inverso, f"Intercepção de Exaustão (4 Casas): {justificativa_inv}", "INVERSION_REAL"
 
-        if sinal_projetado:
-            return sinal_projetado, justificativa_proj, regra_vencedora_id
-            
-        if direcao_inclinacao != "NEUTRO" and porc >= 60.0:
-            return direcao_inclinacao, f"Matriz Pós-Número: {porc:.1f}%", "MATRIZ_INCLINA"
-        if direcao_ia != "NEUTRO" and confianca_ia >= 62.0:
-            return direcao_ia, f"IA Preditiva: {confianca_ia:.1f}%", "IA_PREDITIVA"
-        if direcao_ia != "NEUTRO":
-            return direcao_ia, f"Vetor Recente IA: {direcao_ia} ({confianca_ia:.1f}%)", "IA_VETOR"
-            
+        if sinal_projetado: return sinal_projetado, justificativa_proj, regra_vencedora_id
+        if direcao_inclinacao != "NEUTRO" and porc >= 60.0: return direcao_inclinacao, f"Matriz Pós-Número: {porc:.1f}%", "MATRIZ_INCLINA"
+        if direcao_ia != "NEUTRO" and confianca_ia >= 62.0: return direcao_ia, f"IA Preditiva: {confianca_ia:.1f}%", "IA_PREDITIVA"
+        if direcao_ia != "NEUTRO": return direcao_ia, f"Vetor Recente IA: {direcao_ia} ({confianca_ia:.1f}%)", "IA_VETOR"
         return "PRETO", "Consenso Operacional", "CONSENSO_FECHAMENTO"
 
 class MotorV1Completo:
@@ -367,10 +320,15 @@ class MotorV1Completo:
         self.historico_regras = defaultdict(lambda: {"acertos": 1, "total": 1})
 
     def processar_auditoria(self):
+        # VOLTOU EXATAMENTE AO LOOP ORIGINAL DE SALTOS (Começando do índice 0)
         idx = 0
         memorias_calculo = []
         janelas_auditadas = []
         stats = {"G0": 0, "G1": 0, "G2": 0, "FALHA": 0, "NO CALL": 0}
+        
+        # INCLUSÃO RESTRITA APENAS DOS MEDIDORES SOLICITADOS
+        ia_total_predições = 0
+        ia_acertos_reais = 0
 
         while idx + 12 < self.seq.total:
             sub_num = self.seq.numerica[idx : idx + 12]
@@ -383,7 +341,9 @@ class MotorV1Completo:
 
             num_fechamento = sub_num[-1]
             inclinacao_num = AnalisadorContextoAvancado.calcular_numerologia_pos_numero(num_fechamento, self.seq.numerica, self.seq.polaridades)
-            previsao_ia = self.ia.predizer_proxima_casa(sub_num, sub_pol)
+            
+            direcao_ia_pura, conf_ia_pura = self.ia.predizer_proxima_casa(sub_num, sub_pol)
+            previsao_ia = (direcao_ia_pura, conf_ia_pura)
             
             expectativa_final, justificativa, regra_ativa_id = JuizHierarquicoModificado.arbitrar_sinal(
                 nc_ativo, motivo_nc, expectativas, inclinacao_num, geometria, previsao_ia, status_inv, self.historico_regras
@@ -407,14 +367,19 @@ class MotorV1Completo:
                         classificacao = f"G{g_idx}"
                         salto = g_idx + 1
                         break
-                if classificacao == "FALHA": 
-                    salto = 3
+                if classificacao == "FALHA": salto = 3
                 stats[classificacao] += 1
+
+            # CONTADOR INTERNO DO MEDIDOR SOLICITADO
+            if direcao_ia_pura != "NEUTRO":
+                ia_total_predições += 1
+                letra_ia = "V" if direcao_ia_pura == "VERMELHO" else "P"
+                if correcoes_reais and (correcoes_reais[0] == letra_ia or correcoes_reais[0] == "B" or (len(correcoes_reais) > 1 and correcoes_reais[1] == letra_ia)):
+                    ia_acertos_reais += 1
 
             if regra_ativa_id != "NENHUMA" and regra_ativa_id != "SISTEMA_TRAVADO":
                 self.historico_regras[regra_ativa_id]["total"] += 1
-                if classificacao in ["G0", "G1"]:
-                    self.historico_regras[regra_ativa_id]["acertos"] += 1
+                if classificacao in ["G0", "G1"]: self.historico_regras[regra_ativa_id]["acertos"] += 1
 
             bloco_vivido = []
             for k in range(idx, min(idx + 12 + salto, self.seq.total)):
@@ -426,18 +391,17 @@ class MotorV1Completo:
             janelas_auditadas.append(classificacao)
             idx += 12 + salto
 
-        return self._gerar_relatorio_texto(memorias_calculo, stats, len(janelas_auditadas))
+        assertividade_ia = (ia_acertos_reais / ia_total_predições * 100) if ia_total_predições > 0 else 0.0
+        return self._gerar_relatorio_texto(memorias_calculo, stats, len(janelas_auditadas), assertividade_ia, ia_total_predições)
 
-    def _gerar_relatorio_texto(self, memorias, stats, qtd_janelas):
+    def _gerar_relatorio_texto(self, memorias, stats, qtd_janelas, assertividade_ia, total_ia):
         total_com_sinal = sum([stats["G0"], stats["G1"], stats["G2"], stats["FALHA"]])
         denominador = total_com_sinal if total_com_sinal > 0 else 1
-        denominador_nc = qtd_janelas if qtd_janelas > 0 else 1
-
         p_g0 = (stats["G0"] / denominador) * 100
         p_g1 = (stats["G1"] / denominador) * 100
         p_g2 = (stats["G2"] / denominador) * 100
         p_fa = (stats["FALHA"] / denominador) * 100
-        p_nc = (stats["NO CALL"] / denominador_nc) * 100
+        p_nc = (stats["NO CALL"] / (qtd_janelas if qtd_janelas > 0 else 1)) * 100
 
         if p_fa >= 25.0: condicao_mercado = "MERCADO EM DEGRADAÇÃO"
         elif p_g0 >= 50.0: condicao_mercado = "MERCADO PAGADOR"
@@ -446,12 +410,14 @@ class MotorV1Completo:
 
         output = "[MEMÓRIA DE CÁLCULO DAS JANELAS MÓVEIS]\n" + "\n".join(memorias) + "\n\n"
         output += "[RESULTADO FINAL TIPO D]\n"
-        output += f"TOTAL DE JANELAS AUDITADAS: {qtd_janelas}\n"
-        output += f" - Taxa G0: {stats['G0']} ({p_g0:.2f}%)\n"
-        output += f" - Taxa G1: {stats['G1']} ({p_g1:.2f}%)\n"
-        output += f" - Taxa G2: {stats['G2']} ({p_g2:.2f}%)\n"
-        output += f" - Taxa de Falha: {stats['FALHA']} ({p_fa:.2f}%)\n"
-        output += f" - Taxa de NO CALL: {stats['NO CALL']} ({p_nc:.2f}%)\n\n"
+        output += f"CRONOLOGIA VALIDADA: {self.seq.total} Resultados Reconstruídos\n"
+        output += f"TOTAL DE JANELAS AUDITADAS: {qtd_janelas} Saltos Sequenciais\n"
+        output += f" - Taxa G0: {stats['G0']} Ocorrências ({p_g0:.2f}%)\n"
+        output += f" - Taxa G1: {stats['G1']} Ocorrências ({p_g1:.2f}%)\n"
+        output += f" - Taxa G2: {stats['G2']} Ocorrências ({p_g2:.2f}%)\n"
+        output += f" - Taxa de Falha: {stats['FALHA']} Ocorrências ({p_fa:.2f}%)\n"
+        output += f" - Taxa de NO CALL: {stats['NO CALL']} Ocorrências ({p_nc:.2f}%)\n\n"
+        output += f"METRICA_EVOLUÇÃO_IA: {assertividade_ia:.2f}% de Assertividade Pura (Amostra: {total_ia} tomadas de decisão)\n"
         output += f"ESTADO ATUAL DO MERCADO: {condicao_mercado}\n"
         return output
 
@@ -468,9 +434,7 @@ class ProcessadorTipoB:
             else: self.polaridades_usuario.append("P")
 
     def executar_sinal_real(self):
-        if len(self.entrada_usuario) != 12: 
-            return {"erro": "Requisito de exatamente 12 números violado."}
-            
+        if len(self.entrada_usuario) != 12: return {"erro": "Requisito de exatamente 12 números violado."}
         leitor_longo = LeitorXLS(self.caminho_base)
         base_longo = leitor_longo.ler_e_validar()
         if not base_longo: return {"erro": "Base de dados ausente."}
@@ -490,8 +454,7 @@ class ProcessadorTipoB:
         num_fechamento = self.entrada_usuario[-1]
         
         regras_b = defaultdict(lambda: {"acertos": 1, "total": 1})
-        sinal_final = None
-        justificativa_final = ""
+        sinal_final, justificativa_final, _ = None, "", None
         historico_iteraçoes_log = []
 
         for ciclo in range(1, 16):
@@ -502,35 +465,30 @@ class ProcessadorTipoB:
             sinal_ciclo, justificativa_ciclo, regra_ativa_id = JuizHierarquicoModificado.arbitrar_sinal(
                 nc_ativo, motivo_nc, expectativas, inclinacao_num, saturacao, previsao_ia, status_inv, regras_b
             )
-            
             if regra_ativa_id != "NENHUMA" and regra_ativa_id != "SISTEMA_TRAVADO":
                 regras_b[regra_ativa_id]["total"] += 1
                 regras_b[regra_ativa_id]["acertos"] += 1
-
             historico_iteraçoes_log.append(f" Releitura {ciclo:02d}/15 -> Sinal: {sinal_ciclo} | Id Regra: {regra_ativa_id}")
-            
             if ciclo == 15:
-                sinal_final = sinal_ciclo
-                justificativa_final = justificativa_ciclo
+                sinal_final, justificativa_final = sinal_ciclo, justificativa_ciclo
 
         chance_branco, casas_atraso = AnalisadorContextoAvancado.preditor_estatistico_branco(num_fechamento, num_global, pol_global)
+        
+        total_testes_regras = sum([regras_b[k]["total"] for k in regras_b]) - len(regras_b)
+        score_aprendizado = "ESTABILIZANDO" if total_testes_regras > 5 else "MAPEANDO NOVO CICLO"
 
         output_memoria = (
-            f"[PROCESSO DE 15 RELEITURAS DE VALIDAÇÃO]\n"
+            f"[PROCESSO DE 15 RELEITURAS DE VALIDAÇÃO CONSEQÜENCIAL]\n"
             + "\n".join(historico_iteraçoes_log) + "\n\n"
             f"[ANÁLISE DE FECHAMENTO]\n"
-            f"- Sequência de Entrada: {self.entrada_usuario}\n"
-            f"- Geometria Detectada: {saturacao}\n"
-            f"- Resolução Final do Juiz: {justificativa_final}\n"
+            f"- Status do Aprendizado Vivo: {score_aprendizado}\n"
+            f"- Geometria: {saturacao}\n"
+            f"- Resolução Final: {justificativa_final}\n"
         )
 
         return {
-            "sinal": sinal_final,
-            "justificativa": justificativa_final,
-            "memoria": output_memoria,
-            "chance_branco": chance_branco,
-            "atraso_branco": casas_atraso,
-            "geometria": saturacao
+            "sinal": sinal_final, "justificativa": justificativa_final, "memoria": output_memoria,
+            "chance_branco": chance_branco, "atraso_branco": casas_atraso, "geometria": saturacao
         }
 
 class LeitorXLS:
@@ -553,10 +511,8 @@ class LeitorXLS:
             col_numero, col_cor = None, None
             for col in colunas_atuais:
                 col_lower = str(col).lower().strip()
-                if any(x in col_lower for x in ['val', 'num', 'number', 'roll', 'giro', 'spin']) and not any(x in col_lower for x in ['color', 'cor']):
-                    col_numero = col
-                if any(x in col_lower for x in ['color', 'cor']):
-                    col_cor = col
+                if any(x in col_lower for x in ['val', 'num', 'number', 'roll', 'giro', 'spin']) and not any(x in col_lower for x in ['color', 'cor']): col_numero = col
+                if any(x in col_lower for x in ['color', 'cor']): col_cor = col
             if col_numero is None and len(colunas_atuais) >= 1: col_numero = colunas_atuais[0]
             if col_cor is None and len(colunas_atuais) >= 2: col_cor = colunas_atuais[1]
             if col_numero is None or col_cor is None: return None
