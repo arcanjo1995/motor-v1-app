@@ -41,7 +41,7 @@ with aba_tipo_b:
             try:
                 lista_numeros = [int(x.strip()) for x in entrada_numeros.split(",") if x.strip() != ""]
                 if len(lista_numeros) != 12:
-                    st.error(f"Erro Regulamentar: Contém {len(lista_numeros)} numbers. O manual exige exatamente 12.")
+                    st.error(f"Erro Regulamentar: Contém {len(lista_numeros)} números. O manual exige exatamente 12.")
                 elif not os.path.exists(NOME_BASE_DEFINITIVA):
                     st.error(f"Erro: O arquivo de longo prazo '{NOME_BASE_DEFINITIVA}' não foi localizado no servidor.")
                 else:
@@ -103,7 +103,7 @@ with aba_tipo_b:
                     st.session_state.sinal_pendente = None
 
 # =========================================================================
-# ABA TIPO D — AUDITORIA CRONOLÓGICA DE LONGO PRAZO (Linha 109 Corrigida!)
+# ABA TIPO D — AUDITORIA CRONOLÓGICA DE LONGO PRAZO
 # =========================================================================
 with aba_tipo_d:
     st.header("📊 Auditoria Cronológica Tipo D")
@@ -134,4 +134,18 @@ with aba_tipo_d:
                 
                 st.subheader("📋 Histórico das Janelas Móveis")
                 st.text_area("Processamento em Saltos", value=memoria_d, height=200)
-                st.subheader("📉 Consol
+                st.subheader("📉 Consolidação Normativa")
+                st.code(resultado_d, language="text")
+            else:
+                st.error("IMPOSSÍVEL CALCULAR - Estrutura fora do padrão do Volume 8.")
+            if os.path.exists(caminho_temp): os.remove(caminho_temp)
+
+        if salvar_como_base:
+            try:
+                if os.path.exists(NOME_BASE_DEFINITIVA): os.remove(NOME_BASE_DEFINITIVA)
+                with open(NOME_BASE_DEFINITIVA, "wb") as f:
+                    f.write(arquivo_upload.getbuffer())
+                st.success(f"Sucesso! Arquivo gravado permanentemente como '{NOME_BASE_DEFINITIVA}'. A inteligência do Tipo B foi updated.")
+            except Exception as e:
+                st.error(f"Erro ao salvar arquivo base: {e}")
+            if os.path.exists(caminho_temp): os.remove(caminho_temp)
