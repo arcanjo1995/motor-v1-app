@@ -14,11 +14,26 @@ aba_tipo_b, aba_tipo_d = st.tabs([
 
 NOME_BASE_DEFINITIVA = "resultados_blaze.xlsx"
 
+# =========================================================================
+# ABA TIPO B — SEQUÊNCIA OPERACIONAL E CORREÇÃO MANUAL
+# =========================================================================
 with aba_tipo_b:
     st.header("🎯 Processamento Operacional Tipo B")
     st.info("Insira exatamente 12 números separados por vírgula para gerar o sinal operativo.")
-    entrada_numeros = st.text_input("Sequência dos 12 números da rodada:", placeholder="Exemplo: 8,4,11,7,1,5,14,7,14,12,9,3")
     
+    entrada_numeros = st.text_input(
+        "Sequência dos 12 números da rodada:", 
+        placeholder="Exemplo: 2,11,14,4,9,12,12,7,3,9,5,12"
+    )
+    
+    # Inicializa estados na memória do Streamlit para manter o painel fixo na tela
+    if "sinal_pendente" not in st.session_state:
+        st.session_state.sinal_pendente = None
+    if "justificativa_pendente" not in st.session_state:
+        st.session_state.justificativa_pendente = None
+    if "log_completo" not in st.session_state:
+        st.session_state.log_completo = ""
+
     if st.button("🚀 Executar Releituras e Gerar Sinal"):
         if not entrada_numeros:
             st.error("Erro: Campo de entrada vazio.")
@@ -33,60 +48,34 @@ with aba_tipo_b:
                     processador = ProcessadorTipoB(lista_numeros, NOME_BASE_DEFINITIVA)
                     output_texto = processador.executar_sinal_real()
                     
+                    st.session_state.log_completo = output_texto
+                    st.session_state.sinal_pendente = None
+                    st.session_state.justificativa_pendente = None
+                    
+                    # Captura de forma segura as linhas geradas pelo motor interno
+                    for linha in output_texto.split("\n"):
+                        if "SINAL:" in linha:
+                            st.session_state.sinal_pendente = linha.split("SINAL:")[1].strip()
+                        if "- Resolução de Conflitos:" in linha:
+                            st.session_state.justificativa_pendente = linha.split("- Resolução de Conflitos:")[1].strip()
+                            
                     st.success("Cálculo de Previsibilidade Concluído!")
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.subheader("📝 Rascunho Analítico Interno")
-                        memoria = output_texto.split("[RESULTADO FINAL]")[0]
-                        st.text_area("Memória de Cálculo", value=memoria, height=250)
-                    with col2:
-                        st.subheader("📊 Veredito do Juiz Hierárquico")
-                        resultado = "[RESULTADO FINAL]" + output_texto.split("[RESULTADO FINAL]")[1]
-                        st.code(resultado, language="text")
             except Exception as e:
                 st.error(f"Erro Crítico no processamento da sequência: {e}")
 
-with aba_tipo_d:
-    st.header("📊 Auditoria Cronológica Tipo D")
-    st.info("Faça o upload do seu Excel recente para auditar a saúde e recência do mercado.")
-    arquivo_upload = st.file_uploader("Arraste o seu arquivo .xlsx aqui", type=["xlsx"])
-    
-    if arquivo_upload is not None:
-        caminho_temp = "temp_recencia.xlsx"
-        with open(caminho_temp, "wb") as f:
-            f.write(arquivo_upload.getbuffer())
+    # Painel interativo de exibição cruzada e auditoria ao vivo no iPad
+    if st.session_state.sinal_pendente:
+        st.write("---")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader("📝 Rascunho Analítico Interno")
+            # Divide a memória antes do cabeçalho final do Tipo B
+            memoria_limpa = st.session_state.log_completo.split("[RESULTADO FINAL TIPO B]")[0]
+            st.text_area("Memória de Cálculo", value=memoria_limpa, height=300)
             
-        col_btn1, col_btn2 = st.columns(2)
-        with col_btn1:
-            rodar_auditoria = st.button("🔍 Iniciar Auditoria de Recência")
-        with col_btn2:
-            salvar_como_base = st.button("💾 Definir como Nova Base de Longo Prazo")
-
-        if rodar_auditoria:
-            leitor = LeitorXLS(caminho_temp)
-            dados = leitor.ler_e_validar()
-            if dados:
-                motor = MotorV1Completo(dados)
-                output_d = motor.processar_auditoria()
-                st.success("Auditoria Realizada!")
-                
-                memoria_d = output_d.split("[RESULTADO FINAL ESTATÍSTICO]")[0]
-                resultado_d = "[RESULTADO FINAL ESTATÍSTICO]" + output_d.split("[RESULTADO FINAL ESTATÍSTICO]")[1]
-                
-                st.subheader("📋 Histórico das Janelas Móveis")
-                st.text_area("Processamento em Saltos", value=memoria_d, height=200)
-                st.subheader("📉 Consolidação Normativa")
-                st.code(resultado_d, language="text")
-            else:
-                st.error("IMPOSSÍVEL CALCULAR - Estrutura fora do padrão do Volume 8.")
-            if os.path.exists(caminho_temp): os.remove(caminho_temp)
-
-        if salvar_como_base:
-            try:
-                if os.path.exists(NOME_BASE_DEFINITIVA): os.remove(NOME_BASE_DEFINITIVA)
-                with open(NOME_BASE_DEFINITIVA, "wb") as f:
-                    f.write(arquivo_upload.getbuffer())
-                st.success(f"Sucesso! Arquivo gravado permanentemente como '{NOME_BASE_DEFINITIVA}'. A inteligência do Tipo B foi atualizada.")
-            except Exception as e:
-                st.error(f"Erro ao salvar arquivo base: {e}")
-            if os.path.exists(caminho_temp): os.remove(caminho_temp)
+        with col2:
+            st.subheader("📊 Veredito e Correção Operacional")
+            sinal = st.session_state.sinal_pendente
+            
+            if sinal
