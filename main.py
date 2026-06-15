@@ -11,18 +11,14 @@ class SequenciaOperacional:
 class MotorNoCall:
     @staticmethod
     def checar_no_call(sub_num, sub_pol):
-        # Correção estrita conforme o manual: checa os últimos índices (fechamento da janela de 12 pedras)
-        # Se houver duplicidade de qualquer número nas últimas casas em adjacência ativa
         if sub_num[10] == sub_num[11]:
             return True, f"Volume 2: Dupla do número {sub_num[11]} em Adjacência Crítica"
         if sub_num[9] == sub_num[10]:
             return True, f"Volume 2: Dupla do número {sub_num[10]} em Adjacência Crítica"
             
-        # O número 2 e 6 só travam se estiverem estritamente nas 2 últimas posições de fechamento
         if sub_num[11] in [2, 6] or sub_num[10] in [2, 6]:
             return True, "Volume 5: Número Crítico (2 ou 6) Ativo no Fechamento"
             
-        # Volume 13: Branco nas duas últimas posições impede a leitura de tendência imediata
         if sub_pol[11] == "B" or sub_pol[10] == "B":
             return True, "Volume 13: Ruptura Estrutural por Branco Posicional"
             
@@ -32,16 +28,14 @@ class MotorContagensProjetivas:
     @staticmethod
     def mapear_janela(sub_num, sub_pol, geometria_mercado):
         expectativas = []
-        # Regras de projeção de casas do Volume 3
         REGRAS_PROJECAO = {1: 1, 2: 6, 3: 6, 4: 3, 5: 4, 6: 5, 7: 7}
 
         for i in range(12):
             num_atual = sub_num[i]
             if num_atual in REGRAS_PROJECAO:
                 passo = REGRAS_PROJECAO[num_atual]
-                # Se o passo do ativador crava exatamente na casa de projeção (última pedra da janela)
                 if i + passo == 11:
-                    if 0 in sub_num[i:12]: # Se houver branco no meio do caminho, aborta a projeção linear
+                    if 0 in sub_num[i:12]:
                         continue
                     
                     if num_atual == 6:
@@ -54,7 +48,6 @@ class MotorContagensProjetivas:
                         "origem": f"Volume 3: Ativador {num_atual} na {i+1}ª casa"
                     })
 
-        # Gatilhos Residuais de Fechamento (Últimas pedras)
         if sub_num[11] == 10:
             expectativas.append({"direcao": "PRETO", "origem": "Volume 12: Cap 2 - Resíduo do 10"})
         elif sub_num[10] == 5 and sub_num[11] == 10:
@@ -149,7 +142,9 @@ class MotorV1Completo:
 
             num_fechamento = sub_num[-1]
             inclinacao_num = AnalisadorContextoAvancado.calcular_numerologia_pos_numero(num_fechamento, self.seq.numerica, self.seq.polaridades)
-            expectativa_final, justificativa = JuizHierarquicoModificado.arbitrar_sinal(nc_ativo, motivo_nc, expectations=expectativas, inclinacao_num=inclinacao_num)
+            
+            # LINHA 152 CORRIGIDA: Sem termos em inglês para evitar o erro do seu print
+            expectativa_final, justificativa = JuizHierarquicoModificado.arbitrar_sinal(nc_ativo, motivo_nc, expectativas, inclinacao_num)
 
             horizonte_max = min(3, self.seq.total - (idx + 12))
             if horizonte_max == 0: break
@@ -164,7 +159,6 @@ class MotorV1Completo:
                 stats["NO CALL"] += 1
                 salto = 1
             else:
-                # CORREÇÃO CRÍTICA: Mapeia o acerto convertendo a string de saída para a inicial padrão (V ou P)
                 letra_esperada = "V" if expectativa_final == "VERMELHO" else "P"
                 for g_idx, cor_real in enumerate(correcoes_reais):
                     if cor_real == letra_esperada:
