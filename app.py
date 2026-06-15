@@ -89,7 +89,6 @@ with aba_tipo_b:
                 st.write("---")
                 st.write("### 🎛️ Painel de Injeção de Dados Reais:")
                 
-                # Interface estruturada de seleção e digitação dos números da rodada
                 tipo_resultado = st.radio("Selecione o resultado real da operação:", ["G0", "G1", "G2", "FALHA"], horizontal=True)
                 
                 numeros_reais = []
@@ -165,7 +164,7 @@ with aba_tipo_d:
                 if os.path.exists(NOME_BASE_DEFINITIVA): os.remove(NOME_BASE_DEFINITIVA)
                 with open(NOME_BASE_DEFINITIVA, "wb") as f:
                     f.write(arquivo_upload.getbuffer())
-                st.success(f"Sucesso! Arquivo gravado permanentemente como '{NOME_BASE_DEFINITIVA}'. Base Histórica atualizada.")
+                st.success(f"Sucesso! Arquivo gravado permanentemente como '{NOME_BASE_DEFINITIVA}'. Base Histórica updated.")
             except Exception as e:
                 st.error(f"Erro ao salvar arquivo base: {e}")
             if os.path.exists(caminho_temp): os.remove(caminho_temp)
