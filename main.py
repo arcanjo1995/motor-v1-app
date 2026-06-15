@@ -78,5 +78,23 @@ class IAPreditivaV1:
 class MotorNoCall:
     @staticmethod
     def checar_no_call(sub_num, sub_pol):
+        # =========================================================================
         # 1. REGRA DAS DUPLAS (Volume 2, Capítulo 6) - Adjacência Cronológica Absoluta
-        cenarios_duplas =
+        # Estruturas oficiais mapeadas: [7-8], [8-9], [9-10], [10-11]
+        # =========================================================================
+        cenarios_duplas = [(7, 8), (8, 9), (9, 10), (10, 11)]
+        for idx1, idx2 in cenarios_duplas:
+            if sub_num[idx1] == sub_num[idx2]:
+                return True, f"Volume 2 Cap 6: Trava das Duplas Ativa nas posições {idx1+1}º-{idx2+1}º ({sub_num[idx1]}-{sub_num[idx2]})"
+
+        # =========================================================================
+        # 2. TRAVA DE POSICIONAMENTO DO NÚMERO 6 (Volume 2, Capítulo 4)
+        # Estruturas oficiais mapeadas nas casas: 6ª(idx 5), 9ª(idx 8), 10ª(idx 9), 11ª(idx 10)
+        # =========================================================================
+        posicoes_criticas_6 = [5, 8, 9, 10]
+        for pos in posicoes_criticas_6:
+            if sub_num[pos] == 6:
+                return True, f"Volume 2 Cap 4: Trava Crítica do Número 6 Posicional na {pos+1}ª casa"
+
+        # =========================================================================
+        # 3. TRAVA DE POSICIONAMENTO DO NÚMERO
