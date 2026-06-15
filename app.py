@@ -4,7 +4,7 @@ from main import LeitorXLS, MotorV1Completo, ProcessadorTipoB, GerenciadorMemori
 
 st.set_page_config(page_title="MOTOR V1 - Painel Operacional", page_icon="🛡️", layout="wide")
 st.title("🛡️ Sistema de Auditoria Analítica - MOTOR V1")
-st.caption("Versão Autoaprendizado de Precisão Real — Em conformidade com o Volume 22")
+st.caption("Versão Dicionário Estruturado Blindado — Em conformidade com o Volume 22")
 
 aba_tipo_b, aba_tipo_d = st.tabs([
     "🎯 TIPO B — Sequência Operacional (Sinal Real)", 
@@ -47,23 +47,16 @@ with aba_tipo_b:
                     st.error(f"Erro: O arquivo de longo prazo '{NOME_BASE_DEFINITIVA}' não foi localizado no servidor.")
                 else:
                     processador = ProcessadorTipoB(lista_numeros, NOME_BASE_DEFINITIVA)
-                    output_texto = processador.executar_sinal_real()
+                    resultado_dict = processador.executar_sinal_real()
                     
-                    st.session_state.log_completo = output_texto
-                    st.session_state.sinal_pendente = "NEUTRO"
-                    st.session_state.justificativa_pendente = "Processamento Linear Realizado."
-                    st.session_state.sequencia_em_uso = lista_numeros
-                    
-                    # CAPTURA BLINDADA (Volume 22): Evita crash se a linha mudar por causa da Inversão
-                    for linha in output_texto.split("\n"):
-                        if "SINAL:" in linha:
-                            st.session_state.sinal_pendente = linha.split("SINAL:")[1].strip()
-                        if "- Resolução de Conflitos:" in linha:
-                            st.session_state.justificativa_pendente = linha.split("- Resolução de Conflitos:")[1].strip()
-                        elif "- Alerta de Inversão:" in linha and "Exaustão" in linha:
-                            st.session_state.justificativa_pendente = linha.split("- Alerta de Inversão:")[1].strip()
-                            
-                    st.success("Cálculo de Previsibilidade Concluído!")
+                    if "erro" in resultado_dict:
+                        st.error(resultado_dict["erro"])
+                    else:
+                        st.session_state.log_completo = resultado_dict["memoria"]
+                        st.session_state.sinal_pendente = resultado_dict["sinal"]
+                        st.session_state.justificativa_pendente = resultado_dict["justificativa"]
+                        st.session_state.sequencia_em_uso = lista_numeros
+                        st.success("Cálculo de Previsibilidade Concluído!")
             except Exception as e:
                 st.error(f"Erro Crítico no processamento da sequência: {e}")
 
@@ -73,8 +66,7 @@ with aba_tipo_b:
         
         with col1:
             st.subheader("📝 Rascunho Analítico Interno")
-            memoria_limpa = st.session_state.log_completo.split("[RESULTADO FINAL TIPO B]")[0]
-            st.text_area("Memória de Cálculo", value=memoria_limpa, height=340)
+            st.text_area("Memória de Cálculo", value=st.session_state.log_completo, height=340)
             
         with col2:
             st.subheader("📊 Veredito e Alimentação Real")
@@ -167,7 +159,7 @@ with aba_tipo_d:
                 if os.path.exists(NOME_BASE_DEFINITIVA): os.remove(NOME_BASE_DEFINITIVA)
                 with open(NOME_BASE_DEFINITIVA, "wb") as f:
                     f.write(arquivo_upload.getbuffer())
-                st.success(f"Sucesso! Arquivo gravado permanentemente como '{NOME_BASE_DEFINITIVA}'. Base Histórica atualizada.")
+                st.success(f"Sucesso! Arquivo gravado permanentemente como '{NOME_BASE_DEFINITIVA}'. Base Histórica updated.")
             except Exception as e:
                 st.error(f"Erro ao salvar arquivo base: {e}")
             if os.path.exists(caminho_temp): os.remove(caminho_temp)
