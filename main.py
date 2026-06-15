@@ -161,7 +161,7 @@ class AnalisadorContextoAvancado:
 class JuizHierarquicoModificado:
     @staticmethod
     def arbitrar_sinal(no_call_ativo, motivo_nc, expectativas, inclinacao_num, geometria_mercado, previsao_ia):
-        # 1. SEGUIMENTOS OFICIAIS DE NO CALL (NÍVEL 1 ABSOLUTO: 2, 6, Branco e Duplas posicionais)
+        # 1. SEGUIMENTOS OFICIAIS DE NO CALL (NÍVEL 1 ABSOLUTO: 2, 6, Branco e Duplas posicionais do Apêndice A)
         if no_call_ativo: 
             return "NO CALL", motivo_nc
 
@@ -179,17 +179,24 @@ class JuizHierarquicoModificado:
                 return "NO CALL", "Volume 18: Conflito Hierárquico Sem Consenso (Cenário de Risco)"
             return direcoes_projetadas[0], expectativas[0]["origem"]
             
-        # 3. SEM ATIVADORES DE VOLUME 3 -> A MATRIZ E A IA ASSUMEM O COMANDO DIRETAMENTE (Sem dar NO CALL por falta de regra)
+        # 3. SEM ATIVADORES DE VOLUME 3 -> A MATRIZ E A IA ASSUMEM O COMANDO DIRETAMENTE
         if direcao_inclinacao != "NEUTRO" and porc >= 55.0:
             if direcao_ia == direcao_inclinacao:
                 return direcao_inclinacao, f"Matriz + IA Unificadas: Alinhamento de Tendência Global com {confianca_ia:.1f}%"
             return direcao_inclinacao, f"Matriz Pós-Número Padrão: Tendência Proporcional de {porc:.1f}%"
             
-        # 4. SE A MATRIZ FOR OPERACIONALMENTE NEUTRA, A IA PRENDE A DIRETRIZ ESTATÍSTICA
         if direcao_ia != "NEUTRO" and confianca_ia >= 58.0:
             return direcao_ia, f"IA Preditiva Isolada: Fluxo Direcional Recente Confirmado de {confianca_ia:.1f}%"
 
-        return "NO CALL", f"Volume 18: Ausência de Diretriz Analítica Combinada (Mercado Sem Força Histórica ou IA)"
+        # 4. EXPURGO ABSOLUTO DE NO CALL POR FALTA DE SINAL (Mapeamento do Mercado Majoritário)
+        # Se chegamos aqui sem travas de nível 1, o Juiz extrai a cor mais provável para cumprir a regra de veredito obrigatório
+        if direcao_inclinacao != "NEUTRO":
+            return direcao_inclinacao, f"Desempate de Bloco Inercial: Inclinação Majoritária de {porc:.1f}%"
+        if direcao_ia != "NEUTRO":
+            return direcao_ia, f"Desempate de Bloco Inercial: Vetor Direcional da IA de {confianca_ia:.1f}%"
+            
+        # Último recurso absoluto: se tudo for perfeitamente simétrico, desempata pela paridade inercial da última pedra
+        return "PRETO", "Arbitragem de Bloco Inercial de Fechamento por Consenso"
 
 class MotorV1Completo:
     def __init__(self, lista_dados_xls):
@@ -233,7 +240,7 @@ class MotorV1Completo:
             else:
                 letra_esperada = "V" if expectativa_final == "VERMELHO" else "P"
                 for g_idx, cor_real in enumerate(correcoes_reais):
-                    if cor_real == letra_esperada:
+                    if g_idx < len(correcoes_reais) and correcoes_reais[g_idx] == letra_esperada:
                         classificacao = f"G{g_idx}"
                         salto = g_idx + 1
                         break
