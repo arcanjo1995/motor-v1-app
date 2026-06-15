@@ -35,7 +35,6 @@ class IAPreditivaV1:
                 self.modelo_numerico[num_atual].append(proxima_cor)
 
     def injetar_aprendizado_imediato(self, sub_dados, multiplicador_peso=3):
-        """Alimenta a mente da IA em tempo real durante o fluxo de saltos da auditoria"""
         self._processar_bloco_dados(sub_dados, multiplicador_peso)
 
     def predizer_proxima_casa(self, sub_num, sub_pol):
@@ -53,9 +52,9 @@ class IAPreditivaV1:
         
         total_v = (proximas_cores_historicas.count('V') * peso_geometria) + (proximas_cores_por_num.count('V') * peso_numerico)
         total_p = (proximas_cores_historicas.count('P') * peso_geometria) + (proximas_cores_por_num.count('P') * peso_numerico)
-        total_b = (proximas_cores_historicas.count('B') * peso_geometria) + (proximas_cores_por_num.count('B') * peso_numerico)
+        total_v += (proximas_cores_historicas.count('B') * peso_geometria) + (proximas_cores_por_num.count('B') * peso_numerico) # Tratando b como peso complementar neutro
         
-        soma_pesos = total_v + total_p + total_b
+        soma_pesos = total_v + total_p
         if soma_pesos == 0:
             return "NEUTRO", 0.0
         
@@ -223,7 +222,7 @@ class AnalisadorContextoAvancado:
             return True, "INVERSÃO", "Exaustão: 4 Pretos Seguidos. Quebra para VERMELHO."
         
         if texto_sub_pol.endswith("VPVPVP") or texto_sub_pol.endswith("PVPVPV"):
-            return True, "AVISO_XADREZ", "Ciclo de Alternância Ativo."
+            return True, "AVISO_XADREZ", "Alerta de Ciclo de Alternância Ativo."
             
         return False, "NORMAL", "Fluxo Estável."
 
@@ -273,9 +272,10 @@ class JuizHierarquicoModificado:
             cor_dominante = "VERMELHO" if "VERMELHO" in justificativa_inv else "PRETO"
             return cor_dominante, f"Filtro Antirespiro: Mantendo {cor_dominante}."
 
+        # CORREÇÃO INTEGRAL DO NAMEERROR: Alinhado com o escopo de entrada 'expectations'
         if risco_ativo and tipo_inversao == "INVERSÃO":
             if expectations:
-                return direcoes_projetadas[0], f"Dominância de Quebra: {expectativas[0]['origem']}"
+                return direcoes_projetadas[0], f"Dominância de Quebra: {expectations[0]['origem']}"
             sinal_inverso = "PRETO" if "Vermelhos Seguidos" in justificativa_inv else "VERMELHO"
             return sinal_inverso, f"Intercepção de Exaustão (4 Casas): {justificativa_inv}"
 
@@ -344,8 +344,6 @@ class MotorV1Completo:
                     salto = 3
                 stats[classificacao] += 1
 
-            # --- RETROALIMENTAÇÃO ATIVA (A CORREÇÃO DO PONTO CEGO):
-            # Captura o bloco real que acabou de acontecer e força a IA a processar as transições dinamicamente
             bloco_vivido = []
             for k in range(idx, min(idx + 12 + salto, self.seq.total)):
                 bloco_vivido.append({"numero": self.seq.numerica[k], "cor": self.seq.polaridades[k]})
@@ -374,7 +372,7 @@ class MotorV1Completo:
         elif p_g1 >= 40.0: condicao_mercado = "MERCADO COM ATRASO CONTROLADO"
         else: condicao_mercado = "MERCADO INSTÁVEL"
 
-        output = "[MEMÓRIA DE CÁLCULO DAS JANELAS MÓVEIS]\n" + "\n".join(memorias) + "\n\n"
+        output = "[MEMÓREA DE CÁLCULO DAS JANELAS MÓVEIS]\n" + "\n".join(memorias) + "\n\n"
         output += "[RESULTADO FINAL TIPO D]\n"
         output += f"TOTAL DE JANELAS AUDITADAS: {qtd_janelas}\n"
         output += f" - Taxa G0: {stats['G0']} ({p_g0:.2f}%)\n"
@@ -454,7 +452,6 @@ class LeitorXLS:
         try:
             try: df = pd.read_excel(self.caminho)
             except: df = pd.read_csv(self.caminho)
-            
             df.columns = [str(col).strip().lower() for col in df.columns]
             mapeamento_colunas = {
                 'val': 'numero', 'value': 'numero', 'num': 'numero', 'number': 'numero',
@@ -463,7 +460,6 @@ class LeitorXLS:
             }
             df = df.rename(columns=mapeamento_colunas)
             colunas_atuais = df.columns.tolist()
-            
             col_numero, col_cor = None, None
             for col in colunas_atuais:
                 col_lower = str(col).lower().strip()
@@ -471,21 +467,15 @@ class LeitorXLS:
                     col_numero = col
                 if any(x in col_lower for x in ['color', 'cor']):
                     col_cor = col
-            
             if col_numero is None and len(colunas_atuais) >= 1: col_numero = colunas_atuais[0]
             if col_cor is None and len(colunas_atuais) >= 2: col_cor = colunas_atuais[1]
             if col_numero is None or col_cor is None: return None
             df = df.rename(columns={col_numero: 'numero', col_cor: 'cor'})
-            
-            # ORDENADOR CRONOLÓGICO SEGURO (Mais novo no topo -> Mais antigo abaixo)
-            df_cronologico = df.iloc[::-1].dropna(subset=['numero', 'cor']).reset_index(drop=True)
-            
+            df_cronologico = df.iloc[::-1].reset_index(drop=True)
             if len(df_cronologico) < 15: return None
-            
             LEGENDA_BRANCO = [0]
             LEGENDA_VERMELHO = [1, 2, 3, 4, 5, 6, 7]
             LEGENDA_PRETO = [8, 9, 10, 11, 12, 13, 14]
-            
             dados_limpos = []
             for _, l in df_cronologico.iterrows():
                 try:
@@ -496,6 +486,5 @@ class LeitorXLS:
                     else: continue
                     dados_limpos.append({"numero": num_val, "cor": cor_final})
                 except: continue
-                
             return dados_limpos if dados_limpos else None
         except: return None
