@@ -52,7 +52,6 @@ class IAPreditivaV1:
         
         total_v = (proximas_cores_historicas.count('V') * peso_geometria) + (proximas_cores_por_num.count('V') * peso_numerico)
         total_p = (proximas_cores_historicas.count('P') * peso_geometria) + (proximas_cores_por_num.count('P') * peso_numerico)
-        total_v += (proximas_cores_historicas.count('B') * peso_geometria) + (proximas_cores_por_num.count('B') * peso_numerico) # Tratando b como peso complementar neutro
         
         soma_pesos = total_v + total_p
         if soma_pesos == 0:
@@ -122,6 +121,7 @@ class MotorNoCall:
         return False, "Evento Neutro Operacional"
 
 class MotorContagensProjetivas:
+    """Módulo de Coexistência e Avaliação Consequencial Combinada (Volume 3 e 12)"""
     @staticmethod
     def mapear_janela(sub_num, sub_pol, geometria_mercado):
         lista_bruta = []
@@ -141,7 +141,8 @@ class MotorContagensProjetivas:
                         direcao_sinal = "PRETO" if "VERMELHO" not in geometria_mercado else "VERMELHO"
                         soberania = 1
                     else:
-                        direcao_sinal = "PRETO" if "PRETO" in geometria_mercado else "VERMELHO"
+                        # Regra Geral do Volume 3 corrigida: Mapeia a inversão baseada na cor do ativador original
+                        direcao_sinal = "VERMELHO" if sub_pol[i] == "P" else "PRETO"
                         soberania = 1
                     
                     lista_bruta.append({
@@ -160,17 +161,7 @@ class MotorContagensProjetivas:
         elif sub_num[10] == 5 and sub_num[11] == 10:
             lista_bruta.append({"direcao": "PRETO", "soberania": 3, "origem": "Volume 12: Cap 4 - Acoplamento 5-10"})
 
-        if not lista_bruta:
-            return []
-
-        maior_soberania = max([item["soberania"] for item in lista_bruta])
-        lista_filtrada = [item for item in lista_bruta if item["soberania"] == maior_soberania]
-        
-        direcoes = list(set([d["direcao"] for d in lista_filtrada]))
-        if len(direcoes) > 1:
-            return [lista_filtrada[-1]]
-            
-        return lista_filtrada
+        return lista_bruta
 
 class AnalisadorContextoAvancado:
     @staticmethod
@@ -254,33 +245,62 @@ class JuizHierarquicoModificado:
         risco_ativo, tipo_inversao, justificativa_inv = status_inversao
         direcao_ia, confianca_ia = previsao_ia
         direcao_inclinacao, porc = inclinacao_num
-        direcoes_projetadas = list(set([e["direcao"] for e in expectations]))
 
+        # 1. PROCESSAMENTO DE COEXISTÊNCIA E CONFLITO DE REGRAS PROJETIVAS
+        sinal_projetado = None
+        justificativa_proj = ""
+        
+        if expectations:
+            # Ponderação Consequencial: Separa os vetores de força para Vermelho e Preto
+            forcas = {"VERMELHO": 0, "PRETO": 0}
+            origens = {"VERMELHO": [], "PRETO": []}
+            
+            for item in expectations:
+                # Cada regra contribui com pontos baseados no seu nível de Soberania do manual
+                forcas[item["direcao"]] += item["soberania"]
+                origens[item["direcao"]].append(item["origem"])
+                
+            # CRUZA COM A IA DE RECENCIA PARA DESEMPATAR OU VALIDAR A TENDÊNCIA FUTURA REAL
+            if forcas["VERMELHO"] != forcas["PRETO"]:
+                # Se houver uma direção majoritária por peso, avalia se a IA apoia o movimento
+                sinal_dominante = "VERMELHO" if forcas["VERMELHO"] > forcas["PRETO"] else "PRETO"
+                if direcao_ia != "NEUTRO" and direcao_ia != sinal_dominante and confianca_ia >= 65.0:
+                    # Se a IA de recência viva tiver confiança extrema contra a dominância, ela assume para buscar G0/G1
+                    sinal_projetado = direcao_ia
+                    justificativa_proj = f"Intercepção por IA de Recência ({confianca_ia:.1f}%) quebrando a dominância das contagens."
+                else:
+                    sinal_projetado = sinal_dominante
+                    justificativa_proj = f"Dominância Combinada Ponderada: " + " + ".join(origens[sinal_dominante])
+            else:
+                # Coexistência Perfeita Oposta (Empate de pesos): A IA de recência dita a consequência futura real
+                if direcao_ia != "NEUTRO":
+                    sinal_projetado = direcao_ia
+                    justificativa_proj = f"Coexistência Oposta resolvida por Vetor Recente da IA ({confianca_ia:.1f}%)"
+                else:
+                    sinal_projetado = expectations[-1]["direcao"]
+                    justificativa_proj = f"Coexistência Oposta resolvida por Proximidade Cronológica: {expectations[-1]['origem']}"
+
+        # 2. HIERARQUIA DE DECISÃO SOBERANA
         if geometria_mercado == "CICLO_FECHADO_VPPV":
-            if "VERMELHO" in direcoes_projetadas and direcao_ia == "PRETO":
-                return "PRETO", "Ciclo VPPV + IA validam PRETO"
             return "PRETO", "Geometria VPPV -> Alvo PRETO"
             
         if geometria_mercado == "CICLO_FECHADO_PVVP":
-            if "PRETO" in direcoes_projetadas and direcao_ia == "VERMELHO":
-                return "VERMELHO", "Ciclo PVVP + IA validam VERMELHO"
             return "VERMELHO", "Geometria PVVP -> Alvo VERMELHO"
 
         if risco_ativo and tipo_inversao == "FALSO_RESPIRO":
-            if expectations:
-                return direcoes_projetadas[0], f"Dominância Cruzada: {expectations[0]['origem']}"
+            if sinal_projetado:
+                return sinal_projetado, f"Filtro Cruzado Futuro: {justificativa_proj}"
             cor_dominante = "VERMELHO" if "VERMELHO" in justificativa_inv else "PRETO"
             return cor_dominante, f"Filtro Antirespiro: Mantendo {cor_dominante}."
 
-        # CORREÇÃO INTEGRAL DO NAMEERROR: Alinhado com o escopo de entrada 'expectations'
         if risco_ativo and tipo_inversao == "INVERSÃO":
-            if expectations:
-                return direcoes_projetadas[0], f"Dominância de Quebra: {expectations[0]['origem']}"
+            if sinal_projetado:
+                return sinal_projetado, f"Filtro Cruzado Futuro: {justificativa_proj}"
             sinal_inverso = "PRETO" if "Vermelhos Seguidos" in justificativa_inv else "VERMELHO"
             return sinal_inverso, f"Intercepção de Exaustão (4 Casas): {justificativa_inv}"
 
-        if expectations:
-            return direcoes_projetadas[0], f"Dominância Projetiva: {expectations[0]['origem']}"
+        if sinal_projetado:
+            return sinal_projetado, justificativa_proj
             
         if direcao_inclinacao != "NEUTRO" and porc >= 60.0:
             return direcao_inclinacao, f"Matriz Pós-Número: {porc:.1f}%"
@@ -372,7 +392,7 @@ class MotorV1Completo:
         elif p_g1 >= 40.0: condicao_mercado = "MERCADO COM ATRASO CONTROLADO"
         else: condicao_mercado = "MERCADO INSTÁVEL"
 
-        output = "[MEMÓREA DE CÁLCULO DAS JANELAS MÓVEIS]\n" + "\n".join(memorias) + "\n\n"
+        output = "[MEMÓRIA DE CÁLCULO DAS JANELAS MÓVEIS]\n" + "\n".join(memorias) + "\n\n"
         output += "[RESULTADO FINAL TIPO D]\n"
         output += f"TOTAL DE JANELAS AUDITADAS: {qtd_janelas}\n"
         output += f" - Taxa G0: {stats['G0']} ({p_g0:.2f}%)\n"
