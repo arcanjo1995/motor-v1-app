@@ -43,9 +43,14 @@ class IAPreditivaV1:
         proximas_cores_historicas = self.modelo_transicao.get(ultimas_cores, [])
         proximas_cores_por_num = self.modelo_numerico.get(ultimo_num, [])
         
-        total_v = (proximas_cores_historicas.count('V') * 0.6) + (proximas_cores_por_num.count('V') * 0.4)
-        total_p = (proximas_cores_historicas.count('P') * 0.6) + (proximas_cores_por_num.count('P') * 0.4)
-        total_b = (proximas_cores_historicas.count('B') * 0.6) + (proximas_cores_por_num.count('B') * 0.4)
+        # MODIFICAÇÃO DE ASSERTIVIDADE (Volume 16): Pesos Dinâmicos Baseados em Recência Viva
+        # Se houver dados de recência ativa injetados, prioriza o comportamento milimétrico atualizado
+        peso_geometria = 0.75 if self.dados_recencia else 0.60
+        peso_numerico = 0.25 if self.dados_recencia else 0.40
+        
+        total_v = (proximas_cores_historicas.count('V') * peso_geometria) + (proximas_cores_por_num.count('V') * peso_numerico)
+        total_p = (proximas_cores_historicas.count('P') * peso_geometria) + (proximas_cores_por_num.count('P') * peso_numerico)
+        total_b = (proximas_cores_historicas.count('B') * peso_geometria) + (proximas_cores_por_num.count('B') * peso_numerico)
         
         soma_pesos = total_v + total_p + total_b
         if soma_pesos == 0:
@@ -53,7 +58,9 @@ class IAPreditivaV1:
         
         prob_v = (total_v / soma_pesos) * 100
         prob_p = (total_p / soma_pesos) * 100
-        BARREIRA_CONFIA_IA = 58.0
+        
+        # FILTRO DE REDUÇÃO DE G2: Elevada barreira de confiança de 58% para 62%
+        BARREIRA_CONFIA_IA = 62.0
         
         if prob_v >= BARREIRA_CONFIA_IA and prob_v > prob_p:
             return "VERMELHO", prob_v
@@ -165,8 +172,9 @@ class AnalisadorContextoAvancado:
         pct_v = (contagem_v / total_ocorrencias) * 100
         pct_p = (contagem_p / total_ocorrencias) * 100
 
-        if pct_v >= 55.0: return "VERMELHO", pct_v
-        if pct_p >= 55.0: return "PRETO", pct_p
+        # Rigor elevado na inclinação para evitar atrasos longos (de 55% para 60%)
+        if pct_v >= 60.0: return "VERMELHO", pct_v
+        if pct_p >= 60.0: return "PRETO", pct_p
         return "NEUTRO", max(pct_v, pct_p)
 
     @staticmethod
@@ -180,10 +188,7 @@ class AnalisadorContextoAvancado:
 
     @staticmethod
     def detectar_chance_inversao(sub_pol):
-        """Mapeador de Exaustão Corrigido para 4 Cores Iguais (Volume 14)"""
         texto_sub_pol = "".join(sub_pol)
-        
-        # AJUSTE SUPREMO: Agora dispara com 4 cores iguais no fechamento da janela
         if texto_sub_pol.endswith("VVVV"):
             return True, "INVERSÃO", "Exaustão Crítica de Fluxo: 4 Vermelhos Seguidos. Alerta de Quebra para PRETO."
         if texto_sub_pol.endswith("PPPP"):
@@ -224,7 +229,6 @@ class JuizHierarquicoModificado:
         direcao_inclinacao, porc = inclinacao_num
         direcoes_projetadas = list(set([e["direcao"] for e in expectativas]))
 
-        # EXECUÇÃO DO FILTRO DE INVERSÃO COM 4 CORES (Volume 14)
         if risco_ativo and tipo_inversao == "INVERSÃO":
             sinal_inverso = "PRETO" if "Vermelhos Seguidos" in justificativa_inv else "VERMELHO"
             return sinal_inverso, f"Volume 14 Cap 2 (Gatilho Antiatraso - 4 Casas): {justificativa_inv}"
@@ -233,29 +237,32 @@ class JuizHierarquicoModificado:
             if len(direcoes_projetadas) > 1:
                 if direcao_ia in direcoes_projetadas:
                     return direcao_ia, f"Volume 18: Conflito resolvido por Validação da IA ({confianca_ia:.1f}%)"
-                if direcao_inclinacao in direcoes_projetadas and porc >= 55.0:
+                if direcao_inclinacao in direcoes_projetadas and porc >= 60.0:
                     return direcao_inclinacao, f"Volume 18: Conflito resolvido por Inclinação Histórica ({porc:.1f}%)"
-                return "NO CALL", "Volume 18: Conflito Hierárquico Sem Consenso (Cenário de Risco)"
+                # SEM ADICIONAR NO CALL: Se houver conflito de projeção estrutural pura, o robô força o vetor direcional dominante da IA para puxar G0
+                if direcao_ia != "NEUTRO":
+                    return direcao_ia, f"Volume 18: Conflito estrutural arbitrado por Vetor Direcional da IA ({confianca_ia:.1f}%)"
             
             if risco_ativo and tipo_inversao == "AVISO_XADREZ":
                 return "NO CALL", f"Bloqueio Preventivo: {justificativa_inv}"
                 
             return direcoes_projetadas[0], expectativas[0]["origem"]
             
-        if direcao_inclinacao != "NEUTRO" and porc >= 55.0:
+        # Alinhamentos refinados para forçar acerto rápido de primeira (G0)
+        if direcao_inclinacao != "NEUTRO" and porc >= 60.0:
             if direcao_ia == direcao_inclinacao:
                 return direcao_inclinacao, f"Matriz + IA Unificadas: Alinhamento de Tendência Global com {confianca_ia:.1f}%"
             return direcao_inclinacao, f"Matriz Pós-Número Padrão: Tendência Proporcional de {porc:.1f}%"
             
-        if direcao_ia != "NEUTRO" and confianca_ia >= 58.0:
+        if direcao_ia != "NEUTRO" and confianca_ia >= 62.0:
             return direcao_ia, f"IA Preditiva Isolada: Fluxo Direcional Recente Confirmado de {confianca_ia:.1f}%"
 
-        if direcao_inclinacao != "NEUTRO":
-            return direcao_inclinacao, f"Desempate de Bloco Inercial: Inclinação Majoritária de {porc:.1f}%"
         if direcao_ia != "NEUTRO":
-            return direcao_ia, f"Desempate de Bloco Inercial: Vetor Direcional da IA de {confianca_ia:.1f}%"
+            return direcao_ia, f"Vetor Inercial Dominante: Decisão direcionada por Inteligência Artificial ({confianca_ia:.1f}%)"
+        if direcao_inclinacao != "NEUTRO":
+            return direcao_inclinacao, f"Vetor Inercial Dominante: Decisão baseada em Inclinação Majoritária de {porc:.1f}%"
             
-        return "PRETO", "Arbitragem de Bloco Inercial de Fechamento por Consenso"
+        return "PRETO", "Veredito de Fechamento por Consenso Operacional"
 
 class MotorV1Completo:
     def __init__(self, lista_dados_xls):
@@ -403,13 +410,12 @@ class ProcessadorTipoB:
         num_fechamento = self.entrada_usuario[-1]
         inclinacao_num = AnalisadorContextoAvancado.calcular_numerologia_pos_numero(num_fechamento, num_global, pol_global)
         
-        # CORREÇÃO DA VARIÁVEL FANTASMA NA ARBITRAGEM DO SINAL
         sinal_final, justificativa = JuizHierarquicoModificado.arbitrar_sinal(
             nc_ativo, motivo_nc, expectativas, inclinacao_num, saturacao, previsao_ia, status_inv
         )
 
         chance_branco, casas_atraso = AnalisadorContextoAvancado.preditor_estatistico_branco(num_fechamento, num_global, pol_global)
-        status_recencia = "ATIVA (Peso Triplicado)" if base_recencia else "INATIVA (Apenas Longo Prazo)"
+        status_recencia = "ATIVA (Peso Triplicado e Balanceamento de 75% Recente)" if base_recencia else "INATIVA (Apenas Longo Prazo)"
 
         output = "[MEMÓRIA DE CÁLCULO]\n"
         output += f"- Mapeamento: Sequência {self.entrada_usuario} processada.\n"
