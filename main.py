@@ -135,15 +135,18 @@ class AnalisadorContextoAvancado:
 class JuizHierarquicoModificado:
     @staticmethod
     def arbitrar_sinal(no_call_ativo, motivo_nc, expectativas, inclinacao_num, geometria_mercado):
+        # 1. TRAVAS DE NÍVEL 1 (Volume 1 e 2): Duplas, Brancos, 2 ou 6 posicionais nas zonas críticas
         if no_call_ativo: 
             return "NO CALL", motivo_nc
             
-        if geometria_mercado in ["XADREZ LONGO", "SATURAÇÃO ESTRUTURAL (V)", "SATURAÇÃO ESTRUTURAL (P)"]:
+        # 2. BLOQUEIO GEOMÉTRICO (Apenas o Xadrez Longo atua travando por indefinição de ciclo)
+        if geometria_mercado == "XADREZ LONGO":
             return "NO CALL", f"Volume 22: Bloqueio Geométrico por Mapeamento de {geometria_mercado}"
 
         direcao_inclinacao, porc = inclinacao_num
         direcoes_projetadas = list(set([e["direcao"] for e in expectativas]))
 
+        # 3. CENÁRIO: Ativadores de Volume 3 Ativos (Aqui a saturação influencia a direção do 6, mas não bloqueia!)
         if expectativas:
             if len(direcoes_projetadas) > 1:
                 if direcao_inclinacao in direcoes_projetadas and porc >= 55.0:
@@ -151,10 +154,12 @@ class JuizHierarquicoModificado:
                 return "NO CALL", "Volume 18: Conflito Hierárquico Sem Consenso (Cenário de Risco)"
             return direcoes_projetadas[0], expectativas[0]["origem"]
             
+        # 4. CENÁRIO: Ausência de Projeção Linear -> Comando passa para a Matriz Pós-Número Histórica
         if direcao_inclinacao != "NEUTRO" and porc >= 55.0:
             return direcao_inclinacao, f"Matriz Pós-Número Padrão: Tendência Proporcional de {porc:.1f}%"
             
         return "NO CALL", "Volume 18: Ausência de Diretriz Analítica Combinada"
+
 
 class MotorV1Completo:
     def __init__(self, lista_dados_xls):
