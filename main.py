@@ -124,9 +124,38 @@ class ProcessadorTipoB:
 
 class LeitorXLS:
     def __init__(self, caminho): self.caminho = caminho
-    def ler_e_validar(self):
+        def ler_e_validar(self):
         if not os.path.exists(self.caminho): return None
-        df = pd.read_excel(self.caminho) if self.caminho.endswith('xlsx') else pd.read_csv(self.caminho)
-        df.columns = [str(c).lower() for c in df.columns]
-        df = df.iloc[::-1].reset_index(drop=True)
-        return [{"numero": int(r['numero']), "cor": ('B' if r['numero']==0 else ('V' if 1<=r['numero']<=7 else 'P'))} for _, r in df.iterrows()]
+        try:
+            # Tenta ler xlsx ou csv
+            df = pd.read_excel(self.caminho) if self.caminho.endswith('xlsx') else pd.read_csv(self.caminho)
+            
+            # Normaliza os nomes das colunas para minúsculo e remove espaços
+            df.columns = [str(c).strip().lower() for c in df.columns]
+            
+            # Mapeamento de possíveis nomes de colunas
+            mapa_num = ['numero', 'num', 'valor', 'value', 'resultado', 'roll', 'spin', 'giro']
+            mapa_cor = ['cor', 'color', 'c', 'result']
+            
+            col_num = next((c for c in df.columns if any(alias in c for alias in mapa_num)), None)
+            col_cor = next((c for c in df.columns if any(alias in c for alias in mapa_cor)), None)
+            
+            if col_num is None or col_cor is None:
+                # Fallback: Se não achar, tenta usar a 1ª e 2ª colunas como padrão
+                col_num, col_cor = df.columns[0], df.columns[1]
+            
+            df = df.rename(columns={col_num: 'numero', col_cor: 'cor'})
+            df = df.iloc[::-1].reset_index(drop=True)
+            
+            # Limpeza dos dados
+            dados = []
+            for _, r in df.iterrows():
+                try:
+                    num = int(r['numero'])
+                    cor = 'B' if num == 0 else ('V' if 1 <= num <= 7 else 'P')
+                    dados.append({"numero": num, "cor": cor})
+                except: continue
+            return dados
+        except Exception as e:
+            print(f"Erro na leitura: {e}")
+            return None
