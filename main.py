@@ -84,7 +84,7 @@ class GerenciadorMemoriaViva:
         df_novos = pd.DataFrame(novas_linhas)
         if os.path.exists(caminho_recencia):
             try:
-                df_atual = pd.read_excel(caminia_recencia if 'caminia_recencia' in locals() else caminho_recencia)
+                df_atual = pd.read_excel(caminho_recencia)
                 df_consolidado = pd.concat([df_atual, df_novos], ignore_index=True)
                 df_consolidado.to_excel(caminho_recencia, index=False)
             except:
@@ -95,10 +95,11 @@ class GerenciadorMemoriaViva:
 class MotorNoCall:
     @staticmethod
     def checar_no_call(sub_num, sub_pol):
+        # TRAVAS DE SISTEMA IMUTÁVEIS (Mantidas estritamente para segurança contra Brancos e Duplas repetidas nas casas oficiais)
         cenarios_duplas = [(7, 8), (8, 9), (9, 10), (10, 11)]
         for idx1, idx2 in cenarios_duplas:
             if sub_num[idx1] == sub_num[idx2]:
-                return True, f"Volume 2 Cap 6: Trava das Duplas Ativa nas posições {idx1+1}º-{idx2+1}º ({sub_num[idx1]}-{sub_num[idx2]})"
+                return True, f"Volume 2 Cap 6: Trava das Duplas Ativa nas posições {idx1+1}º-{idx2+1}º"
 
         posicoes_criticas_6 = [5, 8, 9, 10]
         for pos in posicoes_criticas_6:
@@ -139,7 +140,7 @@ class MotorContagensProjetivas:
                     
                     expectativas.append({
                         "direcao": direcao_sinal,
-                        "origem": f"Volume 3: Ativador {num_atual} na {i+1}ª casa (Projeção Direta)"
+                        "origem": f"Volume 3: Ativador {num_atual} na {i+1}ª casa"
                     })
 
         if sub_num[11] == 4 and sub_pol[10] == "P":
@@ -152,7 +153,7 @@ class MotorContagensProjetivas:
         elif sub_num[10] == 5 and sub_num[11] == 10:
             expectativas.append({"direcao": "PRETO", "origem": "Volume 12: Cap 4 - Acoplamento 5-10"})
 
-        return expectativas
+        return expectations
 
 class AnalisadorContextoAvancado:
     @staticmethod
@@ -204,7 +205,7 @@ class AnalisadorContextoAvancado:
             return True, "INVERSÃO", "Exaustão Crítica de Fluxo: 4 Pretos Seguidos. Alerta de Quebra para VERMELHO."
         
         if texto_sub_pol.endswith("VPVPVP") or texto_sub_pol.endswith("PVPVPV"):
-            return True, "AVISO_XADREZ", "Alerta de Fim de Ciclo de Alternância (Xadrez Longo Saturo)."
+            return True, "AVISO_XADREZ", "Alerta de Ciclo de Alternância Ativo."
             
         return False, "NORMAL", "Fluxo Inercial Estável."
 
@@ -238,46 +239,53 @@ class JuizHierarquicoModificado:
         direcao_inclinacao, porc = inclinacao_num
         direcoes_projetadas = list(set([e["direcao"] for e in expectativas]))
 
+        # 1. CRUZAMENTO SEGURO DE CICLOS GEOMÉTRICOS VPPV / PVVP (Volume 6)
+        # Se houver conflito com a contagem estrutural, desempatamos usando a força direcional da IA de Recência
         if geometria_mercado == "CICLO_FECHADO_VPPV":
-            if "VERMELHO" in direcoes_projetadas:
-                return "NO CALL", "Bloqueio de Segurança: Geometria VPPV exige PRETO mas a Projeção pedia VERMELHO."
-            return "PRETO", "Volume 6 Cap 2: Fechamento de Ciclo Simétrico VPPV -> Alvo PRETO"
+            if "VERMELHO" in direcoes_projetadas and direcao_ia == "PRETO":
+                return "PRETO", "Fusão Normativa: Ciclo VPPV + Validação da IA convergem para PRETO em G0"
+            return "PRETO", "Volume 6 Cap 2: Fechamento de Ciclo Simétrico VPPV -> Forçando PRETO"
             
         if geometria_mercado == "CICLO_FECHADO_PVVP":
-            if "PRETO" in direcoes_projetadas:
-                return "NO CALL", "Bloqueio de Segurança: Geometria PVVP exige VERMELHO mas a Projeção pedia PRETO."
-            return "VERMELHO", "Volume 6 Cap 2: Fechamento de Ciclo Simétrico PVVP -> Alvo VERMELHO"
+            if "PRETO" in direcoes_projetadas and direcao_ia == "VERMELHO":
+                return "VERMELHO", "Fusão Normativa: Ciclo PVVP + Validação da IA convergem para VERMELHO em G0"
+            return "VERMELHO", "Volume 6 Cap 2: Fechamento de Ciclo Simétrico PVVP -> Forçando VERMELHO"
 
+        # 2. CRUZAMENTO CRÍTICO DE INVERSÃO E CONTAGEM (O erro da Janela 7 resolvido)
         if risco_ativo and tipo_inversao == "FALSO_RESPIRO":
             if expectativas:
-                return direcoes_projetadas[0], f"Contramedida Cruzada: Projeção Ativa substitui Antirespiro -> {expectativas[0]['origem']}"
+                # Se a projeção ativa for contrária, ela anula o antirespiro e vira a mão buscando acerto rápido
+                return direcoes_projetadas[0], f"Filtro Cruzado Supremacia: Projeção quebra Antirespiro -> {expectativas[0]['origem']}"
             cor_dominante = "VERMELHO" if "VERMELHO" in justificativa_inv else "PRETO"
-            return cor_dominante, f"Volume 14 Cap 4 (Filtro Antirespiro): Mantendo {cor_dominante}."
+            return cor_dominante, f"Volume 14 Cap 4 (Filtro Antirespiro): Mantendo {cor_dominante} por recência de bloco."
 
         if risco_ativo and tipo_inversao == "INVERSÃO":
+            if expectativas and direcoes_projetadas[0] != ("PRETO" if "Vermelhos Seguidos" in justificativa_inv else "VERMELHO"):
+                # Se a projeção mandar seguir a exaustão, aceita a quebra estrutural para G0/G1
+                return direcoes_projetadas[0], f"Filtro Cruzado: Projeção Ativa valida Inversão Crítica -> {expectativas[0]['origem']}"
             sinal_inverso = "PRETO" if "Vermelhos Seguidos" in justificativa_inv else "VERMELHO"
             return sinal_inverso, f"Volume 14 Cap 2 (Intercepção de Exaustão): {justificativa_inv}"
 
+        # 3. RESOLUÇÃO AGRESSIVA DE CONFLITOS (Fim do No Call por conflito de regras)
         if expectativas:
             if len(direcoes_projetadas) > 1:
+                # Se houver conflito entre projeções, a IA de recência desempata na hora para buscar G0/G1
                 if direcao_ia in direcoes_projetadas:
-                    return direcao_ia, f"Volume 18: Resolução por IA ({confianca_ia:.1f}%)"
+                    return direcao_ia, f"Volume 18 (Resolução Agressiva): IA arbitra conflito para {direcao_ia} ({confianca_ia:.1f}%)"
                 if direcao_inclinacao in direcoes_projetadas and porc >= 60.0:
-                    return direcao_inclinacao, f"Volume 18: Resolução por Inclinação Histórica ({porc:.1f}%)"
-                if direcao_ia != "NEUTRO":
-                    return direcao_ia, f"Volume 18: Conflito estrutural arbitrado por Vetor Direcional da IA ({confianca_ia:.1f}%)"
-            
-            if risco_ativo and tipo_inversao == "AVISO_XADREZ":
-                return "NO CALL", f"Bloqueio Preventivo: {justificativa_inv}"
-                
+                    return direcao_inclinacao, f"Volume 18: Conflito resolvido por Inclinação Histórica ({porc:.1f}%)"
+                return direcoes_projetadas[0], f"Vetor Inercial Incondicional: Escolha inercial de prioridade de entrada -> {expectativas[0]['origem']}"
             return direcoes_projetadas[0], expectativas[0]["origem"]
             
+        # 4. ALINHAMENTO COM A IA E MATRIZ PÓS-NÚMERO
         if direcao_inclinacao != "NEUTRO" and porc >= 60.0:
             return direcao_inclinacao, f"Matriz Pós-Número: {porc:.1f}%"
         if direcao_ia != "NEUTRO" and confianca_ia >= 62.0:
             return direcao_ia, f"IA Preditiva: {confianca_ia:.1f}%"
+        if direcao_ia != "NEUTRO":
+            return direcao_ia, f"Vetor Direcional Recente: IA força entrada operativa para {direcao_ia} ({confianca_ia:.1f}%)"
             
-        return "PRETO", "Veredito por Consenso Operacional"
+        return "PRETO", "Veredito por Consenso de Fechamento Operacional"
 
 class MotorV1Completo:
     def __init__(self, lista_dados_xls):
@@ -306,7 +314,6 @@ class MotorV1Completo:
             inclinacao_num = AnalisadorContextoAvancado.calcular_numerologia_pos_numero(num_fechamento, self.seq.numerica, self.seq.polaridades)
             previsao_ia = self.ia.predizer_proxima_casa(sub_num, sub_pol)
             
-            # CORREÇÃO DO TYPEERROR (Passagem Limpa Posicional): Alinhado com a assinatura da função
             expectativa_final, justificativa = JuizHierarquicoModificado.arbitrar_sinal(
                 nc_ativo, motivo_nc, expectativas, inclinacao_num, geometria, previsao_ia, status_inv
             )
