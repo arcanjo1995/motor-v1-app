@@ -180,15 +180,15 @@ class AnalisadorContextoAvancado:
 
     @staticmethod
     def detectar_chance_inversao(sub_pol):
-        """Mapeador de Exaustão de Tendência por Saturação de Fluxo (Volume 14)"""
+        """Mapeador de Exaustão Corrigido para 4 Cores Iguais (Volume 14)"""
         texto_sub_pol = "".join(sub_pol)
-        # Se o final da sequência contiver 5 pedras seguidas da mesma cor, há risco iminente de inversão
-        if texto_sub_pol.endswith("VVVVV"):
-            return True, "INVERSÃO", "Exaustão Crítica de Fluxo: 5 Vermelhos Seguidos. Alerta de Quebra para PRETO."
-        if texto_sub_pol.endswith("PPPPP"):
-            return True, "INVERSÃO", "Exaustão Crítica de Fluxo: 5 Pretos Seguidos. Alerta de Quebra para VERMELHO."
         
-        # Se houver um xadrez muito longo ativo no fechamento, detecta saturação alternada
+        # AJUSTE SUPREMO: Agora dispara com 4 cores iguais no fechamento da janela
+        if texto_sub_pol.endswith("VVVV"):
+            return True, "INVERSÃO", "Exaustão Crítica de Fluxo: 4 Vermelhos Seguidos. Alerta de Quebra para PRETO."
+        if texto_sub_pol.endswith("PPPP"):
+            return True, "INVERSÃO", "Exaustão Crítica de Fluxo: 4 Pretos Seguidos. Alerta de Quebra para VERMELHO."
+        
         if texto_sub_pol.endswith("VPVPVP") or texto_sub_pol.endswith("PVPVPV"):
             return True, "AVISO_XADREZ", "Alerta de Fim de Ciclo de Alternância (Xadrez Longo Saturo)."
             
@@ -219,17 +219,15 @@ class JuizHierarquicoModificado:
         if no_call_ativo: 
             return "NO CALL", motivo_nc
 
-        # Desempacota o detector de inversão
         risco_ativo, tipo_inversao, justificativa_inv = status_inversao
         direcao_ia, confianca_ia = previsao_ia
         direcao_inclinacao, porc = inclinacao_num
         direcoes_projetadas = list(set([e["direcao"] for e in expectativas]))
 
-        # SE HOUVER EXAUSTÃO CRÍTICA DE COR (Inversão Forçada do Manual Volume 14)
+        # EXECUÇÃO DO FILTRO DE INVERSÃO COM 4 CORES (Volume 14)
         if risco_ativo and tipo_inversao == "INVERSÃO":
-            # Força o sinal contra a saturação do mercado
             sinal_inverso = "PRETO" if "Vermelhos Seguidos" in justificativa_inv else "VERMELHO"
-            return sinal_inverso, f"Volume 14 Cap 2 (Gatilho Antiatraso): {justificativa_inv}"
+            return sinal_inverso, f"Volume 14 Cap 2 (Gatilho Antiatraso - 4 Casas): {justificativa_inv}"
 
         if expectativas:
             if len(direcoes_projetadas) > 1:
@@ -239,7 +237,6 @@ class JuizHierarquicoModificado:
                     return direcao_inclinacao, f"Volume 18: Conflito resolvido por Inclinação Histórica ({porc:.1f}%)"
                 return "NO CALL", "Volume 18: Conflito Hierárquico Sem Consenso (Cenário de Risco)"
             
-            # Se a projeção mandar seguir o xadrez mas ele estiver saturo, entra em NO CALL protetivo
             if risco_ativo and tipo_inversao == "AVISO_XADREZ":
                 return "NO CALL", f"Bloqueio Preventivo: {justificativa_inv}"
                 
@@ -406,6 +403,7 @@ class ProcessadorTipoB:
         num_fechamento = self.entrada_usuario[-1]
         inclinacao_num = AnalisadorContextoAvancado.calcular_numerologia_pos_numero(num_fechamento, num_global, pol_global)
         
+        # CORREÇÃO DA VARIÁVEL FANTASMA NA ARBITRAGEM DO SINAL
         sinal_final, justificativa = JuizHierarquicoModificado.arbitrar_sinal(
             nc_ativo, motivo_nc, expectativas, inclinacao_num, saturacao, previsao_ia, status_inv
         )
