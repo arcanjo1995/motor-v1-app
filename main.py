@@ -84,7 +84,7 @@ class GerenciadorMemoriaViva:
         df_novos = pd.DataFrame(novas_linhas)
         if os.path.exists(caminho_recencia):
             try:
-                df_atual = pd.read_excel(caminho_recencia)
+                df_atual = pd.read_excel(caminia_recencia if 'caminia_recencia' in locals() else caminho_recencia)
                 df_consolidado = pd.concat([df_atual, df_novos], ignore_index=True)
                 df_consolidado.to_excel(caminho_recencia, index=False)
             except:
@@ -127,12 +127,10 @@ class MotorContagensProjetivas:
             num_atual = sub_num[i]
             if num_atual in REGRAS_PROJECAO:
                 passo = REGRAS_PROJECAO[num_atual]
-                # MATRIZ CORRIGIDA: Se i + passo for igual a 11, projeta perfeitamente na casa de fechamento (12ª pedra)
                 if i + passo == 11:
                     if i < 10 and 0 in sub_num[i:11]:
                         continue
                     if num_atual == 4:
-                        # O 4 quebra tendências inerciais locais
                         direcao_sinal = "VERMELHO" if sub_pol[i] == "P" else "PRETO"
                     elif num_atual == 6:
                         direcao_sinal = "PRETO" if "VERMELHO" not in geometria_mercado else "VERMELHO"
@@ -181,11 +179,8 @@ class AnalisadorContextoAvancado:
     @staticmethod
     def mapear_padroes_geometria(sub_pol):
         texto_sub_pol = "".join(sub_pol)
-        
-        # Inclusão dos Padrões de Fechamento Geométrico Cíclicos (Volume 6, Cap 2)
         if texto_sub_pol.endswith("VPPV"): return "CICLO_FECHADO_VPPV"
         if texto_sub_pol.endswith("PVVP"): return "CICLO_FECHADO_PVVP"
-        
         if "VVVV" in texto_sub_pol: return "SATURAÇÃO ESTRUTURAL (V)"
         if "PPPP" in texto_sub_pol: return "SATURAÇÃO ESTRUTURAL (P)"
         if "VPVPVP" in texto_sub_pol or "PVPVPV" in texto_sub_pol: return "XADREZ LONGO"
@@ -243,7 +238,6 @@ class JuizHierarquicoModificado:
         direcao_inclinacao, porc = inclinacao_num
         direcoes_projetadas = list(set([e["direcao"] for e in expectativas]))
 
-        # TRAVA SOBERANA DE CONFLITO GEOMÉTRICO (VPPV / PVVP)
         if geometria_mercado == "CICLO_FECHADO_VPPV":
             if "VERMELHO" in direcoes_projetadas:
                 return "NO CALL", "Bloqueio de Segurança: Geometria VPPV exige PRETO mas a Projeção pedia VERMELHO."
@@ -254,9 +248,7 @@ class JuizHierarquicoModificado:
                 return "NO CALL", "Bloqueio de Segurança: Geometria PVVP exige VERMELHO mas a Projeção pedia PRETO."
             return "VERMELHO", "Volume 6 Cap 2: Fechamento de Ciclo Simétrico PVVP -> Alvo VERMELHO"
 
-        # FILTRO DE FALSO RESPIRO VERSUS CONTAGEM DO 4
         if risco_ativo and tipo_inversao == "FALSO_RESPIRO":
-            # Se houver uma contagem projetiva ativa forçando a quebra, ela anula o antirespiro!
             if expectativas:
                 return direcoes_projetadas[0], f"Contramedida Cruzada: Projeção Ativa substitui Antirespiro -> {expectativas[0]['origem']}"
             cor_dominante = "VERMELHO" if "VERMELHO" in justificativa_inv else "PRETO"
@@ -272,6 +264,8 @@ class JuizHierarquicoModificado:
                     return direcao_ia, f"Volume 18: Resolução por IA ({confianca_ia:.1f}%)"
                 if direcao_inclinacao in direcoes_projetadas and porc >= 60.0:
                     return direcao_inclinacao, f"Volume 18: Resolução por Inclinação Histórica ({porc:.1f}%)"
+                if direcao_ia != "NEUTRO":
+                    return direcao_ia, f"Volume 18: Conflito estrutural arbitrado por Vetor Direcional da IA ({confianca_ia:.1f}%)"
             
             if risco_ativo and tipo_inversao == "AVISO_XADREZ":
                 return "NO CALL", f"Bloqueio Preventivo: {justificativa_inv}"
@@ -312,9 +306,9 @@ class MotorV1Completo:
             inclinacao_num = AnalisadorContextoAvancado.calcular_numerologia_pos_numero(num_fechamento, self.seq.numerica, self.seq.polaridades)
             previsao_ia = self.ia.predizer_proxima_casa(sub_num, sub_pol)
             
+            # CORREÇÃO DO TYPEERROR (Passagem Limpa Posicional): Alinhado com a assinatura da função
             expectativa_final, justificativa = JuizHierarquicoModificado.arbitrar_sinal(
-                nc_ativo, motivo_nc, expectations=expectativas, inclinacao_num=inclinacao_num, 
-                geometria_mercado=geometria, previsao_ia=previsao_ia, status_inversao=status_inv
+                nc_ativo, motivo_nc, expectativas, inclinacao_num, geometria, previsao_ia, status_inv
             )
 
             horizonte_max = min(3, self.seq.total - (idx + 12))
@@ -385,7 +379,7 @@ class ProcessadorTipoB:
             elif 1 <= num <= 7: self.polaridades_usuario.append("V")
             else: self.polaridades_usuario.append("P")
 
-    def ejecutar_sinal_real(self):
+    def executar_sinal_real(self):
         if len(self.entrada_usuario) != 12: 
             return {"erro": "Requisito de exatamente 12 números violado."}
             
@@ -417,6 +411,7 @@ class ProcessadorTipoB:
         )
 
         chance_branco, casas_atraso = AnalisadorContextoAvancado.preditor_estatistico_branco(num_fechamento, num_global, pol_global)
+        status_recencia = "ATIVA (Peso Triplicado e Balanceamento de 75% Recente)" if base_recencia else "INATIVA"
 
         output_memoria = (
             f"- Mapeamento: Sequência {self.entrada_usuario}\n"
