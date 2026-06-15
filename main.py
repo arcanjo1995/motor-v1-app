@@ -262,8 +262,9 @@ class MotorV1Completo:
             # Executa o cálculo probabilístico da IA Preditiva para a janela atual
             previsao_ia = self.ia.predizer_proxima_casa(sub_num, sub_pol)
             
+            # CHAMADA LIMPA E CORRIGIDA DO JUIZ
             expectativa_final, justificativa = JuizHierarquicoModificado.arbitrar_sinal(
-                nc_ativo, motivo_nc, expectations=expectativas if 'expectations' in JuizHierarquicoModificado.arbitrar_sinal.__code__.co_varnames else expectativas, expectativas=expectativas, inclinacao_num=inclinacao_num, geometria_mercado=geometria, previsao_ia=previsao_ia
+                nc_ativo, motivo_nc, expectativas, inclinacao_num, geometria, previsao_ia
             )
 
             horizonte_max = min(3, self.seq.total - (idx + 12))
@@ -377,4 +378,3 @@ class LeitorXLS:
                 except: continue
             return dados_limpos if dados_limpos else None
         except: return None
-
