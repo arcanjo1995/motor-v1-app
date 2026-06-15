@@ -118,11 +118,13 @@ class MotorNoCall:
         return False, "Evento Neutro Operacional"
 
 class MotorContagensProjetivas:
+    """Módulo de Coexistência e Dominância Normativa (Volume 3 e 12)"""
     @staticmethod
     def mapear_janela(sub_num, sub_pol, geometria_mercado):
-        expectativas = []
+        lista_bruta = []
         REGRAS_PROJECAO = {1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7}
 
+        # 1. Varre os ativadores cronológicos base (Volume 3)
         for i in range(12):
             num_atual = sub_num[i]
             if num_atual in REGRAS_PROJECAO:
@@ -132,28 +134,48 @@ class MotorContagensProjetivas:
                         continue
                     if num_atual == 4:
                         direcao_sinal = "VERMELHO" if sub_pol[i] == "P" else "PRETO"
+                        soberania = 2  # Nível 2 para o Ativador 4 posicional
                     elif num_atual == 6:
                         direcao_sinal = "PRETO" if "VERMELHO" not in geometria_mercado else "VERMELHO"
+                        soberania = 1
                     else:
                         direcao_sinal = "PRETO" if "PRETO" in geometria_mercado else "VERMELHO"
+                        soberania = 1
                     
-                    expectativas.append({
+                    lista_bruta.append({
                         "direcao": direcao_sinal,
+                        "soberania": soberania,
                         "origem": f"Volume 3: Ativador {num_atual} na {i+1}ª casa"
                     })
 
+        # 2. Varre os acoplamentos e resíduos numéricos (Volume 12 - Soberania Máxima Nível 3)
         if sub_num[11] == 4 and sub_pol[10] == "P":
-            expectativas.append({"direcao": "PRETO", "origem": "Volume 12: Cap 5 - Retenção do 4 sob Base Preta"})
+            lista_bruta.append({"direcao": "PRETO", "soberania": 3, "origem": "Volume 12: Cap 5 - Retenção do 4 sob Base Preta"})
         elif sub_num[9] == 4 and sub_pol[10] == "P" and sub_pol[11] == "P":
-            expectativas.append({"direcao": "PRETO", "origem": "Volume 12: Cap 5 - Acoplamento Posicional 4-P-P"})
+            lista_bruta.append({"direcao": "PRETO", "soberania": 3, "origem": "Volume 12: Cap 5 - Acoplamento Posicional 4-P-P"})
 
         if sub_num[11] == 10:
-            expectativas.append({"direcao": "PRETO", "origem": "Volume 12: Cap 2 - Resíduo do 10"})
+            lista_bruta.append({"direcao": "PRETO", "soberania": 3, "origem": "Volume 12: Cap 2 - Resíduo do 10"})
         elif sub_num[10] == 5 and sub_num[11] == 10:
-            expectativas.append({"direcao": "PRETO", "origem": "Volume 12: Cap 4 - Acoplamento 5-10"})
+            lista_bruta.append({"direcao": "PRETO", "soberania": 3, "origem": "Volume 12: Cap 4 - Acoplamento 5-10"})
 
-        # CORREÇÃO DO NAMEERROR: Agora retorna a variável correta em português
-        return expectativas
+        if not lista_bruta:
+            return []
+
+        # 3. FILTRO DE DOMINÂNCIA ABSOLUTA (Uma regra assume a outra)
+        # Encontra o maior nível de soberania presente na janela
+        maior_soberania = max([item["soberania"] for item in lista_bruta])
+        
+        # Filtra a lista mantendo apenas as regras que possuem a soberania máxima encontrada
+        lista_filtrada = [item for item in lista_bruta if item["soberania"] == maior_soberania]
+        
+        # Se mesmo no mesmo nível houver direções opostas, a recência cronológica da posição decide
+        direcoes = list(set([d["direcao"] for d in lista_filtrada]))
+        if len(direcoes) > 1:
+            # Retorna o último gatilho detectado (mais próximo do fechamento)
+            return [lista_filtrada[-1]]
+            
+        return lista_filtrada
 
 class AnalisadorContextoAvancado:
     @staticmethod
@@ -251,7 +273,7 @@ class JuizHierarquicoModificado:
 
         if risco_ativo and tipo_inversao == "FALSO_RESPIRO":
             if expectativas:
-                return direcoes_projetadas[0], f"Filtro Cruzado Supremacia: Projeção quebra Antirespiro -> {expectativas[0]['origem']}"
+                return direcoes_projetadas[0], f"Dominância Total: Regra Soberana assume o sinal -> {expectativas[0]['origem']}"
             cor_dominante = "VERMELHO" if "VERMELHO" in justificativa_inv else "PRETO"
             return cor_dominante, f"Volume 14 Cap 4 (Filtro Antirespiro): Mantendo {cor_dominante}."
 
@@ -260,13 +282,8 @@ class JuizHierarquicoModificado:
             return sinal_inverso, f"Volume 14 Cap 2 (Intercepção de Exaustão): {justificativa_inv}"
 
         if expectativas:
-            if len(direcoes_projetadas) > 1:
-                if direcao_ia in direcoes_projetadas:
-                    return direcao_ia, f"Volume 18 (Resolução Agressiva): IA arbitra conflito para {direcao_ia} ({confianca_ia:.1f}%)"
-                if direcao_inclinacao in direcoes_projetadas and porc >= 60.0:
-                    return direcao_inclinacao, f"Volume 18: Conflito resolvido por Inclinação Histórica ({porc:.1f}%)"
-                return direcoes_projetadas[0], f"Vetor Inercial Incondicional -> {expectativas[0]['origem']}"
-            return direcoes_projetadas[0], expectativas[0]["origem"]
+            # Como a dominância já filtrou a melhor contagem antes, o Juiz executa direto sem gerar NO CALL por conflito
+            return direcoes_projetadas[0], f"Sinal de Dominância Projetiva: {expectativas[0]['origem']}"
             
         if direcao_inclinacao != "NEUTRO" and porc >= 60.0:
             return direcao_inclinacao, f"Matriz Pós-Número: {porc:.1f}%"
@@ -408,6 +425,7 @@ class ProcessadorTipoB:
         )
 
         chance_branco, casas_atraso = AnalisadorContextoAvancado.preditor_estatistico_branco(num_fechamento, num_global, pol_global)
+        status_recencia = "ATIVA (Peso Triplicado e Balanceamento de 75% Recente)" if base_recencia else "INATIVA"
 
         output_memoria = (
             f"- Mapeamento: Sequência {self.entrada_usuario}\n"
