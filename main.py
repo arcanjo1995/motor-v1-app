@@ -118,7 +118,7 @@ class MotorNoCall:
 
 class MotorContagensProjetivas:
     @staticmethod
-    def mapear_janela(sub_num, sub_pol, geometria_mercado):
+    def mapear_janela(sub_num, sub_pol, geometry_mercado):
         lista_bruta = []
         REGRAS_PROJECAO = {1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7}
         contas_ativas = []
@@ -291,7 +291,7 @@ class JuizHierarquicoModificado:
                     regra_vencedora_id = "IA_DESEMPATE"
                 else:
                     sinal_projetado = expectations[-1]["direcao"]
-                    justificativa_proj = f"Coexistência Empatada: {expectations[-1]['origem']}"
+                    justificativa_proj = f"Coexistência Empatada resolvida por Proximidade: {expectations[-1]['origem']}"
                     regra_vencedora_id = expectations[-1]["tipo_regra"]
 
         if risco_ativo and tipo_inversao == "FALSO_RESPIRO":
@@ -320,13 +320,11 @@ class MotorV1Completo:
         self.historico_regras = defaultdict(lambda: {"acertos": 1, "total": 1})
 
     def processar_auditoria(self):
-        # VOLTOU EXATAMENTE AO LOOP ORIGINAL DE SALTOS (Começando do índice 0)
         idx = 0
         memorias_calculo = []
         janelas_auditadas = []
         stats = {"G0": 0, "G1": 0, "G2": 0, "FALHA": 0, "NO CALL": 0}
         
-        # INCLUSÃO RESTRITA APENAS DOS MEDIDORES SOLICITADOS
         ia_total_predições = 0
         ia_acertos_reais = 0
 
@@ -363,19 +361,28 @@ class MotorV1Completo:
             else:
                 letra_esperada = "V" if expectativa_final == "VERMELHO" else "P"
                 for g_idx, cor_real in enumerate(correcoes_reais):
-                    if cor_real == letra_esperada or cor_real == "B":
+                    if str(cor_real).strip().upper() in [letra_esperada, "B", "VERMELHO" if letra_esperada == "V" else "PRETO", "BRANCO"]:
                         classificacao = f"G{g_idx}"
                         salto = g_idx + 1
                         break
                 if classificacao == "FALHA": salto = 3
                 stats[classificacao] += 1
 
-            # CONTADOR INTERNO DO MEDIDOR SOLICITADO
+            # --- CORREÇÃO SUPREMA E FLEXÍVEL DO MEDIDOR DE ASSERTIVIDADE (Volume 16 e 21) ---
+            # Aceita as strings em qualquer formato de Excel (Letra limpa, cor completa por extenso)
             if direcao_ia_pura != "NEUTRO":
                 ia_total_predições += 1
                 letra_ia = "V" if direcao_ia_pura == "VERMELHO" else "P"
-                if correcoes_reais and (correcoes_reais[0] == letra_ia or correcoes_reais[0] == "B" or (len(correcoes_reais) > 1 and correcoes_reais[1] == letra_ia)):
-                    ia_acertos_reais += 1
+                nome_ia = "VERMELHO" if direcao_ia_pura == "VERMELHO" else "PRETO"
+                
+                if correcoes_reais:
+                    c0 = str(correcoes_reais[0]).strip().upper()
+                    # Checagem G0 da IA
+                    if c0 in [letra_ia, "B", nome_ia, "BRANCO"]:
+                        ia_acertos_reais += 1
+                    # Checagem G1 da IA
+                    elif len(correcoes_reais) > 1 and str(correcoes_reais[1]).strip().upper() in [letra_ia, "B", nome_ia, "BRANCO"]:
+                        ia_acertos_reais += 1
 
             if regra_ativa_id != "NENHUMA" and regra_ativa_id != "SISTEMA_TRAVADO":
                 self.historico_regras[regra_ativa_id]["total"] += 1
