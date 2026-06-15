@@ -1,6 +1,5 @@
 import streamlit as st
 import os
-# IMPORTAÇÃO CORRIGIDA: Puxa o ProcessadorTipoB direto do main.py
 from main import LeitorXLS, MotorV1Completo, ProcessadorTipoB
 
 st.set_page_config(page_title="MOTOR V1 - Painel Operacional", page_icon="🛡️", layout="wide")
@@ -13,6 +12,7 @@ aba_tipo_b, aba_tipo_d = st.tabs([
 ])
 
 NOME_BASE_DEFINITIVA = "resultados_blaze.xlsx"
+NOME_RECENCIA_ATIVA = "base_recencia_ativa.xlsx"
 
 # =========================================================================
 # ABA TIPO B — SEQUÊNCIA OPERACIONAL E CORREÇÃO MANUAL
@@ -54,7 +54,7 @@ with aba_tipo_b:
                     for linha in output_texto.split("\n"):
                         if "SINAL:" in linha:
                             st.session_state.sinal_pendente = linha.split("SINAL:")[1].strip()
-                        if "- Resolução de Conflitos:" in line if 'line' in locals() else False or "- Resolução de Conflitos:" in linha:
+                        if "- Resolução de Conflitos:" in linha:
                             st.session_state.justificativa_pendente = linha.split("- Resolução de Conflitos:")[1].strip()
                             
                     st.success("Cálculo de Previsibilidade Concluído!")
@@ -108,9 +108,7 @@ with aba_tipo_d:
     
     if arquivo_upload is not None:
         caminho_temp = "temp_recencia.xlsx"
-        with open(caminho_temp, "wb") as f:
-            f.write(arquivo_upload.getbuffer())
-            
+        
         col_btn1, col_btn2 = st.columns(2)
         with col_btn1:
             rodar_auditoria = st.button("🔍 Iniciar Auditoria de Recência")
@@ -118,12 +116,19 @@ with aba_tipo_d:
             salvar_como_base = st.button("💾 Definir como Nova Base de Longo Prazo")
 
         if rodar_auditoria:
+            # Salva o arquivo como temporário E também como Memória Ativa de Recência
+            with open(caminho_temp, "wb") as f:
+                f.write(arquivo_upload.getbuffer())
+            if os.path.exists(NOME_RECENCIA_ATIVA): os.remove(NOME_RECENCIA_ATIVA)
+            with open(NOME_RECENCIA_ATIVA, "wb") as f:
+                f.write(arquivo_upload.getbuffer())
+
             leitor = LeitorXLS(caminho_temp)
             dados = leitor.ler_e_validar()
             if dados:
                 motor = MotorV1Completo(dados)
                 output_d = motor.processar_auditoria()
-                st.success("Auditoria Realizada!")
+                st.success("Auditoria Realizada! A IA salvou e fixou esta base como Recência Ativa.")
                 
                 memoria_d = output_d.split("[RESULTADO FINAL TIPO D]")[0]
                 resultado_d = "[RESULTADO FINAL TIPO D]" + output_d.split("[RESULTADO FINAL TIPO D]")[1]
@@ -137,11 +142,13 @@ with aba_tipo_d:
             if os.path.exists(caminho_temp): os.remove(caminho_temp)
 
         if salvar_como_base:
+            with open(caminho_temp, "wb") as f:
+                f.write(arquivo_upload.getbuffer())
             try:
                 if os.path.exists(NOME_BASE_DEFINITIVA): os.remove(NOME_BASE_DEFINITIVA)
                 with open(NOME_BASE_DEFINITIVA, "wb") as f:
                     f.write(arquivo_upload.getbuffer())
-                st.success(f"Sucesso! Arquivo gravado permanentemente como '{NOME_BASE_DEFINITIVA}'. A inteligência do Tipo B foi updated.")
+                st.success(f"Sucesso! Arquivo gravado permanentemente como '{NOME_BASE_DEFINITIVA}'. Base Histórica atualizada.")
             except Exception as e:
                 st.error(f"Erro ao salvar arquivo base: {e}")
             if os.path.exists(caminho_temp): os.remove(caminho_temp)
