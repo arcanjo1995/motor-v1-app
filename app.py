@@ -41,7 +41,7 @@ with aba_tipo_b:
             try:
                 lista_numeros = [int(x.strip()) for x in entrada_numeros.split(",") if x.strip() != ""]
                 if len(lista_numeros) != 12:
-                    st.error(f"Erro Regulamentar: Contém {len(lista_numeros)} números. O manual exige exatamente 12.")
+                    st.error(f"Erro Regulamentar: Contém {len(lista_numeros)} numbers. O manual exige exatamente 12.")
                 elif not os.path.exists(NOME_BASE_DEFINITIVA):
                     st.error(f"Erro: O arquivo de longo prazo '{NOME_BASE_DEFINITIVA}' não foi localizado no servidor.")
                 else:
@@ -63,7 +63,7 @@ with aba_tipo_b:
             except Exception as e:
                 st.error(f"Erro Crítico no processamento da sequência: {e}")
 
-    # Painel interativo de exibição cruzada e auditoria ao vivo no iPad (Linha 81 Corrigida)
+    # Painel interativo de exibição cruzada e auditoria ao vivo no iPad
     if st.session_state.sinal_pendente:
         st.write("---")
         col1, col2 = st.columns(2)
@@ -103,7 +103,35 @@ with aba_tipo_b:
                     st.session_state.sinal_pendente = None
 
 # =========================================================================
-# ABA TIPO D — AUDITORIA CRONOLÓGICA DE LONGO PRAZO
+# ABA TIPO D — AUDITORIA CRONOLÓGICA DE LONGO PRAZO (Linha 109 Corrigida!)
 # =========================================================================
 with aba_tipo_d:
-    st.header("📊 Auditoria Cronológica
+    st.header("📊 Auditoria Cronológica Tipo D")
+    st.info("Faça o upload do seu Excel recente para auditar a saúde e recência do mercado.")
+    arquivo_upload = st.file_uploader("Arraste o seu arquivo .xlsx aqui", type=["xlsx"])
+    
+    if arquivo_upload is not None:
+        caminho_temp = "temp_recencia.xlsx"
+        with open(caminho_temp, "wb") as f:
+            f.write(arquivo_upload.getbuffer())
+            
+        col_btn1, col_btn2 = st.columns(2)
+        with col_btn1:
+            rodar_auditoria = st.button("🔍 Iniciar Auditoria de Recência")
+        with col_btn2:
+            salvar_como_base = st.button("💾 Definir como Nova Base de Longo Prazo")
+
+        if rodar_auditoria:
+            leitor = LeitorXLS(caminho_temp)
+            dados = leitor.ler_e_validar()
+            if dados:
+                motor = MotorV1Completo(dados)
+                output_d = motor.processar_auditoria()
+                st.success("Auditoria Realizada!")
+                
+                memoria_d = output_d.split("[RESULTADO FINAL ESTATÍSTICO]")[0]
+                resultado_d = "[RESULTADO FINAL ESTATÍSTICO]" + output_d.split("[RESULTADO FINAL ESTATÍSTICO]")[1]
+                
+                st.subheader("📋 Histórico das Janelas Móveis")
+                st.text_area("Processamento em Saltos", value=memoria_d, height=200)
+                st.subheader("📉 Consol
