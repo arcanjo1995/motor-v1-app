@@ -12,7 +12,7 @@ class SequenciaOperacional:
 class IAPreditivaV1:
     def __init__(self, dados_longo_prazo, dados_recencia=None):
         self.dados_longo = dados_longo_prazo
-        self.dados_recencia = dados_recencia
+        self.dados_recencia = dados_recencia if dados_recencia else []
         self.modelo_transicao = defaultdict(list)
         self.modelo_numerico = defaultdict(list)
         self._treinar_modelo()
@@ -34,6 +34,10 @@ class IAPreditivaV1:
                 self.modelo_transicao[estado_atual_cor].append(proxima_cor)
                 self.modelo_numerico[num_atual].append(proxima_cor)
 
+    def injetar_aprendizado_imediato(self, sub_dados, multiplicador_peso=3):
+        """Alimenta a mente da IA em tempo real durante o fluxo de saltos da auditoria"""
+        self._processar_bloco_dados(sub_dados, multiplicador_peso)
+
     def predizer_proxima_casa(self, sub_num, sub_pol):
         if len(sub_num) < 12:
             return "NEUTRO", 0.0
@@ -43,8 +47,9 @@ class IAPreditivaV1:
         proximas_cores_historicas = self.modelo_transicao.get(ultimas_cores, [])
         proximas_cores_por_num = self.modelo_numerico.get(ultimo_num, [])
         
-        peso_geometria = 0.75 if self.dados_recencia else 0.60
-        peso_numerico = 0.25 if self.dados_recencia else 0.40
+        has_recencia = len(self.dados_recencia) > 0 or len(self.modelo_transicao) > 0
+        peso_geometria = 0.75 if has_recencia else 0.60
+        peso_numerico = 0.25 if has_recencia else 0.40
         
         total_v = (proximas_cores_historicas.count('V') * peso_geometria) + (proximas_cores_por_num.count('V') * peso_numerico)
         total_p = (proximas_cores_historicas.count('P') * peso_geometria) + (proximas_cores_por_num.count('P') * peso_numerico)
@@ -98,33 +103,31 @@ class MotorNoCall:
         cenarios_duplas = [(7, 8), (8, 9), (9, 10), (10, 11)]
         for idx1, idx2 in cenarios_duplas:
             if sub_num[idx1] == sub_num[idx2]:
-                return True, f"Volume 2 Cap 6: Trava das Duplas Ativa nas posições {idx1+1}º-{idx2+1}º"
+                return True, f"Volume 2 Cap 6: Trava das Duplas Ativa"
 
         posicoes_criticas_6 = [5, 8, 9, 10]
         for pos in posicoes_criticas_6:
             if sub_num[pos] == 6:
-                return True, f"Volume 2 Cap 4: Trava Crítica do Número 6 Posicional na {pos+1}ª casa"
+                return True, f"Volume 2 Cap 4: Trava Número 6"
 
         posicoes_criticas_2 = [8, 9, 10, 11]
         for pos in posicoes_criticas_2:
             if sub_num[pos] == 2:
-                return True, f"Volume 2 Cap 3: Trava Crítica do Número 2 Posicional na {pos+1}ª casa"
+                return True, f"Volume 2 Cap 3: Trava Número 2"
 
         posicoes_criticas_b = [5, 8, 9, 10, 11]
         for pos in posicoes_criticas_b:
             if sub_pol[pos] == "B":
-                return True, f"Volume 2 Cap 5: Trava Crítica do Branco Posicional na {pos+1}ª casa"
+                return True, f"Volume 2 Cap 5: Trava do Branco"
 
         return False, "Evento Neutro Operacional"
 
 class MotorContagensProjetivas:
-    """Módulo de Coexistência e Dominância Normativa (Volume 3 e 12)"""
     @staticmethod
     def mapear_janela(sub_num, sub_pol, geometria_mercado):
         lista_bruta = []
         REGRAS_PROJECAO = {1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7}
 
-        # 1. Varre os ativadores cronológicos base (Volume 3)
         for i in range(12):
             num_atual = sub_num[i]
             if num_atual in REGRAS_PROJECAO:
@@ -134,7 +137,7 @@ class MotorContagensProjetivas:
                         continue
                     if num_atual == 4:
                         direcao_sinal = "VERMELHO" if sub_pol[i] == "P" else "PRETO"
-                        soberania = 2  # Nível 2 para o Ativador 4 posicional
+                        soberania = 2
                     elif num_atual == 6:
                         direcao_sinal = "PRETO" if "VERMELHO" not in geometria_mercado else "VERMELHO"
                         soberania = 1
@@ -148,7 +151,6 @@ class MotorContagensProjetivas:
                         "origem": f"Volume 3: Ativador {num_atual} na {i+1}ª casa"
                     })
 
-        # 2. Varre os acoplamentos e resíduos numéricos (Volume 12 - Soberania Máxima Nível 3)
         if sub_num[11] == 4 and sub_pol[10] == "P":
             lista_bruta.append({"direcao": "PRETO", "soberania": 3, "origem": "Volume 12: Cap 5 - Retenção do 4 sob Base Preta"})
         elif sub_num[9] == 4 and sub_pol[10] == "P" and sub_pol[11] == "P":
@@ -162,17 +164,11 @@ class MotorContagensProjetivas:
         if not lista_bruta:
             return []
 
-        # 3. FILTRO DE DOMINÂNCIA ABSOLUTA (Uma regra assume a outra)
-        # Encontra o maior nível de soberania presente na janela
         maior_soberania = max([item["soberania"] for item in lista_bruta])
-        
-        # Filtra a lista mantendo apenas as regras que possuem a soberania máxima encontrada
         lista_filtrada = [item for item in lista_bruta if item["soberania"] == maior_soberania]
         
-        # Se mesmo no mesmo nível houver direções opostas, a recência cronológica da posição decide
         direcoes = list(set([d["direcao"] for d in lista_filtrada]))
         if len(direcoes) > 1:
-            # Retorna o último gatilho detectado (mais próximo do fechamento)
             return [lista_filtrada[-1]]
             
         return lista_filtrada
@@ -217,19 +213,19 @@ class AnalisadorContextoAvancado:
         if texto_sub_pol.endswith("VVVV"):
             bloco_anterior = texto_sub_pol[4:8]
             if bloco_anterior.count("V") >= 2:
-                return True, "FALSO_RESPIRO", "Falso Respiro Detetado: Tendência macro forte de VERMELHO."
-            return True, "INVERSÃO", "Exaustão Crítica de Fluxo: 4 Vermelhos Seguidos. Alerta de Quebra para PRETO."
+                return True, "FALSO_RESPIRO", "Falso Respiro: Tendência forte de VERMELHO."
+            return True, "INVERSÃO", "Exaustão: 4 Vermelhos Seguidos. Quebra para PRETO."
             
         if texto_sub_pol.endswith("PPPP"):
             bloco_anterior = texto_sub_pol[4:8]
             if bloco_anterior.count("P") >= 2:
-                return True, "FALSO_RESPIRO", "Falso Respiro Detetado: Tendência macro forte de PRETO."
-            return True, "INVERSÃO", "Exaustão Crítica de Fluxo: 4 Pretos Seguidos. Alerta de Quebra para VERMELHO."
+                return True, "FALSO_RESPIRO", "Falso Respiro: Tendência forte de PRETO."
+            return True, "INVERSÃO", "Exaustão: 4 Pretos Seguidos. Quebra para VERMELHO."
         
         if texto_sub_pol.endswith("VPVPVP") or texto_sub_pol.endswith("PVPVPV"):
-            return True, "AVISO_XADREZ", "Alerta de Ciclo de Alternância Ativo."
+            return True, "AVISO_XADREZ", "Ciclo de Alternância Ativo."
             
-        return False, "NORMAL", "Fluxo Inercial Estável."
+        return False, "NORMAL", "Fluxo Estável."
 
     @staticmethod
     def preditor_estatistico_branco(num_fechamento, sequencia_num, sequencia_pol):
@@ -252,55 +248,56 @@ class AnalisadorContextoAvancado:
 
 class JuizHierarquicoModificado:
     @staticmethod
-    def arbitrar_sinal(no_call_ativo, motivo_nc, expectativas, inclinacao_num, geometria_mercado, previsao_ia, status_inversao):
+    def arbitrar_sinal(no_call_ativo, motivo_nc, expectations, inclinacao_num, geometria_mercado, previsao_ia, status_inversao):
         if no_call_ativo: 
             return "NO CALL", motivo_nc
 
         risco_ativo, tipo_inversao, justificativa_inv = status_inversao
         direcao_ia, confianca_ia = previsao_ia
         direcao_inclinacao, porc = inclinacao_num
-        direcoes_projetadas = list(set([e["direcao"] for e in expectativas]))
+        direcoes_projetadas = list(set([e["direcao"] for e in expectations]))
 
         if geometria_mercado == "CICLO_FECHADO_VPPV":
             if "VERMELHO" in direcoes_projetadas and direcao_ia == "PRETO":
-                return "PRETO", "Fusão Normativa: Ciclo VPPV + Validação da IA convergem para PRETO"
-            return "PRETO", "Volume 6 Cap 2: Fechamento de Ciclo Simétrico VPPV -> Forçando PRETO"
+                return "PRETO", "Ciclo VPPV + IA validam PRETO"
+            return "PRETO", "Geometria VPPV -> Alvo PRETO"
             
         if geometria_mercado == "CICLO_FECHADO_PVVP":
             if "PRETO" in direcoes_projetadas and direcao_ia == "VERMELHO":
-                return "VERMELHO", "Fusão Normativa: Ciclo PVVP + Validação da IA convergem para VERMELHO"
-            return "VERMELHO", "Volume 6 Cap 2: Fechamento de Ciclo Simétrico PVVP -> Forçando VERMELHO"
+                return "VERMELHO", "Ciclo PVVP + IA validam VERMELHO"
+            return "VERMELHO", "Geometria PVVP -> Alvo VERMELHO"
 
         if risco_ativo and tipo_inversao == "FALSO_RESPIRO":
-            if expectativas:
-                return direcoes_projetadas[0], f"Dominância Total: Regra Soberana assume o sinal -> {expectativas[0]['origem']}"
+            if expectations:
+                return direcoes_projetadas[0], f"Dominância Cruzada: {expectations[0]['origem']}"
             cor_dominante = "VERMELHO" if "VERMELHO" in justificativa_inv else "PRETO"
-            return cor_dominante, f"Volume 14 Cap 4 (Filtro Antirespiro): Mantendo {cor_dominante}."
+            return cor_dominante, f"Filtro Antirespiro: Mantendo {cor_dominante}."
 
         if risco_ativo and tipo_inversao == "INVERSÃO":
+            if expectations:
+                return direcoes_projetadas[0], f"Dominância de Quebra: {expectativas[0]['origem']}"
             sinal_inverso = "PRETO" if "Vermelhos Seguidos" in justificativa_inv else "VERMELHO"
-            return sinal_inverso, f"Volume 14 Cap 2 (Intercepção de Exaustão): {justificativa_inv}"
+            return sinal_inverso, f"Intercepção de Exaustão (4 Casas): {justificativa_inv}"
 
-        if expectativas:
-            # Como a dominância já filtrou a melhor contagem antes, o Juiz executa direto sem gerar NO CALL por conflito
-            return direcoes_projetadas[0], f"Sinal de Dominância Projetiva: {expectativas[0]['origem']}"
+        if expectations:
+            return direcoes_projetadas[0], f"Dominância Projetiva: {expectations[0]['origem']}"
             
         if direcao_inclinacao != "NEUTRO" and porc >= 60.0:
             return direcao_inclinacao, f"Matriz Pós-Número: {porc:.1f}%"
         if direcao_ia != "NEUTRO" and confianca_ia >= 62.0:
             return direcao_ia, f"IA Preditiva: {confianca_ia:.1f}%"
         if direcao_ia != "NEUTRO":
-            return direcao_ia, f"Vetor Direcional Recente: IA força entrada operativa para {direcao_ia} ({confianca_ia:.1f}%)"
+            return direcao_ia, f"Vetor Recente IA: {direcao_ia} ({confianca_ia:.1f}%)"
             
-        return "PRETO", "Veredito por Consenso de Fechamento Operacional"
+        return "PRETO", "Consenso Operacional"
 
 class MotorV1Completo:
     def __init__(self, lista_dados_xls):
         self.seq = SequenciaOperacional(lista_dados_xls)
         corte_recencia = max(0, len(lista_dados_xls) - 150)
-        dados_longo = lista_dados_xls[:corte_recencia]
-        dados_curto = lista_dados_xls[corte_recencia:]
-        self.ia = IAPreditivaV1(dados_longo, dados_curto)
+        self.dados_longo = lista_dados_xls[:corte_recencia]
+        self.dados_curto = lista_dados_xls[corte_recencia:]
+        self.ia = IAPreditivaV1(self.dados_longo, self.dados_curto)
 
     def processar_auditoria(self):
         idx = 0
@@ -346,6 +343,13 @@ class MotorV1Completo:
                 if classificacao == "FALHA": 
                     salto = 3
                 stats[classificacao] += 1
+
+            # --- RETROALIMENTAÇÃO ATIVA (A CORREÇÃO DO PONTO CEGO):
+            # Captura o bloco real que acabou de acontecer e força a IA a processar as transições dinamicamente
+            bloco_vivido = []
+            for k in range(idx, min(idx + 12 + salto, self.seq.total)):
+                bloco_vivido.append({"numero": self.seq.numerica[k], "cor": self.seq.polaridades[k]})
+            self.ia.injetar_aprendizado_imediato(bloco_vivido, multiplicador_peso=3)
 
             log_linha = f"Janela {len(janelas_auditadas) + 1}: {sub_num} -> Expectativa: {expectativa_final} -> Justificativa: {justificativa} -> Correção: {classificacao}"
             memorias_calculo.append(log_linha)
@@ -425,7 +429,6 @@ class ProcessadorTipoB:
         )
 
         chance_branco, casas_atraso = AnalisadorContextoAvancado.preditor_estatistico_branco(num_fechamento, num_global, pol_global)
-        status_recencia = "ATIVA (Peso Triplicado e Balanceamento de 75% Recente)" if base_recencia else "INATIVA"
 
         output_memoria = (
             f"- Mapeamento: Sequência {self.entrada_usuario}\n"
@@ -451,6 +454,7 @@ class LeitorXLS:
         try:
             try: df = pd.read_excel(self.caminho)
             except: df = pd.read_csv(self.caminho)
+            
             df.columns = [str(col).strip().lower() for col in df.columns]
             mapeamento_colunas = {
                 'val': 'numero', 'value': 'numero', 'num': 'numero', 'number': 'numero',
@@ -459,6 +463,7 @@ class LeitorXLS:
             }
             df = df.rename(columns=mapeamento_colunas)
             colunas_atuais = df.columns.tolist()
+            
             col_numero, col_cor = None, None
             for col in colunas_atuais:
                 col_lower = str(col).lower().strip()
@@ -466,15 +471,21 @@ class LeitorXLS:
                     col_numero = col
                 if any(x in col_lower for x in ['color', 'cor']):
                     col_cor = col
+            
             if col_numero is None and len(colunas_atuais) >= 1: col_numero = colunas_atuais[0]
             if col_cor is None and len(colunas_atuais) >= 2: col_cor = colunas_atuais[1]
             if col_numero is None or col_cor is None: return None
             df = df.rename(columns={col_numero: 'numero', col_cor: 'cor'})
-            df_cronologico = df.iloc[::-1].reset_index(drop=True)
+            
+            # ORDENADOR CRONOLÓGICO SEGURO (Mais novo no topo -> Mais antigo abaixo)
+            df_cronologico = df.iloc[::-1].dropna(subset=['numero', 'cor']).reset_index(drop=True)
+            
             if len(df_cronologico) < 15: return None
+            
             LEGENDA_BRANCO = [0]
             LEGENDA_VERMELHO = [1, 2, 3, 4, 5, 6, 7]
             LEGENDA_PRETO = [8, 9, 10, 11, 12, 13, 14]
+            
             dados_limpos = []
             for _, l in df_cronologico.iterrows():
                 try:
@@ -485,5 +496,6 @@ class LeitorXLS:
                     else: continue
                     dados_limpos.append({"numero": num_val, "cor": cor_final})
                 except: continue
+                
             return dados_limpos if dados_limpos else None
         except: return None
