@@ -1,7 +1,7 @@
 import streamlit as st
 import os
-from main import LeitorXLS, MotorV1Completo
-from operational_tipo_b import ProcessadorTipoB
+# IMPORTAÇÃO CORRIGIDA: Puxa o ProcessadorTipoB direto do main.py
+from main import LeitorXLS, MotorV1Completo, ProcessadorTipoB
 
 st.set_page_config(page_title="MOTOR V1 - Painel Operacional", page_icon="🛡️", layout="wide")
 st.title("🛡️ Sistema de Auditoria Analítica - MOTOR V1")
@@ -54,7 +54,7 @@ with aba_tipo_b:
                     for linha in output_texto.split("\n"):
                         if "SINAL:" in linha:
                             st.session_state.sinal_pendente = linha.split("SINAL:")[1].strip()
-                        if "- Resolução de Conflitos:" in linha:
+                        if "- Resolução de Conflitos:" in line if 'line' in locals() else False or "- Resolução de Conflitos:" in linha:
                             st.session_state.justificativa_pendente = linha.split("- Resolução de Conflitos:")[1].strip()
                             
                     st.success("Cálculo de Previsibilidade Concluído!")
@@ -125,7 +125,6 @@ with aba_tipo_d:
                 output_d = motor.processar_auditoria()
                 st.success("Auditoria Realizada!")
                 
-                # Sincronizado perfeitamente com '[RESULTADO FINAL TIPO D]'
                 memoria_d = output_d.split("[RESULTADO FINAL TIPO D]")[0]
                 resultado_d = "[RESULTADO FINAL TIPO D]" + output_d.split("[RESULTADO FINAL TIPO D]")[1]
                 
