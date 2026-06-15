@@ -105,7 +105,7 @@ class MotorContagensProjetivas:
         elif sub_num[10] == 5 and sub_num[11] == 10:
             expectativas.append({"direcao": "PRETO", "origem": "Volume 12: Cap 4 - Acoplamento 5-10"})
 
-        return expectativas
+        return copy_expectativas if 'copy_expectativas' in locals() else expectativas
 
 class AnalisadorContextoAvancado:
     @staticmethod
@@ -249,19 +249,16 @@ class MotorV1Completo:
         return self._gerar_relatorio_texto(memorias_calculo, stats, len(janelas_auditadas))
 
     def _gerar_relatorio_texto(self, memorias, stats, qtd_janelas):
-        # 1. Base Estatística: Segregação das janelas com sinal (Volume 8, Cap 5D)
         total_com_sinal = sum([stats["G0"], stats["G1"], stats["G2"], stats["FALHA"]])
         denominador = total_com_sinal if total_com_sinal > 0 else 1
         denominador_nc = qtd_janelas if qtd_janelas > 0 else 1
 
-        # 2. Cálculo Oficial das Taxas de Recência (Volume 8, Cap 5B2)
         p_g0 = (stats["G0"] / denominador) * 100
         p_g1 = (stats["G1"] / denominador) * 100
         p_g2 = (stats["G2"] / denominador) * 100
         p_fa = (stats["FALHA"] / denominador) * 100
         p_nc = (stats["NO CALL"] / denominador_nc) * 100
 
-        # 3. Classificação Evolutiva do Estágio do Mercado (Volume 8, Cap 14)
         if p_fa >= 25.0:
             condicao_mercado = "MERCADO EM DEGRADAÇÃO (Risco Elevado de Falhas)"
             degradacao = "FORTE"
@@ -283,9 +280,8 @@ class MotorV1Completo:
             degradacao = "MEDIANA"
             recuperacao = "MEDIANA"
 
-        # 4. Formatação do Bloco de Saída Conforme Protocolo do Volume 22
         output = "[MEMÓRIA DE CÁLCULO DAS JANELAS MÓVEIS]\n" + "\n".join(memorias) + "\n\n"
-        output += "[RESULTADO FINAL TIPO D]\n"  # Ajustado de acordo com o Volume 22, Cap 2
+        output += "[RESULTADO FINAL TIPO D]\n"
         output += f"CRONOLOGIA VALIDADA: {self.seq.total} Resultados Reconstruídos\n"
         output += f"TOTAL DE JANELAS AUDITADAS: {qtd_janelas} Saltos Sequenciais\n"
         output += f" - Taxa G0: {stats['G0']} Ocorrências ({p_g0:.2f}%)\n"
