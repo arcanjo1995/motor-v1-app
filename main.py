@@ -140,7 +140,6 @@ class MotorContagensProjetivas:
                     alvo_interno_idx = i + passo
                     cor_alvo_interno = sub_pol[alvo_interno_idx]
                     
-                    # Correção de simetria do vetor dinâmico para evitar falsas inversões
                     if cor_alvo_interno == sub_pol[i]:
                         direcao_sinal = "PRETO" if cor_alvo_interno == "V" else "VERMELHO"
                     else:
@@ -218,13 +217,31 @@ class AnalisadorContextoAvancado:
             
         return False, "NORMAL", "Fluxo Estável."
 
+    @staticmethod
+    def preditor_estatistico_branco(num_fechamento, sequencia_num, sequencia_pol):
+        if not sequencia_pol: return "BAIXA", 0
+        atraso_atual = 0
+        for cor in reversed(sequencia_pol):
+            if cor == "B": break
+            atraso_atual += 1
+
+        vezes_numero_apareceu, vezes_chamou_branco = 0, 0
+        for i in range(len(sequencia_num) - 1):
+            if sequencia_num[i] == num_fechamento:
+                vezes_numero_apareceu += 1
+                horizonte_proximo = sequencia_pol[i+1 : min(i+4, len(sequencia_pol))]
+                if "B" in horizonte_proximo: vezes_chamou_branco += 1
+
+        taxa_atracao = (vezes_chamou_branco / vezes_numero_apareceu) * 100 if vezes_numero_apareceu > 0 else 0.0
+        chance = "ALTA" if atraso_atual >= 15 or taxa_atracao >= 18.0 else ("MÉDIA" if atraso_atual >= 8 else "BAIXA")
+        return chance, atraso_atual
+
 class JuizHierarquicoModificado:
     @staticmethod
     def arbitrar_sinal(no_call_ativo, motivo_nc, expectations, inclinacao_num, geometria_mercado, previsao_ia, status_inversao, historico_revalida_regras):
         if no_call_ativo: 
             return "NO CALL", motivo_nc, "SISTEMA_TRAVADO"
 
-        # Correção ortográfica do bug de escopo que quebrava o PVVP/VPPV
         if geometria_mercado == "CICLO_FECHADO_VPPV":
             return "PRETO", "Geometria VPPV -> Alvo PRETO", "GEOMETRIA"
             
@@ -252,7 +269,7 @@ class JuizHierarquicoModificado:
                 peso_vivo = base_soberania * (1.0 + taxa_acerto_recente)
                 
                 forcas[item["direcao"]] += peso_vivo
-                origens[item["direcao"]].append(f"{item['origem']} [Peso Vivo: {peso_vivo:.1f}]")
+                origens[item["direcao"]].append(f"{item['origem']}")
                 
                 if peso_vivo > maior_peso_id[item["direcao"]][1]:
                     maior_peso_id[item["direcao"]] = (id_r, peso_vivo)
@@ -262,7 +279,6 @@ class JuizHierarquicoModificado:
                 sinal_oposto = "PRETO" if sinal_dominante == "VERMELHO" else "VERMELHO"
                 regra_vencedora_id = maior_peso_id[sinal_dominante][0]
                 
-                # Ajuste Fino Anti-Esmagamento: Só entrega para a IA se ela tiver alta confiança absoluta (>65%)
                 if forcas[sinal_oposto] > 0 and direcao_ia != "NEUTRO" and confianca_ia > 65.0:
                     sinal_projetado = direcao_ia
                     justificativa_proj = f"Veredito de Recência Extrema: IA ({confianca_ia:.1f}%) assume o controle do choque de matrizes."
@@ -366,7 +382,7 @@ class MotorV1Completo:
             bloco_vivido = []
             for k in range(idx, min(idx + 12 + salto, self.seq.total)):
                 bloco_vivido.append({"numero": self.seq.numerica[k], "cor": self.seq.polaridades[k]})
-            self.ia.injetar_learned_immediate = self.ia.injetar_aprendizado_imediato(bloco_vivido, multiplicador_peso=3)
+            self.ia.injetar_aprendizado_imediato(bloco_vivido, multiplicador_peso=3)
 
             log_linha = f"Janela {len(janelas_auditadas) + 1}: {sub_num} -> Expectativa: {expectativa_final} -> Justificativa: {justificativa} -> Correção: {classificacao}"
             memorias_calculo.append(log_linha)
@@ -386,10 +402,10 @@ class MotorV1Completo:
         p_fa = (stats["FALHA"] / denominador) * 100
         p_nc = (stats["NO CALL"] / denominador_nc) * 100
 
-        condicao_mercado = "MERCADO INSTÁVEL"
         if p_fa >= 25.0: condicao_mercado = "MERCADO EM DEGRADAÇÃO"
         elif p_g0 >= 50.0: condicao_mercado = "MERCADO PAGADOR"
         elif p_g1 >= 40.0: condicao_mercado = "MERCADO COM ATRASO CONTROLADO"
+        else: condicao_mercado = "MERCADO INSTÁVEL"
 
         output = "[MEMÓRIA DE CÁLCULO DAS JANELAS MÓVEIS]\n" + "\n".join(memorias) + "\n\n"
         output += "[RESULTADO FINAL TIPO D]\n"
@@ -401,3 +417,110 @@ class MotorV1Completo:
         output += f" - Taxa de NO CALL: {stats['NO CALL']} ({p_nc:.2f}%)\n\n"
         output += f"ESTADO ATUAL DO MERCADO: {condicao_mercado}\n"
         return output
+
+class ProcessadorTipoB:
+    def __init__(self, sequencia_12_numeros, caminho_base_dados):
+        self.entrada_usuario = sequencia_12_numeros
+        self.caminho_base = caminho_base_dados
+        self.caminho_recencia = "base_recencia_ativa.xlsx"
+        
+        self.polaridades_usuario = []
+        for num in self.entrada_usuario:
+            if num == 0: self.polaridades_usuario.append("B")
+            elif 1 <= num <= 7: self.polaridades_usuario.append("V")
+            else: self.polaridades_usuario.append("P")
+
+    def executar_sinal_real(self):
+        if len(self.entrada_usuario) != 12: 
+            return {"erro": "Requisito de exatamente 12 números violado."}
+            
+        leitor_longo = LeitorXLS(self.caminho_base)
+        base_longo = leitor_longo.ler_e_validar()
+        if not base_longo: return {"erro": "Base de dados ausente."}
+
+        base_recencia = None
+        if os.path.exists(self.caminho_recencia):
+            leitor_recencia = LeitorXLS(self.caminho_recencia)
+            base_recencia = leitor_recencia.ler_e_validar()
+
+        num_global = [d['numero'] for d in base_longo]
+        pol_global = [d['cor'] for d in base_longo]
+
+        ia_operacional = IAPreditivaV1(base_longo, base_recencia)
+        previsao_ia = ia_operacional.predizer_proxima_casa(self.entrada_usuario, self.polaridades_usuario)
+
+        saturacao = AnalisadorContextoAvancado.mapear_padroes_geometria(self.polaridades_usuario)
+        status_inv = AnalisadorContextoAvancado.detectar_chance_inversao(self.polaridades_usuario)
+        nc_ativo, motivo_nc = MotorNoCall.checar_no_call(self.entrada_usuario, self.polaridades_usuario)
+        expectativas = MotorContagensProjetivas.mapear_janela(self.entrada_usuario, self.polaridades_usuario, saturacao)
+        
+        num_fechamento = self.entrada_usuario[-1]
+        inclinacao_num = AnalisadorContextoAvancado.calcular_numerologia_pos_numero(num_fechamento, num_global, pol_global)
+        
+        regras_b = defaultdict(lambda: {"acertos": 1, "total": 1})
+        sinal_final, justificativa, _ = JuizHierarquicoModificado.arbitrar_sinal(
+            nc_ativo, motivo_nc, expectativas, inclinacao_num, saturacao, previsao_ia, status_inv, regras_b
+        )
+
+        chance_branco, casas_atraso = AnalisadorContextoAvancado.preditor_estatistico_branco(num_fechamento, num_global, pol_global)
+
+        output_memoria = (
+            f"- Mapeamento: Sequência {self.entrada_usuario}\n"
+            f"- Geometria da Janela: {saturacao}\n"
+            f"- Resolução de Conflitos: {justificativa}\n"
+        )
+
+        return {
+            "sinal": sinal_final,
+            "justificativa": justificativa,
+            "memoria": output_memoria,
+            "chance_branco": chance_branco,
+            "atraso_branco": casas_atraso,
+            "geometria": saturacao
+        }
+
+class LeitorXLS:
+    def __init__(self, caminho_arquivo):
+        self.caminho = caminho_arquivo
+
+    def ler_e_validar(self):
+        if not os.path.exists(self.caminho): return None
+        try:
+            try: df = pd.read_excel(self.caminho)
+            except: df = pd.read_csv(self.caminho)
+            df.columns = [str(col).strip().lower() for col in df.columns]
+            mapeamento_colunas = {
+                'val': 'numero', 'value': 'numero', 'num': 'numero', 'number': 'numero',
+                'resultado': 'numero', 'roll': 'numero', 'giro': 'numero', 'spin': 'numero',
+                'color': 'cor', 'cor': 'cor', 'result': 'cor'
+            }
+            df = df.rename(columns=mapeamento_colunas)
+            colunas_atuais = df.columns.tolist()
+            col_numero, col_cor = None, None
+            for col in colunas_atuais:
+                col_lower = str(col).lower().strip()
+                if any(x in col_lower for x in ['val', 'num', 'number', 'roll', 'giro', 'spin']) and not any(x in col_lower for x in ['color', 'cor']):
+                    col_numero = col
+                if any(x in col_lower for x in ['color', 'cor']):
+                    col_cor = col
+            if col_numero is None and len(colunas_atuais) >= 1: col_numero = colunas_atuais[0]
+            if col_cor is None and len(colunas_atuais) >= 2: col_cor = colunas_atuais[1]
+            if col_numero is None or col_cor is None: return None
+            df = df.rename(columns={col_numero: 'numero', col_cor: 'cor'})
+            df_cronologico = df.iloc[::-1].reset_index(drop=True)
+            if len(df_cronologico) < 15: return None
+            LEGENDA_BRANCO = [0]
+            LEGENDA_VERMELHO = [1, 2, 3, 4, 5, 6, 7]
+            LEGENDA_PRETO = [8, 9, 10, 11, 12, 13, 14]
+            dados_limpos = []
+            for _, l in df_cronologico.iterrows():
+                try:
+                    num_val = int(l["numero"])
+                    if num_val in LEGENDA_BRANCO: cor_final = 'B'
+                    elif num_val in LEGENDA_VERMELHO: cor_final = 'V'
+                    elif num_val in LEGENDA_PRETO: cor_final = 'P'
+                    else: continue
+                    dados_limpos.append({"numero": num_val, "cor": cor_final})
+                except: continue
+            return dados_limpos if dados_limpos else None
+        except: return None
