@@ -43,7 +43,6 @@ class IAPreditivaV1:
         proximas_cores_historicas = self.modelo_transicao.get(ultimas_cores, [])
         proximas_cores_por_num = self.modelo_numerico.get(ultimo_num, [])
         
-        # Pesos dinâmicos aplicados com sucesso se houver inteligência de recência ativa
         peso_geometria = 0.75 if self.dados_recencia else 0.60
         peso_numerico = 0.25 if self.dados_recencia else 0.40
         
@@ -185,10 +184,23 @@ class AnalisadorContextoAvancado:
 
     @staticmethod
     def detectar_chance_inversao(sub_pol):
+        """Mapeador Avançado: Diferencia Inversão Real de Falso Respiro (Volume 14, Cap 4)"""
         texto_sub_pol = "".join(sub_pol)
+        
+        # Caso 1: Detecção na ponta da cauda para Vermelho
         if texto_sub_pol.endswith("VVVV"):
+            # Analisa o miolo anterior da janela para ver se o vermelho já vinha dominando antes
+            bloco_anterior = texto_sub_pol[4:8]
+            if bloco_anterior.count("V") >= 2:
+                # Se vinha dominando, ativa a proteção contra o FALSO RESPIRO (o mercado vai jogar uma cor oposta curta e voltar)
+                return True, "FALSO_RESPIRO", "Falso Respiro Detetado: Tendência macro forte de VERMELHO. Proteção de Gale Ativa."
             return True, "INVERSÃO", "Exaustão Crítica de Fluxo: 4 Vermelhos Seguidos. Alerta de Quebra para PRETO."
+            
+        # Caso 2: Detecção na ponta da cauda para Preto
         if texto_sub_pol.endswith("PPPP"):
+            bloco_anterior = texto_sub_pol[4:8]
+            if bloco_anterior.count("P") >= 2:
+                return True, "FALSO_RESPIRO", "Falso Respiro Detetado: Tendência macro forte de PRETO. Proteção de Gale Ativa."
             return True, "INVERSÃO", "Exaustão Crítica de Fluxo: 4 Pretos Seguidos. Alerta de Quebra para VERMELHO."
         
         if texto_sub_pol.endswith("VPVPVP") or texto_sub_pol.endswith("PVPVPV"):
@@ -226,9 +238,15 @@ class JuizHierarquicoModificado:
         direcao_inclinacao, porc = inclinacao_num
         direcoes_projetadas = list(set([e["direcao"] for e in expectativas]))
 
+        # FILTRO SOBERANO 1: Se for FALSO RESPIRO, o robô manda manter a cor forte sabendo que o Gale 1 protege do respiro curto
+        if risco_ativo and tipo_inversao == "FALSO_RESPIRO":
+            cor_dominante = "VERMELHO" if "VERMELHO" in justificativa_inv else "PRETO"
+            return cor_dominante, f"Volume 14 Cap 4 (Filtro Antirespiro): Mantendo {cor_dominante} devido à pressão de bloco anterior."
+
+        # FILTRO SOBERANO 2: Se for INVERSÃO REAL, vira o sinal de contra-ataque imediatamente
         if risco_ativo and tipo_inversao == "INVERSÃO":
             sinal_inverso = "PRETO" if "Vermelhos Seguidos" in justificativa_inv else "VERMELHO"
-            return sinal_inverso, f"Volume 14 Cap 2 (Gatilho Antiatraso - 4 Casas): {justificativa_inv}"
+            return sinal_inverso, f"Volume 14 Cap 2 (Gatilho Antiatraso - Intercepção de 4 Casas): {justificativa_inv}"
 
         if expectativas:
             if len(direcoes_projetadas) > 1:
@@ -262,13 +280,9 @@ class JuizHierarquicoModificado:
 class MotorV1Completo:
     def __init__(self, lista_dados_xls):
         self.seq = SequenciaOperacional(lista_dados_xls)
-        
-        # CORREÇÃO SUPREMA: Divide o arquivo Excel dinamicamente. Os últimos 150 giros da planilha 
-        # são tratados como Recência Ativa para calibrar a IA com peso dinâmico de 75%!
         corte_recencia = max(0, len(lista_dados_xls) - 150)
         dados_longo = lista_dados_xls[:corte_recencia]
         dados_curto = lista_dados_xls[corte_recencia:]
-        
         self.ia = IAPreditivaV1(dados_longo, dados_curto)
 
     def processar_auditoria(self):
@@ -377,21 +391,18 @@ class ProcessadorTipoB:
         
         self.polaridades_usuario = []
         for num in self.entrada_usuario:
-            if num == 0: 
-                self.polaridades_usuario.append("B")
-            elif 1 <= num <= 7: 
-                self.polaridades_usuario.append("V")
-            else: 
-                self.polaridades_usuario.append("P")
+            if num == 0: self.polaridades_usuario.append("B")
+            elif 1 <= num <= 7: self.polaridades_usuario.append("V")
+            else: self.polaridades_usuario.append("P")
 
     def executar_sinal_real(self):
         if len(self.entrada_usuario) != 12: 
-            return "[ERRO] Requisito de exatamente 12 números violado."
+            return {"erro": "Requisito de exatamente 12 números violado."}
             
         leitor_longo = LeitorXLS(self.caminho_base)
         base_longo = leitor_longo.ler_e_validar()
         if not base_longo: 
-            return "[ERRO] Base de dados resultados_blaze.xlsx ausente."
+            return {"erro": "Base de dados resultados_blaze.xlsx ausente."}
 
         base_recencia = None
         if os.path.exists(self.caminho_recencia):
@@ -417,21 +428,26 @@ class ProcessadorTipoB:
         )
 
         chance_branco, casas_atraso = AnalisadorContextoAvancado.preditor_estatistico_branco(num_fechamento, num_global, pol_global)
-        status_recencia = "ATIVA (Peso Triplicado e Balanceamento de 75% Recente)" if base_recencia else "INATIVA (Apenas Longo Prazo)"
+        status_recencia = "ATIVA (Peso Triplicado e Balanceamento de 75% Recente)" if base_recencia else "INATIVA"
 
-        output = "[MEMÓRIA DE CÁLCULO]\n"
-        output += f"- Mapeamento: Sequência {self.entrada_usuario} processada.\n"
-        output += f"- Geometria da Janela: {saturacao}\n"
-        output += f"- Alerta de Inversão: {status_inv[2]}\n"
-        output += f"- Calibração de Recência: {status_recencia}\n"
-        output += f"- Previsão IA: {previsao_ia[0]} ({previsao_ia[1]:.1f}%)\n"
-        output += f"- Inclinação Histórica ({num_fechamento}): {inclinacao_num[0]} ({inclinacao_num[1]:.1f}%)\n"
-        output += f"- Resolução de Conflitos: {justificativa}\n\n"
-        output += "[RESULTADO FINAL TIPO B]\n"
-        output += f"SINAL: {sinal_final}\n"
-        output += f"BRANCO: {chance_branco} CHANCE (Atraso: {casas_atraso} rodadas)\n"
-        output += f"ESTADO DO MERCADO: {saturacao}\n"
-        return output
+        output_memoria = (
+            f"- Mapeamento: Sequência {self.entrada_usuario} processada.\n"
+            f"- Geometria da Janela: {saturacao}\n"
+            f"- Alerta de Inversão: {status_inv[2]}\n"
+            f"- Calibração de Recência: {status_recencia}\n"
+            f"- Previsão IA: {previsao_ia[0]} ({previsao_ia[1]:.1f}%)\n"
+            f"- Inclinação Histórica ({num_fechamento}): {inclinacao_num[0]} ({inclinacao_num[1]:.1f}%)\n"
+            f"- Resolução de Conflitos: {justificativa}\n"
+        )
+
+        return {
+            "sinal": sinal_final,
+            "justificativa": justificativa,
+            "memoria": output_memoria,
+            "chance_branco": chance_branco,
+            "atraso_branco": casas_atraso,
+            "geometria": saturacao
+        }
 
 class LeitorXLS:
     def __init__(self, caminho_arquivo):
