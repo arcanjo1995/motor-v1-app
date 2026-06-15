@@ -67,21 +67,18 @@ class GerenciadorMemoriaViva:
     def injetar_rodadas_reais(sequencia_12, numeros_gales_reais, caminho_recencia="base_recencia_ativa.xlsx"):
         novas_linhas = []
         
-        # 1. Adiciona os 12 números da janela base
         for num in sequencia_12:
             if num == 0: cor = 'B'
             elif 1 <= num <= 7: cor = 'V'
             else: cor = 'P'
             novas_linhas.append({"numero": int(num), "cor": cor})
             
-        # 2. Adiciona os números reais das rodadas seguintes informadas pelo usuário
         for num in numeros_gales_reais:
             if num == 0: cor = 'B'
             elif 1 <= num <= 7: cor = 'V'
             else: cor = 'P'
             novas_linhas.append({"numero": int(num), "cor": cor})
 
-        # 3. Consolida no arquivo Excel de recência ativa no servidor
         df_novos = pd.DataFrame(novas_linhas)
         if os.path.exists(caminho_recencia):
             try:
@@ -237,6 +234,7 @@ class JuizHierarquicoModificado:
         return "PRETO", "Arbitragem de Bloco Inercial de Fechamento por Consenso"
 
 class MotorV1Completo:
+    """Classe de Auditoria Cronológica em Massa (Tipo D) - Restaurada!"""
     def __init__(self, lista_dados_xls):
         self.seq = SequenciaOperacional(lista_dados_xls)
         self.ia = IAPreditivaV1(lista_dados_xls)
@@ -381,7 +379,7 @@ class ProcessadorTipoB:
         inclinacao_num = AnalisadorContextoAvancado.calcular_numerologia_pos_numero(num_fechamento, num_global, pol_global)
         
         sinal_final, justificativa = JuizHierarquicoModificado.arbitrar_sinal(
-            nc_ativo, motivo_nc, expectativas, inclinacao_num, saturacao, previsao_ia
+            nc_ativo, motivo_nc, Forest_expectativas if 'Forest_expectativas' in locals() else expectativas, inclinacao_num, saturacao, previsao_ia
         )
 
         chance_branco, casas_atraso = AnalisadorContextoAvancado.preditor_estatistico_branco(num_fechamento, num_global, pol_global)
