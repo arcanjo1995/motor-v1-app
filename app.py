@@ -1,7 +1,7 @@
 import streamlit as st
 import os
 from main import LeitorXLS, MotorV1Completo
-from operacional_tipo_b import ProcessadorTipoB
+from operational_tipo_b import ProcessadorTipoB
 
 st.set_page_config(page_title="MOTOR V1 - Painel Operacional", page_icon="🛡️", layout="wide")
 st.title("🛡️ Sistema de Auditoria Analítica - MOTOR V1")
@@ -26,7 +26,6 @@ with aba_tipo_b:
         placeholder="Exemplo: 2,11,14,4,9,12,12,7,3,9,5,12"
     )
     
-    # Inicializa estados na memória do Streamlit para manter o painel fixo na tela
     if "sinal_pendente" not in st.session_state:
         st.session_state.sinal_pendente = None
     if "justificativa_pendente" not in st.session_state:
@@ -52,7 +51,6 @@ with aba_tipo_b:
                     st.session_state.sinal_pendente = None
                     st.session_state.justificativa_pendente = None
                     
-                    # Captura de forma segura as linhas geradas pelo motor interno
                     for linha in output_texto.split("\n"):
                         if "SINAL:" in linha:
                             st.session_state.sinal_pendente = linha.split("SINAL:")[1].strip()
@@ -63,7 +61,6 @@ with aba_tipo_b:
             except Exception as e:
                 st.error(f"Erro Crítico no processamento da sequência: {e}")
 
-    # Painel interativo de exibição cruzada e auditoria ao vivo no iPad
     if st.session_state.sinal_pendente:
         st.write("---")
         col1, col2 = st.columns(2)
@@ -87,7 +84,6 @@ with aba_tipo_b:
                 st.write("---")
                 st.write("### 🎛️ Registrar Resultado Real da Entrada:")
                 
-                # Botões de clique rápido para salvar o resultado da rodada
                 c1, c2, c3, c4 = st.columns(4)
                 if c1.button("🟢 G0"):
                     st.success(f"Registrado: Sinal no {sinal} pago em G0!")
@@ -129,8 +125,9 @@ with aba_tipo_d:
                 output_d = motor.processar_auditoria()
                 st.success("Auditoria Realizada!")
                 
-                memoria_d = output_d.split("[RESULTADO FINAL ESTATÍSTICO]")[0]
-                resultado_d = "[RESULTADO FINAL ESTATÍSTICO]" + output_d.split("[RESULTADO FINAL ESTATÍSTICO]")[1]
+                # Sincronizado perfeitamente com '[RESULTADO FINAL TIPO D]'
+                memoria_d = output_d.split("[RESULTADO FINAL TIPO D]")[0]
+                resultado_d = "[RESULTADO FINAL TIPO D]" + output_d.split("[RESULTADO FINAL TIPO D]")[1]
                 
                 st.subheader("📋 Histórico das Janelas Móveis")
                 st.text_area("Processamento em Saltos", value=memoria_d, height=200)
