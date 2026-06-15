@@ -297,27 +297,26 @@ class LeitorXLS:
             if len(df_cronologico) < 15: 
                 return None
                 
+            # LEGENDA ESTRITA E IMUTÁVEL DA BLAZE DOUBLE (Volume 8)
+            LEGENDA_BRANCO = [0]
+            LEGENDA_VERMELHO = [1, 2, 3, 4, 5, 6, 7]
+            LEGENDA_PRETO = [8, 9, 10, 11, 12, 13, 14]
+            
             dados_limpos = []
             for _, l in df_cronologico.iterrows():
                 try:
                     num_val = int(l["numero"])
-                    cor_original = str(l["cor"]).strip().lower()
                     
-                    # Tradução inteligente baseada no teu ficheiro:
-                    # Se a cor for '1' ou 'red' -> Vermelho (V)
-                    # Se a cor for '2' ou 'black' -> Preto (P)
-                    # Se a cor for '0' ou 'white' -> Branco (B)
-                    if cor_original in ['1', 'red', 'vermelho', 'v', 'true']:
-                        cor_final = 'V'
-                    elif cor_original in ['2', 'black', 'preto', 'p', 'false']:
-                        cor_final = 'P'
-                    elif cor_original in ['0', 'white', 'branco', 'b', 'none']:
+                    # Força a cor com base estritamente no número do tabuleiro real
+                    # Isto blinda o código contra inversões ou traduções erradas de arquivos
+                    if num_val in LEGENDA_BRANCO:
                         cor_final = 'B'
+                    elif num_val in LEGENDA_VERMELHO:
+                        cor_final = 'V'
+                    elif num_val in LEGENDA_PRETO:
+                        cor_final = 'P'
                     else:
-                        # Segurança baseada estritamente no número do giro
-                        if num_val == 0: cor_final = 'B'
-                        elif 1 <= num_val <= 7: cor_final = 'V'
-                        else: cor_final = 'P'
+                        continue # Ignora se for um número fora do padrão da Blaze (ex: erros de digitação)
                         
                     dados_limpos.append({
                         "numero": num_val,
@@ -332,3 +331,4 @@ class LeitorXLS:
             return dados_limpos
         except: 
             return None
+
