@@ -71,7 +71,7 @@ with aba_tipo_b:
         with col1:
             st.subheader("📝 Rascunho Analítico Interno")
             memoria_limpa = st.session_state.log_completo.split("[RESULTADO FINAL TIPO B]")[0]
-            st.text_area("Memória de Cálculo", value=memoria_limpa, height=320)
+            st.text_area("Memória de Cálculo", value=memoria_limpa, height=340)
             
         with col2:
             st.subheader("📊 Veredito e Alimentação Real")
