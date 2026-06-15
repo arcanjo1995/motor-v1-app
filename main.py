@@ -43,8 +43,7 @@ class IAPreditivaV1:
         proximas_cores_historicas = self.modelo_transicao.get(ultimas_cores, [])
         proximas_cores_por_num = self.modelo_numerico.get(ultimo_num, [])
         
-        # MODIFICAÇÃO DE ASSERTIVIDADE (Volume 16): Pesos Dinâmicos Baseados em Recência Viva
-        # Se houver dados de recência ativa injetados, prioriza o comportamento milimétrico atualizado
+        # Pesos dinâmicos aplicados com sucesso se houver inteligência de recência ativa
         peso_geometria = 0.75 if self.dados_recencia else 0.60
         peso_numerico = 0.25 if self.dados_recencia else 0.40
         
@@ -59,7 +58,6 @@ class IAPreditivaV1:
         prob_v = (total_v / soma_pesos) * 100
         prob_p = (total_p / soma_pesos) * 100
         
-        # FILTRO DE REDUÇÃO DE G2: Elevada barreira de confiança de 58% para 62%
         BARREIRA_CONFIA_IA = 62.0
         
         if prob_v >= BARREIRA_CONFIA_IA and prob_v > prob_p:
@@ -172,7 +170,6 @@ class AnalisadorContextoAvancado:
         pct_v = (contagem_v / total_ocorrencias) * 100
         pct_p = (contagem_p / total_ocorrencias) * 100
 
-        # Rigor elevado na inclinação para evitar atrasos longos (de 55% para 60%)
         if pct_v >= 60.0: return "VERMELHO", pct_v
         if pct_p >= 60.0: return "PRETO", pct_p
         return "NEUTRO", max(pct_v, pct_p)
@@ -239,7 +236,6 @@ class JuizHierarquicoModificado:
                     return direcao_ia, f"Volume 18: Conflito resolvido por Validação da IA ({confianca_ia:.1f}%)"
                 if direcao_inclinacao in direcoes_projetadas and porc >= 60.0:
                     return direcao_inclinacao, f"Volume 18: Conflito resolvido por Inclinação Histórica ({porc:.1f}%)"
-                # SEM ADICIONAR NO CALL: Se houver conflito de projeção estrutural pura, o robô força o vetor direcional dominante da IA para puxar G0
                 if direcao_ia != "NEUTRO":
                     return direcao_ia, f"Volume 18: Conflito estrutural arbitrado por Vetor Direcional da IA ({confianca_ia:.1f}%)"
             
@@ -248,7 +244,6 @@ class JuizHierarquicoModificado:
                 
             return direcoes_projetadas[0], expectativas[0]["origem"]
             
-        # Alinhamentos refinados para forçar acerto rápido de primeira (G0)
         if direcao_inclinacao != "NEUTRO" and porc >= 60.0:
             if direcao_ia == direcao_inclinacao:
                 return direcao_inclinacao, f"Matriz + IA Unificadas: Alinhamento de Tendência Global com {confianca_ia:.1f}%"
@@ -267,7 +262,14 @@ class JuizHierarquicoModificado:
 class MotorV1Completo:
     def __init__(self, lista_dados_xls):
         self.seq = SequenciaOperacional(lista_dados_xls)
-        self.ia = IAPreditivaV1(lista_dados_xls)
+        
+        # CORREÇÃO SUPREMA: Divide o arquivo Excel dinamicamente. Os últimos 150 giros da planilha 
+        # são tratados como Recência Ativa para calibrar a IA com peso dinâmico de 75%!
+        corte_recencia = max(0, len(lista_dados_xls) - 150)
+        dados_longo = lista_dados_xls[:corte_recencia]
+        dados_curto = lista_dados_xls[corte_recencia:]
+        
+        self.ia = IAPreditivaV1(dados_longo, dados_curto)
 
     def processar_auditoria(self):
         idx = 0
@@ -349,7 +351,7 @@ class MotorV1Completo:
             degradacao = "MODERADA"
             recuperacao = "FRACA"
         else:
-            condicao_mercado = "MERCADO INSTÁVEL (Oscilação Excessiva de Vetores)"
+            condicao_mercado = "MERCADO INSTÁVEL (Oscilação Excessive de Vetores)"
             degradacao = "MEDIANA"
             recuperacao = "MEDIANA"
 
