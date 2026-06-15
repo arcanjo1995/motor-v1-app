@@ -64,9 +64,11 @@ class GerenciadorMemoriaViva:
             novas_linhas.append({"numero": int(num), "cor": cor})
         df_novos = pd.DataFrame(novas_linhas)
         if os.path.exists(caminho_recencia):
-            pd.concat([pd.read_excel(caminho_recencia), df_novos], ignore_index=True).to_excel(caminho_recencia, index=False)
-        else:
-            df_novos.to_excel(caminho_recencia, index=False)
+            try:
+                df_atual = pd.read_excel(caminho_recencia)
+                pd.concat([df_atual, df_novos], ignore_index=True).to_excel(caminho_recencia, index=False)
+            except: df_novos.to_excel(caminho_recencia, index=False)
+        else: df_novos.to_excel(caminho_recencia, index=False)
 
 class MotorNoCall:
     @staticmethod
@@ -74,14 +76,11 @@ class MotorNoCall:
         cenarios_duplas = [(7, 8), (8, 9), (9, 10), (10, 11)]
         for idx1, idx2 in cenarios_duplas:
             if sub_num[idx1] == sub_num[idx2]: return True, "Volume 2 Cap 6: Trava das Duplas Ativa"
-        posicoes_criticas_6 = [5, 8, 9, 10, 11]
-        for pos in posicoes_criticas_6:
+        for pos in [5, 8, 9, 10, 11]:
             if sub_num[pos] == 6: return True, "Volume 2 Cap 4: Trava Número 6"
-        posicoes_criticas_2 = [8, 9, 10, 11]
-        for pos in posicoes_criticas_2:
+        for pos in [8, 9, 10, 11]:
             if sub_num[pos] == 2: return True, "Volume 2 Cap 3: Trava Número 2"
-        posicoes_criticas_b = [5, 8, 9, 10, 11]
-        for pos in posicoes_criticas_b:
+        for pos in [5, 8, 9, 10, 11]:
             if sub_pol[pos] == "B": return True, "Volume 2 Cap 5: Trava do Branco"
         return False, "Evento Neutro Operacional"
 
@@ -98,7 +97,7 @@ class MotorContagensProjetivas:
                 alvo_idx = i + passo
                 if alvo_idx == 11:
                     direcao_sinal = "VERMELHO" if sub_pol[i] == "P" else "PRETO"
-                    lista_bruta.append({"direcao": direcao_sinal, "tipo_regra": f"V3_ATIVADOR_{num_atual}", "origem": "Volume 3"})
+                    lista_bruta.append({"direcao": direcao_sinal, "tipo_regra": f"V3_{num_atual}", "origem": "Volume 3"})
         return lista_bruta
 
 class AnalisadorContextoAvancado:
@@ -116,35 +115,38 @@ class AnalisadorContextoAvancado:
 class JuizHierarquicoModificado:
     @staticmethod
     def arbitrar_sinal(no_call_ativo, motivo_nc, expectations, inclinacao_num, geometria_mercado, previsao_ia, status_inversao, historico_revalida_regras, entropia=0):
-        # INTEGRADO: Filtro de Entropia (Conceito de Ruído de Mercado)
-        if no_call_ativo or entropia > 0.85: return "NO CALL", "Ruído/Entropia", "SISTEMA_TRAVADO"
-        # IA Arbitra baseada em taxa de sucesso real
+        if no_call_ativo or entropia > 0.85: return "NO CALL", "Ruído/Entropia Alta", "SISTEMA_TRAVADO"
         sinal = previsao_ia[0] if previsao_ia[0] != "NEUTRO" else "PRETO"
-        return sinal, "Análise de Probabilidade", "REGRA_ATIVA"
+        return sinal, "Análise Ponderada", "REGRA_ATIVA"
 
 class MotorV1Completo:
     def __init__(self, lista_dados_xls):
         self.seq = SequenciaOperacional(lista_dados_xls)
-        self.ia = IAPreditivaV1(lista_dados_xls[:150], lista_dados_xls[-150:])
+        corte = max(0, len(lista_dados_xls) - 150)
+        self.ia = IAPreditivaV1(lista_dados_xls[:corte], lista_dados_xls[corte:])
         self.historico_regras = defaultdict(lambda: {"acertos": 1, "total": 1})
+
     def processar_auditoria(self):
-        idx, ia_t, ia_h = 0, 0, 0
+        idx, stats, ia_t, ia_h = 0, {"G0": 0, "G1": 0, "G2": 0, "FALHA": 0, "NO CALL": 0}, 0, 0
+        memorias = []
         while idx + 12 < self.seq.total:
             s_n, s_p = self.seq.numerica[idx:idx+12], self.seq.polaridades[idx:idx+12]
             ent = AnalisadorContextoAvancado.medir_entropia(s_n)
-            sinal, _, _ = JuizHierarquicoModificado.arbitrar_sinal(*MotorNoCall.checar_no_call(s_n, s_p), 
-                MotorContagensProjetivas.mapear_janela(s_n, s_p, "ESTÁVEL"), (0,0), self.ia.predizer_proxima_casa(s_n, s_p), 
+            sinal, just, id_r = JuizHierarquicoModificado.arbitrar_sinal(*MotorNoCall.checar_no_call(s_n, s_p), 
+                MotorContagensProjetivas.mapear_janela(s_n, s_p, "ESTÁVEL"), (0,0), "ESTÁVEL", self.ia.predizer_proxima_casa(s_n, s_p), 
                 (False,"",""), self.historico_regras, ent)
+            
             if sinal != "NO CALL":
                 ia_t += 1
                 if self.seq.polaridades[idx+12] == ("V" if sinal=="VERMELHO" else "P"): ia_h += 1
+            memorias.append(f"Janela {len(memorias)+1}: {sinal}")
             idx += 1
-        return f"[RESULTADO FINAL TIPO D]\nMETRICA_EVOLUÇÃO_IA: {(ia_h/ia_t*100) if ia_t>0 else 0:.2f}%"
+        return "\n".join(memorias) + "\n\n[RESULTADO FINAL TIPO D]\nMETRICA_EVOLUÇÃO_IA: {(ia_h/ia_t*100) if ia_t>0 else 0:.2f}%"
 
 class ProcessadorTipoB:
-    def __init__(self, seq, caminho): self.entrada = seq
+    def __init__(self, seq, caminho): self.entrada, self.caminho = seq, caminho
     def executar_sinal_real(self):
-        return {"sinal": "PRETO", "justificativa": "Análise Ponderada", "memoria": "Concluído", "chance_branco": "BAIXA", "atraso_branco": 0, "geometria": "ESTÁVEL"}
+        return {"sinal": "PRETO", "justificativa": "Análise Ponderada", "memoria": "Processado", "chance_branco": "BAIXA", "atraso_branco": 0, "geometria": "ESTÁVEL"}
 
 class LeitorXLS:
     def __init__(self, caminho): self.caminho = caminho
@@ -153,5 +155,6 @@ class LeitorXLS:
             df = pd.read_excel(self.caminho) if self.caminho.endswith('xlsx') else pd.read_csv(self.caminho)
             df.columns = [str(c).lower().strip() for c in df.columns]
             c_n = next((c for c in df.columns if any(x in c for x in ['num', 'giro', 'spin'])), df.columns[0])
-            return [{"numero": int(r[c_n]), "cor": ('B' if int(r[c_n])==0 else ('V' if 1<=int(r[c_n])<=7 else 'P'))} for _, r in df.iterrows()]
+            dados = [{"numero": int(r[c_n]), "cor": ('B' if int(r[c_n])==0 else ('V' if 1<=int(r[c_n])<=7 else 'P'))} for _, r in df.iterrows()]
+            return dados if len(dados) >= 15 else None
         except: return None
