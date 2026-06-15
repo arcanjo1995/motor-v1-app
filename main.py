@@ -11,17 +11,42 @@ class SequenciaOperacional:
 class MotorNoCall:
     @staticmethod
     def checar_no_call(sub_num, sub_pol):
-        if sub_num[10] == sub_num[11]:
-            return True, f"Volume 2: Dupla do número {sub_num[11]} em Adjacência Crítica"
-        if sub_num[9] == sub_num[10]:
-            return True, f"Volume 2: Dupla do número {sub_num[10]} em Adjacência Crítica"
-            
-        if sub_num[11] in [2, 6] or sub_num[10] in [2, 6]:
-            return True, "Volume 5: Número Crítico (2 ou 6) Ativo no Fechamento"
-            
-        if sub_pol[11] == "B" or sub_pol[10] == "B":
-            return True, "Volume 13: Ruptura Estrutural por Branco Posicional"
-            
+        # =========================================================================
+        # 1. REGRA DAS DUPLAS (Volume 2, Capítulo 6) - Adjacência Cronológica Absoluta
+        # Estruturas oficiais mapeadas: [7-8], [8-9], [9-10], [10-11]
+        # =========================================================================
+        cenarios_duplas = [(7, 8), (8, 9), (9, 10), (10, 11)]
+        for idx1, idx2 in cenarios_duplas:
+            if sub_num[idx1] == sub_num[idx2]:
+                return True, f"Volume 2 Cap 6: Trava das Duplas Ativa nas posições {idx1+1}º-{idx2+1}º ({sub_num[idx1]}-{sub_num[idx2]})"
+
+        # =========================================================================
+        # 2. TRAVA DE POSICIONAMENTO DO NÚMERO 6 (Volume 2, Capítulo 4)
+        # Estruturas oficiais mapeadas nas casas: 6ª(idx 5), 9ª(idx 8), 10ª(idx 9), 11ª(idx 10)
+        # =========================================================================
+        posicoes_criticas_6 = [5, 8, 9, 10]
+        for pos in posicoes_criticas_6:
+            if sub_num[pos] == 6:
+                return True, f"Volume 2 Cap 4: Trava Crítica do Número 6 Posicional na {pos+1}ª casa"
+
+        # =========================================================================
+        # 3. TRAVA DE POSICIONAMENTO DO NÚMERO 2 (Volume 2, Capítulo 3)
+        # Estruturas oficiais mapeadas nas casas: 9ª(idx 8), 10ª(idx 9), 11ª(idx 10), 12ª(idx 11)
+        # =========================================================================
+        posicoes_criticas_2 = [8, 9, 10, 11]
+        for pos in posicoes_criticas_2:
+            if sub_num[pos] == 2:
+                return True, f"Volume 2 Cap 3: Trava Crítica do Número 2 Posicional na {pos+1}ª casa"
+
+        # =========================================================================
+        # 4. TRAVA DE POSICIONAMENTO DO BRANCO (Volume 2, Capítulo 5)
+        # Estruturas oficiais mapeadas nas casas: 6ª(idx 5), 9ª(idx 8), 10ª(idx 9), 11ª(idx 10), 12ª(idx 11)
+        # =========================================================================
+        posicoes_criticas_b = [5, 8, 9, 10, 11]
+        for pos in posicoes_criticas_b:
+            if sub_pol[pos] == "B":
+                return True, f"Volume 2 Cap 5: Trava Crítica do Branco Posicional na {pos+1}ª casa"
+
         return False, "Evento Neutro Operacional"
 
 class MotorContagensProjetivas:
@@ -35,7 +60,7 @@ class MotorContagensProjetivas:
             if num_atual in REGRAS_PROJECAO:
                 passo = REGRAS_PROJECAO[num_atual]
                 if i + passo == 11:
-                    if 0 in sub_num[i:12]:
+                    if i < 10 and 0 in sub_num[i:11]:
                         continue
                     
                     if num_atual == 6:
@@ -109,18 +134,27 @@ class AnalisadorContextoAvancado:
 
 class JuizHierarquicoModificado:
     @staticmethod
-    def arbitrar_sinal(no_call_ativo, motivo_nc, expectativas, inclinacao_num):
-        if no_call_ativo: return "NO CALL", motivo_nc
-        if not expectativas: return "NO CALL", "Ausência de Diretriz Ativa de Volume 3"
-        
+    def arbitrar_sinal(no_call_ativo, motivo_nc, expectativas, inclinacao_num, geometria_mercado):
+        if no_call_ativo: 
+            return "NO CALL", motivo_nc
+            
+        if geometria_mercado in ["XADREZ LONGO", "SATURAÇÃO ESTRUTURAL (V)", "SATURAÇÃO ESTRUTURAL (P)"]:
+            return "NO CALL", f"Volume 22: Bloqueio Geométrico por Mapeamento de {geometria_mercado}"
+
         direcao_inclinacao, porc = inclinacao_num
         direcoes_projetadas = list(set([e["direcao"] for e in expectativas]))
 
-        if len(direcoes_projetadas) > 1:
-            if direcao_inclinacao in direcoes_projetadas and porc >= 55.0:
-                return direcao_inclinacao, f"Volume 18: Conflito resolvido por Inclinação Histórica ({porc:.1f}%)"
-            return "NO CALL", "Volume 18: Conflito Hierárquico Sem Consenso"
-        return direcoes_projetadas[0], expectativas[0]["origem"]
+        if expectativas:
+            if len(direcoes_projetadas) > 1:
+                if direcao_inclinacao in direcoes_projetadas and porc >= 55.0:
+                    return direcao_inclinacao, f"Volume 18: Conflito resolvido por Inclinação Histórica ({porc:.1f}%)"
+                return "NO CALL", "Volume 18: Conflito Hierárquico Sem Consenso (Cenário de Risco)"
+            return direcoes_projetadas[0], expectativas[0]["origem"]
+            
+        if direcao_inclinacao != "NEUTRO" and porc >= 55.0:
+            return direcao_inclinacao, f"Matriz Pós-Número Padrão: Tendência Proporcional de {porc:.1f}%"
+            
+        return "NO CALL", "Volume 18: Ausência de Diretriz Analítica Combinada"
 
 class MotorV1Completo:
     def __init__(self, lista_dados_xls):
@@ -143,8 +177,9 @@ class MotorV1Completo:
             num_fechamento = sub_num[-1]
             inclinacao_num = AnalisadorContextoAvancado.calcular_numerologia_pos_numero(num_fechamento, self.seq.numerica, self.seq.polaridades)
             
-            # LINHA 152 CORRIGIDA: Sem termos em inglês para evitar o erro do seu print
-            expectativa_final, justificativa = JuizHierarquicoModificado.arbitrar_sinal(nc_ativo, motivo_nc, expectativas, inclinacao_num)
+            expectativa_final, justificativa = JuizHierarquicoModificado.arbitrar_sinal(
+                nc_ativo, motivo_nc, expectativas, inclinacao_num, geometria
+            )
 
             horizonte_max = min(3, self.seq.total - (idx + 12))
             if horizonte_max == 0: break
@@ -169,7 +204,7 @@ class MotorV1Completo:
                     salto = 3
                 stats[classificacao] += 1
 
-            log_linha = f"Janela {len(janelas_auditadas) + 1}: {sub_num} -> Expectativa: {expectativa_final} -> Correção: {classificacao}"
+            log_linha = f"Janela {len(janelas_auditadas) + 1}: {sub_num} -> Expectativa: {expectativa_final} -> Justificativa: {justificativa} -> Correção: {classificacao}"
             memorias_calculo.append(log_linha)
             janelas_auditadas.append(classificacao)
             idx += 12 + salto
