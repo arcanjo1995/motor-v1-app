@@ -51,25 +51,21 @@ class IAPreditivaV1:
 class MotorNoCall:
     @staticmethod
     def checar_no_call(sub_num, sub_pol):
-        # 1. TRAVA DAS DUPLAS (Volume 2 Cap 6) - Adjacência Cronológica Absoluta nas posições oficiais
         cenarios_duplas = [(7, 8), (8, 9), (9, 10), (10, 11)]
         for idx1, idx2 in cenarios_duplas:
             if sub_num[idx1] == sub_num[idx2]:
                 return True, f"Volume 2 Cap 6: Trava das Duplas Ativa nas posições {idx1+1}º-{idx2+1}º ({sub_num[idx1]}-{sub_num[idx2]})"
 
-        # 2. TRAVA DO NÚMERO 6 (Volume 2 Cap 4) - Posições Oficiais
         posicoes_criticas_6 = [5, 8, 9, 10]
         for pos in posicoes_criticas_6:
             if sub_num[pos] == 6:
                 return True, f"Volume 2 Cap 4: Trava Crítica do Número 6 Posicional na {pos+1}ª casa"
 
-        # 3. TRAVA DO NÚMERO 2 (Volume 2 Cap 3) - Posições Oficiais
         posicoes_criticas_2 = [8, 9, 10, 11]
         for pos in posicoes_criticas_2:
             if sub_num[pos] == 2:
                 return True, f"Volume 2 Cap 3: Trava Crítica do Número 2 Posicional na {pos+1}ª casa"
 
-        # 4. TRAVA DO BRANCO (Volume 2 Cap 5) - Posições Oficiais
         posicoes_criticas_b = [5, 8, 9, 10, 11]
         for pos in posicoes_criticas_b:
             if sub_pol[pos] == "B":
@@ -81,16 +77,7 @@ class MotorContagensProjetivas:
     @staticmethod
     def mapear_janela(sub_num, sub_pol, geometria_mercado):
         expectativas = []
-        
-        REGRAS_PROJECAO = {
-            1: 1,  # Contagem 1: Imediata
-            2: 2,  # Contagem 2: 2-X -> Fecha em 2 casas
-            3: 3,  # Contagem 3: 3-X-X -> Fecha em 3 casas
-            4: 4,  # Contagem 4: 4-X-X-X -> Fecha em 4 casas
-            5: 5,  # Contagem 5: 5-X-X-X-X -> Fecha em 5 casas
-            6: 6,  # Contagem 6: 6-X-X-X-X-X -> Fecha em 6 casas
-            7: 7   # Contagem 7: 7-X-X-X-X-X-X -> Fecha em 7 casas
-        }
+        REGRAS_PROJECAO = {1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7}
 
         for i in range(12):
             num_atual = sub_num[i]
@@ -108,15 +95,11 @@ class MotorContagensProjetivas:
                         "origem": f"Volume 3: Ativador {num_atual} na {i+1}ª casa"
                     })
 
-        # Cenário 1 e 2: O 4 está no fechamento (posição 12) sustentado por base preta
         if sub_num[11] == 4 and sub_pol[10] == "P":
             expectativas.append({"direcao": "PRETO", "origem": "Volume 12: Cap 5 - Retenção do 4 sob Base Preta (Cenário 1/2)"})
-            
-        # Cenário 3: O 4 aparece na 10ª casa (idx 9) sustentando a sequência 4-P-P
         elif sub_num[9] == 4 and sub_pol[10] == "P" and sub_pol[11] == "P":
             expectativas.append({"direcao": "PRETO", "origem": "Volume 12: Cap 5 - Acoplamento Posicional 4-P-P (Cenário 3)"})
 
-        # Gatilhos Residuais Fixos
         if sub_num[11] == 10:
             expectativas.append({"direcao": "PRETO", "origem": "Volume 12: Cap 2 - Resíduo do 10"})
         elif sub_num[10] == 5 and sub_num[11] == 10:
@@ -250,11 +233,7 @@ class MotorV1Completo:
             else:
                 letra_esperada = "V" if expectativa_final == "VERMELHO" else "P"
                 for g_idx, cor_real in enumerate(correcoes_reais):
-                    # =========================================================================
-                    # MODIFICAÇÃO SUPREMA: BRANCO ('B') ACEITO COMO GREEN (G0, G1, G2)
-                    # Se sair a cor que esperávamos OU se bater um Branco ('B'), valida o acerto.
-                    # =========================================================================
-                    if g_idx < len(correcoes_reais) and (correcoes_reais[g_idx] == letra_esperada or correcoes_reais[g_idx] == "B"):
+                    if cor_real == letra_esperada or cor_real == "B":
                         classificacao = f"G{g_idx}"
                         salto = g_idx + 1
                         break
@@ -269,20 +248,17 @@ class MotorV1Completo:
 
         return self._gerar_relatorio_texto(memorias_calculo, stats, len(janelas_auditadas))
 
-    def    def _gerar_relatorio_texto(self, memorias, stats, qtd_janelas):
-        # 1. Base Estatística: Segregação das janelas com sinal (Volume 8, Cap 5D)
+    def _gerar_relatorio_texto(self, memorias, stats, qtd_janelas):
         total_com_sinal = sum([stats["G0"], stats["G1"], stats["G2"], stats["FALHA"]])
         denominador = total_com_sinal if total_com_sinal > 0 else 1
         denominador_nc = qtd_janelas if qtd_janelas > 0 else 1
 
-        # 2. Cálculo Oficial das Taxas de Recência (Volume 8, Cap 5B2)
         p_g0 = (stats["G0"] / denominador) * 100
         p_g1 = (stats["G1"] / denominador) * 100
         p_g2 = (stats["G2"] / denominador) * 100
         p_fa = (stats["FALHA"] / denominador) * 100
         p_nc = (stats["NO CALL"] / denominador_nc) * 100
 
-        # 3. Classificação Evolutiva do Estágio do Mercado (Volume 8, Cap 14)
         if p_fa >= 25.0:
             condicao_mercado = "MERCADO EM DEGRADAÇÃO (Risco Elevado de Falhas)"
             degradacao = "FORTE"
@@ -304,7 +280,6 @@ class MotorV1Completo:
             degradacao = "MEDIANA"
             recuperacao = "MEDIANA"
 
-        # 4. Formatação do Bloco de Saída Conforme Protocolo do Volume 22
         output = "[MEMÓRIA DE CÁLCULO DAS JANELAS MÓVEIS]\n" + "\n".join(memorias) + "\n\n"
         output += "[RESULTADO FINAL ESTATÍSTICO - BASE DE RECÊNCIA]\n"
         output += f"CRONOLOGIA VALIDADA: {self.seq.total} Resultados Reconstruídos\n"
@@ -318,7 +293,6 @@ class MotorV1Completo:
         output += f"RECUPERAÇÃO EVOLUTIVA: {recuperacao}\n"
         output += f"ESTADO ATUAL DO MERCADO: {condicao_mercado}\n"
         return output
-
 
 class LeitorXLS:
     def __init__(self, caminho_arquivo):
