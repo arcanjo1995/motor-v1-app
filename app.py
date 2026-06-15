@@ -50,15 +50,18 @@ with aba_tipo_b:
                     output_texto = processador.executar_sinal_real()
                     
                     st.session_state.log_completo = output_texto
-                    st.session_state.sinal_pendente = None
-                    st.session_state.justificativa_pendente = None
+                    st.session_state.sinal_pendente = "NEUTRO"
+                    st.session_state.justificativa_pendente = "Processamento Linear Realizado."
                     st.session_state.sequencia_em_uso = lista_numeros
                     
+                    # CAPTURA BLINDADA (Volume 22): Evita crash se a linha mudar por causa da Inversão
                     for linha in output_texto.split("\n"):
                         if "SINAL:" in linha:
                             st.session_state.sinal_pendente = linha.split("SINAL:")[1].strip()
                         if "- Resolução de Conflitos:" in linha:
                             st.session_state.justificativa_pendente = linha.split("- Resolução de Conflitos:")[1].strip()
+                        elif "- Alerta de Inversão:" in linha and "Exaustão" in linha:
+                            st.session_state.justificativa_pendente = linha.split("- Alerta de Inversão:")[1].strip()
                             
                     st.success("Cálculo de Previsibilidade Concluído!")
             except Exception as e:
@@ -164,7 +167,7 @@ with aba_tipo_d:
                 if os.path.exists(NOME_BASE_DEFINITIVA): os.remove(NOME_BASE_DEFINITIVA)
                 with open(NOME_BASE_DEFINITIVA, "wb") as f:
                     f.write(arquivo_upload.getbuffer())
-                st.success(f"Sucesso! Arquivo gravado permanentemente como '{NOME_BASE_DEFINITIVA}'. Base Histórica updated.")
+                st.success(f"Sucesso! Arquivo gravado permanentemente como '{NOME_BASE_DEFINITIVA}'. Base Histórica atualizada.")
             except Exception as e:
                 st.error(f"Erro ao salvar arquivo base: {e}")
             if os.path.exists(caminho_temp): os.remove(caminho_temp)
