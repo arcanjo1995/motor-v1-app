@@ -99,10 +99,10 @@ class MotorNoCall:
             if sub_num[idx1] == sub_num[idx2]:
                 return True, "Volume 2 Cap 6: Trava das Duplas Ativa"
 
-        posicoes_criticas_6 = [5, 8, 9, 10]
+        posicoes_criticas_6 = [5, 8, 9, 10, 11]
         for pos in posicoes_criticas_6:
             if sub_num[pos] == 6:
-                return True, "Volume 2 Cap 4: Trava Número 6"
+                return True, "Volume 2 Cap 4: Trava Número 6 (Posição de No Call Ativa)"
 
         posicoes_criticas_2 = [8, 9, 10, 11]
         for pos in posicoes_criticas_2:
@@ -121,36 +121,73 @@ class MotorContagensProjetivas:
     def mapear_janela(sub_num, sub_pol, geometria_mercado):
         lista_bruta = []
         REGRAS_PROJECAO = {1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7}
+        
+        # Estrutura de Rastreamento de Linha do Tempo para Assunção e Contas Pagas (Vol 1 e 3)
+        contas_ativas = [] # Armazena dicts com {"regra", "alvo_idx", "origem_idx", "cor_origem"}
 
         for i in range(12):
             num_atual = sub_num[i]
+            
+            # SISTEMA DE ASSUNÇÃO DINÂMICA (Volume 3, Cap 9): 
+            # Um novo número mapeável herda ou altera a direção se houver conta anterior aberta
             if num_atual in REGRAS_PROJECAO:
                 passo = REGRAS_PROJECAO[num_atual]
+                alvo_idx = i + passo
                 
-                if i + passo == 11:
+                # Se houver conta ativa anterior na retaguarda, ela é ASSUMIDA ou EMPURRADA pelo novo elemento
+                if contas_ativas:
+                    conta_anterior = contas_ativas[-1]
+                    # Se o novo número surge antes do alvo da anterior, ele assume a consequência
+                    if i <= conta_anterior["alvo_idx"]:
+                        tipo_id = f"V3_ASSUMIDA_{num_atual}"
+                        origem_txt = f"Volume 3: Ativador {num_atual} assume contagem anterior na {i+1}ª casa"
+                    else:
+                        tipo_id = f"V3_CADEIA_{num_atual}"
+                        origem_txt = f"Volume 3: Repercussão em Cadeia do Ativador {num_atual} na {i+1}ª casa"
+                else:
+                    tipo_id = f"V3_ATIVADOR_{num_atual}" if alvo_idx == 11 else f"V3_CADEIA_{num_atual}"
+                    origem_txt = f"Volume 3: Ativador {num_atual} direto no fechamento" if alvo_idx == 11 else f"Volume 3: Repercussão em Cadeia do Ativador {num_atual} na {i+1}ª casa"
+                
+                # Determina direção de sinal baseado na lógica do manual
+                if alvo_idx == 11:
                     if i < 10 and 0 in sub_num[i:11]: continue
                     direcao_sinal = "VERMELHO" if sub_pol[i] == "P" else "PRETO"
-                    lista_bruta.append({
-                        "direcao": direcao_sinal,
-                        "tipo_regra": f"V3_ATIVADOR_{num_atual}",
-                        "origem": f"Volume 3: Ativador {num_atual} direto no fechamento"
-                    })
-                
-                elif i + passo < 11:
-                    alvo_interno_idx = i + passo
-                    cor_alvo_interno = sub_pol[alvo_interno_idx]
-                    
-                    if cor_alvo_interno != sub_pol[i]:
+                else:
+                    if alvo_idx < 11 and sub_pol[alvo_idx] != sub_pol[i]:
                         direcao_sinal = "VERMELHO" if sub_pol[i] == "V" else "PRETO"
                     else:
                         direcao_sinal = "PRETO" if sub_pol[i] == "V" else "VERMELHO"
-                        
-                    lista_bruta.append({
-                        "direcao": direcao_sinal,
-                        "tipo_regra": f"V3_CADEIA_{num_atual}",
-                        "origem": f"Volume 3: Repercussão em Cadeia do Ativador {num_atual} da {i+1}ª para a {alvo_interno_idx+1}ª casa"
-                    })
+                
+                # Registra o nascimento ou transição da conta viva
+                nova_conta = {
+                    "regra": tipo_id,
+                    "alvo_idx": alvo_idx,
+                    "origem_idx": i,
+                    "cor_origem": sub_pol[i],
+                    "direcao": direcao_sinal,
+                    "origem": origem_txt
+                }
+                contas_ativas.append(nova_conta)
 
+        # FILTRAGEM FINAL DE ASSUNÇÃO E CONTAS PAGAS:
+        # Analisa o histórico interno para ver se os ativadores já cumpriram o papel (foram pagos)
+        for conta in contas_ativas:
+            alvo = conta["alvo_idx"]
+            # Se o alvo já passou dentro do bloco de 12 e entregou a cor correspondente, está PAGA e morre
+            if alvo < 11:
+                cor_real_no_alvo = sub_pol[alvo]
+                # Validador de Baixa de autoridade (Se pagou a cor da origem, encerra a força da regra)
+                if cor_real_no_alvo == conta["cor_origem"]:
+                    continue # Ignora, a contagem foi PAGA internamente
+            
+            # Se sobreviveu até o fechamento ou foi assumida com projeção futura ativa, entra no bloco final
+            lista_bruta.append({
+                "direcao": conta["direcao"],
+                "tipo_regra": conta["regra"],
+                "origem": conta["origem"]
+            })
+
+        # Ativadores de Fechamento Críticos de Volume 12 (Retenções de Base e Resíduos)
         if sub_num[11] == 4 and sub_pol[10] == "P":
             lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V12_RETENCAO_4", "origem": "Volume 12: Cap 5 - Retenção do 4 sob Base Preta"})
         elif sub_num[9] == 4 and sub_pol[10] == "P" and sub_pol[11] == "P":
@@ -348,7 +385,6 @@ class MotorV1Completo:
             inclinacao_num = AnalisadorContextoAvancado.calcular_numerologia_pos_numero(num_fechamento, self.seq.numerica, self.seq.polaridades)
             previsao_ia = self.ia.predizer_proxima_casa(sub_num, sub_pol)
             
-            # CORREÇÃO SUPREMA DA CHAMADA (Linha 352): Alinhado com o nome do parâmetro 'expectations'
             expectativa_final, justificativa, regra_ativa_id = JuizHierarquicoModificado.arbitrar_sinal(
                 nc_ativo, motivo_nc, expectativas, inclinacao_num, geometria, previsao_ia, status_inv, self.historico_regras
             )
@@ -458,9 +494,6 @@ class ProcessadorTipoB:
         justificativa_final = ""
         historico_iteraçoes_log = []
 
-        # =========================================================================
-        # REQUISITO EXCLUSIVO VOL. 22: LOOP DE 15 RELEITURAS CONSECUTIVAS DE VALIDAÇÃO
-        # =========================================================================
         for ciclo in range(1, 16):
             previsao_ia = ia_operacional.predizer_proxima_casa(self.entrada_usuario, self.polaridades_usuario)
             expectativas = MotorContagensProjetivas.mapear_janela(self.entrada_usuario, self.polaridades_usuario, saturacao)
