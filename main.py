@@ -32,7 +32,7 @@ class MotorNoCall:
 
 
 # ============================================================
-# IAPreditivaV1 - COM AJUSTES ESTATÍSTICOS DE SEQUÊNCIAS LONGAS
+# IAPreditivaV1 - Versão limpa e otimizada
 # ============================================================
 class IAPreditivaV1:
     def __init__(self, dados_longo_prazo, dados_recencia=None):
@@ -86,9 +86,6 @@ class IAPreditivaV1:
                 self.unidade_analise[n]["freq_v"] = round((self.unidade_analise[n]["V"] / total) * 100, 2)
                 self.unidade_analise[n]["freq_p"] = round((self.unidade_analise[n]["P"] / total) * 100, 2)
                 self.unidade_analise[n]["freq_b"] = round((self.unidade_analise[n]["B"] / total) * 100, 2)
-                max_freq = max(self.unidade_analise[n]["freq_v"], self.unidade_analise[n]["freq_p"], self.unidade_analise[n]["freq_b"])
-                self.unidade_analise[n]["estabilidade"] = self.unidade_analise[n]["consequencia_dominante"] if max_freq >= 60 else "NEUTRO"
-                self.unidade_analise[n]["saturacao"] = f"SATURADO ({self.unidade_analise[n]['consequencia_dominante']})" if max_freq >= 70 else "NORMAL"
 
         if len(dados) >= 12:
             for i in range(len(dados) - 12):
@@ -100,10 +97,6 @@ class IAPreditivaV1:
                     for _ in range(multiplicador_peso):
                         if "PVPV" in texto: self.modelo_transicao[("XADREZ", "PVPV")].append(cor_futura)
                         if "VPVP" in texto: self.modelo_transicao[("XADREZ", "VPVP")].append(cor_futura)
-                        if sub_num[-2] == 5 and sub_num[-1] == 10: self.stats_regras["REGRA_5_10"].append(cor_futura)
-                        if sub_num[-1] == 10: self.stats_regras["REGRA_10"].append(cor_futura)
-                        if sub_num[5] == 2: self.stats_regras["REGRA_2_POSICIONAL"].append(cor_futura)
-                        if sub_num[5] == 3: self.stats_regras["REGRA_3_POSICIONAL"].append(cor_futura)
 
     def injetar_aprendizado_imediato(self, sub_dados, multiplicador_peso=4):
         self._processar_bloco_dados(sub_dados, multiplicador_peso, True)
@@ -123,83 +116,55 @@ class IAPreditivaV1:
         if "PVPV" in texto: geom.extend(self.modelo_transicao.get(("XADREZ", "PVPV"), []))
         if "VPVP" in texto: geom.extend(self.modelo_transicao.get(("XADREZ", "VPVP"), []))
 
-        regras = []
-        if sub_num[-2] == 5 and ultimo_num == 10: regras.extend(self.stats_regras.get("REGRA_5_10", []))
-        if ultimo_num == 10: regras.extend(self.stats_regras.get("REGRA_10", []))
-        if sub_num[5] == 2: regras.extend(self.stats_regras.get("REGRA_2_POSICIONAL", []))
-        if sub_num[5] == 3: regras.extend(self.stats_regras.get("REGRA_3_POSICIONAL", []))
+        stats = self.unidade_analise.get(ultimo_num, {"freq_v": 0, "freq_p": 0})
 
-        stats = self.unidade_analise.get(ultimo_num, {"freq_v": 0, "freq_p": 0, "estabilidade": "NEUTRO", "saturacao": "NORMAL"})
+        v_bonus = stats.get("freq_v", 0) * 3.5
+        p_bonus = stats.get("freq_p", 0) * 3.5
 
-        v_bonus = stats["freq_v"] * 3.5
-        p_bonus = stats["freq_p"] * 3.5
-
-        if stats.get("estabilidade") == "VERMELHO": v_bonus += 35
-        if stats.get("estabilidade") == "PRETO": p_bonus += 35
-        if "SATURADO (VERMELHO)" in stats.get("saturacao", ""): v_bonus += 45
-        if "SATURADO (PRETO)" in stats.get("saturacao", ""): p_bonus += 45
-
-        concordancia = 0
-        if geom: concordancia += 12
-        if regras: concordancia += 14
-        if stats.get("estabilidade") != "NEUTRO": concordancia += 18
-
-        v_bonus += concordancia * 0.7
-        p_bonus += concordancia * 0.7
-
-        # Bônus estatístico de sequências longas
+        # Bônus de sequência longa
         streak = 0
         for cor in reversed(sub_pol):
-            if cor == sub_pol[-1]:
-                streak += 1
-            else:
-                break
+            if cor == sub_pol[-1]: streak += 1
+            else: break
 
         xadrez_len = 0
         for i in range(len(sub_pol)-1, 0, -1):
-            if sub_pol[i] != sub_pol[i-1]:
-                xadrez_len += 1
-            else:
-                break
+            if sub_pol[i] != sub_pol[i-1]: xadrez_len += 1
+            else: break
 
         if streak >= 5:
-            if sub_pol[-1] == 'V':
-                p_bonus += 18
-            else:
-                v_bonus += 18
+            if sub_pol[-1] == 'V': p_bonus += 18
+            else: v_bonus += 18
 
         if xadrez_len >= 5:
             expected = 'P' if sub_pol[-1] == 'V' else 'V'
             if sub_pol[-1] != expected:
-                if sub_pol[-1] == 'V':
-                    v_bonus += 22
-                else:
-                    p_bonus += 22
+                if sub_pol[-1] == 'V': v_bonus += 22
+                else: p_bonus += 22
 
         has_rec = len(self.dados_recencia) > 0
         p_trans = 0.22 if has_rec else 0.17
         p_num = 0.18 if has_rec else 0.16
         p_geom = 0.25
-        p_regras = 0.30
 
-        total_v = (trans.count('V') * p_trans) + (por_num.count('V') * p_num) + (geom.count('V') * p_geom) + (regras.count('V') * p_regras) + v_bonus
-        total_p = (trans.count('P') * p_trans) + (por_num.count('P') * p_num) + (geom.count('P') * p_geom) + (regras.count('P') * p_regras) + p_bonus
+        total_v = (trans.count('V') * p_trans) + (por_num.count('V') * p_num) + (geom.count('V') * p_geom) + v_bonus
+        total_p = (trans.count('P') * p_trans) + (por_num.count('P') * p_num) + (geom.count('P') * p_geom) + p_bonus
 
         if total_v + total_p == 0: return "NEUTRO", 0.0
 
         prob_v = (total_v / (total_v + total_p)) * 100
         prob_p = (total_p / (total_v + total_p)) * 100
 
-        BARREIRA = 55.0
-        if prob_v >= BARREIRA and prob_v > prob_p + 6:
+        BARREIRA = 53.5
+        if prob_v >= BARREIRA and prob_v > prob_p + 5:
             return "VERMELHO", round(prob_v, 1)
-        elif prob_p >= BARREIRA and prob_p > prob_v + 6:
+        elif prob_p >= BARREIRA and prob_p > prob_v + 5:
             return "PRETO", round(prob_p, 1)
         return "NEUTRO", round(max(prob_v, prob_p), 1)
 
 
 # ============================================================
-# JuizHierarquicoModificado - LÓGICA DE ANALISTA (Contexto + Probabilidade primeiro)
+# JuizHierarquicoModificado - Mais permissivo (menos NO CALL)
 # ============================================================
 class JuizHierarquicoModificado:
     @staticmethod
@@ -208,63 +173,45 @@ class JuizHierarquicoModificado:
                        modo_mercado="NEUTRO", xadrez_quebrado=False,
                        streak_atual=0, xadrez_len=0, xadrez_quebrou=False):
         
-        # 1. NO CALL tem prioridade absoluta
         if no_call_ativo:
             return "NO CALL", motivo_nc, "SISTEMA_TRAVADO"
 
-        # 2. Padrões geométricos fortes ainda têm prioridade
         if geometria_mercado == "CICLO_FECHADO_VPPV": 
-            return "PRETO", "Geometria VPPV (Alta Confluência)", "GEOMETRIA"
+            return "PRETO", "Geometria VPPV", "GEOMETRIA"
         if geometria_mercado == "CICLO_FECHADO_PVVP": 
-            return "VERMELHO", "Geometria PVVP (Alta Confluência)", "GEOMETRIA"
+            return "VERMELHO", "Geometria PVVP", "GEOMETRIA"
 
         direcao_ia, confianca_ia = previsao_ia
 
-        # ============================================================
-        # 3. LÓGICA DE ANALISTA: Contexto + Reversão primeiro
-        # ============================================================
-
-        # Prioridade alta para reversão após Xadrez longo quebrando
+        # Prioridade para reversão forte
         if xadrez_len >= 5 and xadrez_quebrou and direcao_ia != "NEUTRO":
-            return direcao_ia, f"Xadrez {xadrez_len} quebrou → Reversão", "XADREZ_REVERSAO_FORTE"
+            return direcao_ia, f"Xadrez {xadrez_len} quebrou → Reversão", "XADREZ_REVERSAO"
 
-        # Prioridade alta para reversão após streak longo
         if streak_atual >= 5 and direcao_ia != "NEUTRO":
             return direcao_ia, f"Reversão após streak {streak_atual}", "STREAK_REVERSAO"
 
-        # Xadrez Quebrado normal (mantido como reforço)
         if xadrez_quebrado and direcao_ia != "NEUTRO" and confianca_ia >= 52:
-            return direcao_ia, f"Xadrez Quebrado + IA ({confianca_ia:.1f}%)", "XADREZ_FORTE"
+            return direcao_ia, f"Xadrez Quebrado + IA", "XADREZ_FORTE"
 
-        # ============================================================
-        # 4. Regras do manual agora são apoio secundário
-        # ============================================================
+        # Regras como apoio (peso menor)
         if expectations:
             forcas = {"VERMELHO": 0.0, "PRETO": 0.0}
             for item in expectations:
                 taxa = historico_revalida_regras[item["tipo_regra"]]["acertos"] / max(1, historico_revalida_regras[item["tipo_regra"]]["total"])
-                peso = 2.8 * (1.0 + taxa)
-                forcas[item["direcao"]] += peso
+                forcas[item["direcao"]] += 2.5 * (1.0 + taxa)
 
             if forcas["VERMELHO"] != forcas["PRETO"]:
                 dominante = "VERMELHO" if forcas["VERMELHO"] > forcas["PRETO"] else "PRETO"
+                if direcao_ia == dominante and confianca_ia >= 52:
+                    return dominante, "Confluência (Regra + IA)", "CONFLUENCIA"
+                if direcao_ia != dominante and confianca_ia >= 57:
+                    return direcao_ia, f"IA assume", "IA_ARBITRAGEM"
 
-                if direcao_ia == dominante and confianca_ia >= 53:
-                    return dominante, f"Confluência (Regra + IA)", "CONFLUENCIA_REGRA_IA"
-                
-                if direcao_ia != dominante and confianca_ia >= 58:
-                    return direcao_ia, f"IA sobrepõe regra ({confianca_ia:.1f}%)", "IA_ARBITRAGEM"
-
-        # ============================================================
-        # 5. Decisão final por IA (quando contexto não é forte)
-        # ============================================================
-        if direcao_ia != "NEUTRO" and confianca_ia >= 54:
+        # IA com confiança razoável já gera sinal
+        if direcao_ia != "NEUTRO" and confianca_ia >= 53:
             return direcao_ia, f"IA Preditiva ({confianca_ia:.1f}%)", "IA_PREDITIVA"
 
-        # ============================================================
-        # 6. Sem confluência suficiente → NO CALL
-        # ============================================================
-        return "NO CALL", "Sem confluência clara entre contexto, IA e regras", "SISTEMA_TRAVADO"
+        return "NO CALL", "Sem confluência suficiente", "SISTEMA_TRAVADO"
 
 
 # ============================================================
@@ -611,24 +558,19 @@ class ProcessadorTipoB:
         direcao_ia, conf_ia = ia.predizer_proxima_casa(self.entrada, self.polaridades)
         modo_mercado = AnalisadorContextoAvancado.detectar_modo_mercado(self.polaridades)
 
-        # Cálculo de streak e Xadrez
         streak = 0
         for c in reversed(self.polaridades):
-            if c == self.polaridades[-1]:
-                streak += 1
-            else:
-                break
+            if c == self.polaridades[-1]: streak += 1
+            else: break
 
         xadrez_len = 0
         for i in range(len(self.polaridades)-1, 0, -1):
             if self.polaridades[i] != self.polaridades[i-1]:
                 xadrez_len += 1
-            else:
-                break
+            else: break
 
         xadrez_quebrou = (self.polaridades[-1] == self.polaridades[-2]) if len(self.polaridades) >= 2 else False
 
-        # Arbitragem final
         sinal, justificativa, regra_id = JuizHierarquicoModificado.arbitrar_sinal(
             nc_ativo, motivo_nc, expectativas, inclinacao, 
             AnalisadorContextoAvancado.mapear_padroes_geometria(self.polaridades),
@@ -640,33 +582,16 @@ class ProcessadorTipoB:
             xadrez_quebrou=xadrez_quebrou
         )
 
-        # Retorno estruturado em camadas (como um Analista)
         analise_completa = {
-            "no_call": {
-                "ativo": nc_ativo,
-                "motivo": motivo_nc
-            },
-            "contexto": {
-                "streak": streak,
-                "xadrez_len": xadrez_len,
-                "xadrez_quebrou": xadrez_quebrou,
-                "modo_mercado": modo_mercado
-            },
+            "no_call": {"ativo": nc_ativo, "motivo": motivo_nc},
+            "contexto": {"streak": streak, "xadrez_len": xadrez_len, "xadrez_quebrou": xadrez_quebrou, "modo_mercado": modo_mercado},
             "padroes": {
                 "expectativas": expectativas,
                 "geometria": AnalisadorContextoAvancado.mapear_padroes_geometria(self.polaridades),
                 "inclinacao_pos_numero": inclinacao
             },
-            "ia": {
-                "direcao": direcao_ia,
-                "confianca": round(conf_ia, 2),
-                "barreira_usada": 55.0
-            },
-            "juiz": {
-                "sinal_final": sinal,
-                "justificativa": justificativa,
-                "regra_id": regra_id
-            },
+            "ia": {"direcao": direcao_ia, "confianca": round(conf_ia, 2), "barreira_usada": 53.5},
+            "juiz": {"sinal_final": sinal, "justificativa": justificativa, "regra_id": regra_id},
             "gestao_risco": self._gerar_gestao_risco(sinal, streak, xadrez_len, xadrez_quebrou, conf_ia)
         }
 
@@ -713,10 +638,8 @@ class EngineMatematicoAvancado:
         
         streak = 0
         for cor in reversed(sub_pol):
-            if cor == ultima_cor:
-                streak += 1
-            else:
-                break
+            if cor == ultima_cor: streak += 1
+            else: break
         
         probabilidade_sequencia = ((7 / 15) ** streak) * 100
         status = "SATURAÇÃO CRÍTICA (Risco Elevado de Inversão)" if streak >= 5 else \
