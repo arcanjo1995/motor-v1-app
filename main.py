@@ -15,6 +15,10 @@ class IAPreditivaV1:
         self.dados_recencia = dados_recencia if dados_recencia else []
         self.modelo_transicao = defaultdict(list)
         self.modelo_numerico = defaultdict(list)
+        
+        # MATRIZES DE APRENDIZADO PROFUNDO (VOLUME 6 E VOLUME 7)
+        self.stats_numerologia = defaultdict(lambda: {"V": 0, "P": 0, "B": 0, "total": 0})
+        self.stats_regras = defaultdict(list)
         self._treinar_modelo()
 
     def _treinar_modelo(self):
@@ -25,7 +29,10 @@ class IAPreditivaV1:
             self._processar_bloco_dados(self.dados_recencia, multiplicador_peso=3)
 
     def _processar_bloco_dados(self, dados, multiplicador_peso):
-        # 1. TRANSMISSÃO BÁSICA DE TRANSIÇÕES DE CASAS
+        if not dados:
+            return
+
+        # 1. TRANSMISSÃO BÁSICA DE TRANSIÇÕES DE CASAS (Volume 1)
         for i in range(len(dados) - 2):
             estado_atual_cor = (dados[i]['cor'], dados[i+1]['cor'])
             proxima_cor = dados[i+2]['cor']
@@ -34,8 +41,17 @@ class IAPreditivaV1:
             for _ in range(multiplicador_peso):
                 self.modelo_transicao[estado_atual_cor].append(proxima_cor)
                 self.modelo_numerico[num_atual].append(proxima_cor)
+
+        # 2. UNIDADE DE ANÁLISE E COMPORTAMENTO PÓS-NÚMERO (Volume 7 - Capítulos 2, 3 e 4)
+        for i in range(len(dados) - 1):
+            num = dados[i]['numero']
+            cor_post = dados[i+1]['cor']
+            if 0 <= num <= 14 and cor_post in ['V', 'P', 'B']:
+                for _ in range(multiplicador_peso):
+                    self.stats_numerologia[num][cor_post] += 1
+                    self.stats_numerologia[num]["total"] += 1
                     
-        # 2. ABSORÇÃO COGNITIVA INTEGRAL: PADRÕES E NUMEROLOGIA (VOLUME 6 E 7)
+        # 3. ABSORÇÃO COGNITIVA INTEGRAL DE REGRAS E GEOMETRIAS (VOLUME 2, 3, 6 E 12)
         if len(dados) >= 12:
             for i in range(len(dados) - 12):
                 sub_window_num = [d['numero'] for d in dados[i:i+12]]
@@ -47,14 +63,35 @@ class IAPreditivaV1:
                     num_fechamento = sub_window_num[-1]
                     
                     for _ in range(multiplicador_peso):
-                        # Gravação de assinaturas geométricas complexas (Volume 6)
+                        # Assinaturas Geométricas do Padrão de Polaridades (Volume 6)
                         if "PVPV" in texto_pol: self.modelo_transicao[("XADREZ", "PVPV")].append(cor_futura)
                         if "VPVP" in texto_pol: self.modelo_transicao[("XADREZ", "VPVP")].append(cor_futura)
                         if "VVV" in texto_pol: self.modelo_transicao[("SATURACAO", "V")].append(cor_futura)
                         if "PPP" in texto_pol: self.modelo_transicao[("SATURACAO", "P")].append(cor_futura)
-                        
-                        # Gravação de contexto numerológico avançado (Volume 7)
                         self.modelo_numerico[(num_fechamento, "CONTEXTO")].append(cor_futura)
+                        
+                        # Monitoramento de Sucesso das Contagens Projetivas (Volume 3)
+                        REGRAS_PROJECAO = {1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7}
+                        for idx in range(12):
+                            n = sub_window_num[idx]
+                            if n in REGRAS_PROJECAO and idx + REGRAS_PROJECAO[n] == 11:
+                                self.stats_regras[f"CONTAGEM_PROJETIVA_{n}"].append(cor_futura)
+                        
+                        # Validação de Comportamento de Regras Oficiais (Volume 2 / Volume 12)
+                        if sub_window_num[-2] == 5 and sub_window_num[-1] == 10:
+                            self.stats_regras["REGRA_5_10"].append(cor_futura)
+                            
+                        if sub_window_num[-1] == 10:
+                            self.stats_regras["REGRA_10"].append(cor_futura)
+                            
+                        if sub_window_num[5] == 2:
+                            self.stats_regras["REGRA_2_POSICIONAL"].append(cor_futura)
+                            
+                        if sub_window_num[5] == 3:
+                            self.stats_regras["REGRA_3_POSICIONAL"].append(cor_futura)
+                            
+                        if sub_window_num[-1] == 4 and sub_window_pol[-2] == "P":
+                            self.stats_regras["REGRA_4_BASE_PRETA"].append(cor_futura)
 
     def injetar_aprendizado_imediato(self, sub_dados, multiplicador_peso=3):
         self._processar_bloco_dados(sub_dados, multiplicador_peso)
@@ -68,7 +105,7 @@ class IAPreditivaV1:
         proximas_cores_historicas = self.modelo_transicao.get(ultimas_cores, [])
         proximas_cores_por_num = self.modelo_numerico.get(ultimo_num, [])
         
-        # CONSULTA AOS NOVOS MODELOS DE EVOLUÇÃO COMPORTAMENTAL ABSORVIDOS
+        # CONSULTA DA HISTÓRIA DE ASSINATURAS GEOMÉTRICAS ABSORVIDAS (VOLUME 6)
         texto_pol = "".join(sub_pol)
         cores_por_geometria = []
         if "PVPV" in texto_pol: cores_por_geometria.extend(self.modelo_transicao.get(("XADREZ", "PVPV"), []))
@@ -78,23 +115,50 @@ class IAPreditivaV1:
         
         cores_por_numerologia = self.modelo_numerico.get((ultimo_num, "CONTEXTO"), [])
         
+        # CONSULTA DAS ESTATÍSTICAS COGNITIVAS DE REGRAS ESPECÍFICAS (VOLUME 2 E 12)
+        cores_por_regras = []
+        REGRAS_PROJECAO = {1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7}
+        for idx in range(12):
+            n = sub_num[idx]
+            if n in REGRAS_PROJECAO and idx + REGRAS_PROJECAO[n] == 11:
+                cores_por_regras.extend(self.stats_regras.get(f"CONTAGEM_PROJETIVA_{n}", []))
+                
+        if sub_num[-2] == 5 and ultimo_num == 10:
+            cores_por_regras.extend(self.stats_regras.get("REGRA_5_10", []))
+        if ultimo_num == 10:
+            cores_por_regras.extend(self.stats_regras.get("REGRA_10", []))
+        if sub_num[5] == 2:
+            cores_por_regras.extend(self.stats_regras.get("REGRA_2_POSICIONAL", []))
+        if sub_num[5] == 3:
+            cores_por_regras.extend(self.stats_regras.get("REGRA_3_POSICIONAL", []))
+        if ultimo_num == 4 and sub_pol[-2] == "P":
+            cores_por_regras.extend(self.stats_regras.get("REGRA_4_BASE_PRETA", []))
+            
+        # CONSULTA DIRETAMENTE COMPORTAMENTO PÓS-NÚMERO DA UNIDADE DE ANÁLISE (VOLUME 7)
+        num_stats = self.stats_numerologia.get(ultimo_num, {"V": 0, "P": 0, "B": 0, "total": 0})
+        
         has_recencia = len(self.dados_recencia) > 0 or len(self.modelo_transicao) > 0
         
-        # Distribuição proporcional de pesos balanceando macro e micro contexto
-        peso_geometria = 0.40 if has_recencia else 0.30
-        peso_numerico = 0.20 if has_recencia else 0.30
-        peso_padrao_v6 = 0.25
-        peso_padrao_v7 = 0.15
+        # PESOS BALANCEADOS PROPORCIONALMENTE INTEGRANDO TODAS AS SUB-DIRETRIZES
+        p_transicao = 0.20 if has_recencia else 0.15
+        p_num_base = 0.15 if has_recencia else 0.15
+        p_geom_v6 = 0.20
+        p_num_v7 = 0.15
+        p_regras_v2_v12 = 0.30
         
-        total_v = (proximas_cores_historicas.count('V') * peso_geometria) + \
-                  (proximas_cores_por_num.count('V') * peso_numerico) + \
-                  (cores_por_geometria.count('V') * peso_padrao_v6) + \
-                  (cores_por_numerologia.count('V') * peso_padrao_v7)
+        total_v = (proximas_cores_historicas.count('V') * p_transicao) + \
+                  (proximas_cores_por_num.count('V') * p_num_base) + \
+                  (cores_por_geometria.count('V') * p_geom_v6) + \
+                  (cores_por_numerologia.count('V') * p_num_v7) + \
+                  (cores_por_regras.count('V') * p_regras_v2_v12) + \
+                  (num_stats["V"] * 1.5)
                   
-        total_p = (proximas_cores_historicas.count('P') * peso_geometria) + \
-                  (proximas_cores_por_num.count('P') * peso_numerico) + \
-                  (cores_por_geometria.count('P') * peso_padrao_v6) + \
-                  (cores_por_numerologia.count('P') * peso_padrao_v7)
+        total_p = (proximas_cores_historicas.count('P') * p_transicao) + \
+                  (proximas_cores_por_num.count('P') * p_num_base) + \
+                  (cores_por_geometria.count('P') * p_geom_v6) + \
+                  (cores_por_numerologia.count('P') * p_num_v7) + \
+                  (cores_por_regras.count('P') * p_regras_v2_v12) + \
+                  (num_stats["P"] * 1.5)
         
         soma_pesos = total_v + total_p
         if soma_pesos == 0:
@@ -124,15 +188,20 @@ class GerenciadorMemoriaViva:
             novas_linhas.append({"numero": int(num), "cor": cor})
 
         df_novos = pd.DataFrame(novas_linhas)
+        # CORREÇÃO DE ALINHAMENTO CRONOLÓGICO: Inverte o bloco novo para manter mais recentes no topo do arquivo.
+        # Assim o LeitorXLS irá descompactar as rodadas na ordem cronológica exata de trás para frente.
+        df_novos_invertido = df_novos.iloc[::-1].reset_index(drop=True)
+        
         if os.path.exists(caminho_recencia):
             try:
                 df_atual = pd.read_excel(caminho_recencia)
-                df_consolidado = pd.concat([df_atual, df_novos], ignore_index=True)
+                df_consolidado = pd.concat([df_novos_invertido, df_atual], ignore_index=True)
+                df_consolidado = df_consolidado.drop_duplicates().reset_index(drop=True)
                 df_consolidado.to_excel(caminho_recencia, index=False)
             except:
-                df_novos.to_excel(caminho_recencia, index=False)
+                df_novos_invertido.to_excel(caminho_recencia, index=False)
         else:
-            df_novos.to_excel(caminho_recencia, index=False)
+            df_novos_invertido.to_excel(caminia_recencia if 'caminia_recencia' not in locals() else caminho_recencia, index=False)
 
 class MotorNoCall:
     @staticmethod
@@ -172,7 +241,6 @@ class MotorContagensProjetivas:
                 passo = REGRAS_PROJECAO[num_atual]
                 alvo_idx = i + passo
                 
-                # Se o fechamento coincide com o fim da janela, gera Expectativa Vermelha (Volume 3 Cap 2)
                 if alvo_idx == 11:
                     if i < 10 and 0 in sub_num[i:11]: continue
                     lista_bruta.append({
@@ -199,7 +267,7 @@ class MotorContagensProjetivas:
                 "origem": f"Volume 2: Continuidade Numérica Vermelha {par_fechamento[0]}-{par_fechamento[1]} até G1"
             })
 
-        # 3. REGRAS POSICIONAIS DO VOLUME 12 (CRÍTICAS DE DESTAQUE NO MANUAL)
+        # 3. REGRAS POSICIONAIS DO VOLUME 12
         if sub_num[5] == 2:
             lista_bruta.append({
                 "direcao": "VERMELHO", 
@@ -390,9 +458,6 @@ class MotorV1Completo:
         self.dados_longo = lista_dados_xls[:corte_recencia]
         self.dados_curto = lista_dados_xls[corte_recencia:]
         
-        # =========================================================================
-        # EVOLUÇÃO PERMANENTE: IMPORTA A BASE DE RECÊNCIA ATIVA DA IA (FIX)
-        # =========================================================================
         base_recencia = None
         caminho_recencia = "base_recencia_ativa.xlsx"
         if os.path.exists(caminho_recencia):
@@ -430,7 +495,7 @@ class MotorV1Completo:
             direcao_ia_pura, conf_ia_pura = self.ia.predizer_proxima_casa(sub_num, sub_pol)
             previsao_ia = (direcao_ia_pura, conf_ia_pura)
             
-            # CORREÇÃO EFETUADA AQUI: Alterado 'expectations' para 'expectativas' para matar o NameError
+            # CORREÇÃO DO NAMEERROR: Alterado 'expectations' para 'expectativas'
             expectativa_final, justificativa, regra_ativa_id = JuizHierarquicoModificado.arbitrar_sinal(
                 nc_ativo, motivo_nc, expectativas, inclinacao_num, geometria, previsao_ia, status_inv, self.historico_regras
             )
@@ -500,7 +565,7 @@ class MotorV1Completo:
             janelas_auditadas.append(classificacao)
             idx += 12 + salto
 
-        # PERSISTÊNCIA AUTOMÁTICA EM DISCO
+        # GRAVAÇÃO CONSOLIDADA E EVOLUTIVA NO BANCO DE DADOS
         try:
             GerenciadorMemoriaViva.injetar_rodadas_reais(self.seq.numerica, [], "base_recencia_ativa.xlsx")
         except:
