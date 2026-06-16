@@ -521,20 +521,59 @@ class EngineMatematicoAvancado:
             "status": status
         }
 
-    @staticmethod
-    def calcular_vies_surfe(caminho_base, janela=100):
-        leitor = LeitorXLS(caminho_base)
-        dados = leitor.ler_e_validar()
-        if not dados:
-            return {"vies": "INDISPONÍVEL"}
-        ultimos = dados[-janela:]
-        v = sum(1 for d in ultimos if d['cor'] == 'V')
-        p = sum(1 for d in ultimos if d['cor'] == 'P')
-        pct_v = (v / len(ultimos)) * 100
-        pct_p = (p / len(ultimos)) * 100
-        vies = "VIÉS VERMELHO" if pct_v >= 53 else ("VIÉS PRETO" if pct_p >= 53 else "EQUILIBRADO")
-        return {"frequencia_v": round(pct_v,2), "frequencia_p": round(pct_p,2), "vies": vies}
-
+@staticmethod
+def calcular_vies_surfe(caminho_base, janela=100):
+    leitor = LeitorXLS(caminho_base)
+    dados = leitor.ler_e_validar()
+    if not dados:
+        return {
+            "vies": "INDISPONÍVEL",
+            "desvio_v": 0.0,
+            "desvio_p": 0.0,
+            "frequencia_v": 46.67,
+            "frequencia_p": 46.67,
+            "frequencia_b": 6.67
+        }
+    
+    ultimos_giros = dados[-janela:]
+    total_giros = len(ultimos_giros)
+    
+    if total_giros == 0:
+        return {
+            "vies": "INDISPONÍVEL",
+            "desvio_v": 0.0,
+            "desvio_p": 0.0,
+            "frequencia_v": 46.67,
+            "frequencia_p": 46.67,
+            "frequencia_b": 6.67
+        }
+    
+    v = sum(1 for d in ultimos_giros if d['cor'] == 'V')
+    p = sum(1 for d in ultimos_giros if d['cor'] == 'P')
+    b = sum(1 for d in ultimos_giros if d['cor'] == 'B')
+    
+    pct_v = (v / total_giros) * 100
+    pct_p = (p / total_giros) * 100
+    pct_b = (b / total_giros) * 100
+    
+    desvio_v = round(pct_v - 46.67, 2)
+    desvio_p = round(pct_p - 46.67, 2)
+    
+    if pct_v >= 53.0:
+        vies = "SURFE DE MACROFREQUÊNCIA: VIÉS PARA VERMELHO ATIVO"
+    elif pct_p >= 53.0:
+        vies = "SURFE DE MACROFREQUÊNCIA: VIÉS PARA PRETO ATIVO"
+    else:
+        vies = "MACROANÁLISE EQUILIBRADA"
+    
+    return {
+        "frequencia_v": round(pct_v, 2),
+        "frequencia_p": round(pct_p, 2),
+        "frequencia_b": round(pct_b, 2),
+        "desvio_v": desvio_v,
+        "desvio_p": desvio_p,
+        "vies": vies
+    }
     @staticmethod
     def simular_split_stake_cobertura(stake_principal=10.0):
         stake_branco_ideal = round(stake_principal / 7.0, 2)
