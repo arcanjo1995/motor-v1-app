@@ -58,6 +58,40 @@ with aba_tipo_b:
 
     if st.session_state.sinal_pendente:
         st.write("---")
+        
+        # =========================================================================
+        # VOLUME 21 & 22: INTEGRAÇÃO DA CAMADA DE INTELIGÊNCIA OBSERVACIONAL
+        # =========================================================================
+        st.subheader("📈 Volume 21: Inteligência Observacional e Métricas de Cobertura")
+        with st.expander("Visualizar Diagnóstico do Algoritmo e Split-Stake", expanded=True):
+            analise_raridade = EngineMatematicoAvancado.calcular_raridade_sequencia([('B' if n == 0 else ('V' if 1 <= n <= 7 else 'P')) for n in st.session_state.sequencia_em_uso])
+            analise_surfe = EngineMatematicoAvancado.calcular_vies_surfe(NOME_BASE_DEFINITIVA, janela=100)
+            gestao_financeira = EngineMatematicoAvancado.simular_split_stake_cobertura(stake_principal=10.0)
+            
+            met1, met2, met3 = st.columns(3)
+            with met1:
+                st.metric(label="Raridade de Tendência (Binomial)", value=f"{analise_raridade['probabilidade']}%")
+                st.caption(f"Saturação: {analise_raridade['streak']}x {analise_raridade['cor_sequencia']}")
+            with met2:
+                st.metric(label="Desvio Macro Vermelho", value=f"{analise_surfe['desvio_v']}%", delta=f"{analise_surfe['desvio_v']}% vs Teórico")
+            with met3:
+                st.metric(label="Desvio Macro Preto", value=f"{analise_surfe['desvio_p']}%", delta=f"{analise_surfe['desvio_p']}% vs Teórico")
+                
+            st.code(
+                f"[DIAGNÓSTICO ESTRUTURAL DO MERCADO]:\n"
+                f"- Comportamento de Curto Prazo: {analise_raridade['status']}\n"
+                f"- Análise Macro (Últimos 100 Giros): {analise_surfe['vies']}\n"
+                f"  Frequências Verificadas -> V: {analise_surfe['frequencia_v']}% | P: {analise_surfe['frequencia_p']}% | B: {analise_surfe['frequencia_b']}%\n\n"
+                f"[GESTÃO MATEMÁTICA DE STAKE (Simulação para Base R$10)]:\n"
+                f"- House Edge Fixo do Sistema: {gestao_financeira['house_edge_estatico']}\n"
+                f"- Aposta na Cor Principal: R$ {gestao_financeira['stake_cor']:.2f}\n"
+                f"- Cobertura Cirúrgica no Branco (1/7): R$ {gestao_financeira['cobertura_b_ideal_1_7']:.2f}\n"
+                f"- Custo Total Consolidado da Operação: R$ {gestao_financeira['custo_total_operacao']:.2f}\n"
+                f"- Lucro Líquido Realizado caso Sorteado Branco (0): R$ {gestao_financeira['lucro_liquido_se_der_branco']:.2f}",
+                language="text"
+            )
+            
+        st.write("---")
         col1, col2 = st.columns(2)
         
         with col1:
@@ -75,40 +109,6 @@ with aba_tipo_b:
             else:
                 st.info(f"**EXPECTATIVA ATIVA:** Operar no {sinal}")
                 st.caption(f"Origem: {st.session_state.justificativa_pendente}")
-                
-                # =========================================================================
-                # EXIBIÇÃO VISUAL COMPLEMENTAR DAS MÉTRICAS INTEGRADAS
-                # =========================================================================
-                st.write("---")
-                st.subheader("📈 Métricas Estatísticas e Gestão Matemática Avançada")
-                
-                with st.expander("Visualizar Análise de Desvio Padrão e Split-Stake", expanded=True):
-                    analise_raridade = EngineMatematicoAvancado.calcular_raridade_sequencia([('B' if n == 0 else ('V' if 1 <= n <= 7 else 'P')) for n in st.session_state.sequencia_em_uso])
-                    analise_surfe = EngineMatematicoAvancado.calcular_vies_surfe(NOME_BASE_DEFINITIVA, janela=100)
-                    gestao_financeira = EngineMatematicoAvancado.simular_split_stake_cobertura(stake_principal=10.0)
-                    
-                    met1, met2, met3 = st.columns(3)
-                    with met1:
-                        st.metric(label="Raridade da Sequência Atual", value=f"{analise_raridade['probabilidade']}%")
-                        st.caption(f"Sequência: {analise_raridade['streak']}x {analise_raridade['cor_sequencia']}")
-                    with met2:
-                        st.metric(label="Desvio Real Vermelho (Macro)", value=f"{analise_surfe['desvio_v']}%", delta=f"{analise_surfe['desvio_v']}% vs Teórico")
-                    with met3:
-                        st.metric(label="Desvio Real Preto (Macro)", value=f"{analise_surfe['desvio_p']}%", delta=f"{analise_surfe['desvio_p']}% vs Teórico")
-                        
-                    st.code(
-                        f"[DIAGNÓSTICO REAL-TIME DO ALGORITMO]:\n"
-                        f"- Filtro Binomial Curtíssimo: {analise_raridade['status']}\n"
-                        f"- Comportamento Macro Estendido (100 Giros): {analise_surfe['vies']}\n"
-                        f"  Amostragem Real -> V: {analise_surfe['frequencia_v']}% | P: {analise_surfe['frequencia_p']}% | B: {analise_surfe['frequencia_b']}%\n\n"
-                        f"[GERENCIAMENTO FINANCEIRO INTEGRADO (Base Padrão R$10)]:\n"
-                        f"- Valor Esperado Teórico (House Edge): {gestao_financeira['house_edge_estatico']}\n"
-                        f"- Entrada na Cor Indicada: R$ {gestao_financeira['stake_cor']:.2f}\n"
-                        f"- Cobertura Protegida no Branco: R$ {gestao_financeira['cobertura_b_ideal_1_7']:.2f}\n"
-                        f"- Desembolso Total Calculado: R$ {gestao_financeira['custo_total_operacao']:.2f}\n"
-                        f"- Retorno Líquido no Branco (0): R$ {gestao_financeira['lucro_liquido_se_der_branco']:.2f}",
-                        language="text"
-                    )
                 
                 st.write("---")
                 st.write("### 🎛️ Painel de Injeção de Dados Reais:")
@@ -167,13 +167,11 @@ with aba_tipo_d:
                 memoria_d = output_d.split("[RESULTADO FINAL TIPO D]")[0]
                 resultado_d = "[RESULTADO FINAL TIPO D]" + output_d.split("[RESULTADO FINAL TIPO D]")[1]
                 
-                # CAPTURA DA MÉTRICA DE EVOLUÇÃO VISUAL DA IA
                 valor_ia = 0.0
                 for linha in resultado_d.split("\n"):
                     if "METRICA_EVOLUÇÃO_IA:" in linha:
                         valor_ia = float(linha.split("METRICA_EVOLUÇÃO_IA:")[1].split("%")[0].strip())
                 
-                # EXIBIÇÃO DO MEDIDOR DE APRENDIZADO
                 st.write("---")
                 st.subheader("🤖 Indicador de Evolução e Assertividade da IA")
                 col_kpi1, col_kpi2 = st.columns([1, 3])
