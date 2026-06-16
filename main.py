@@ -147,9 +147,7 @@ class IAPreditivaV1:
         v_bonus += concordancia * 0.7
         p_bonus += concordancia * 0.7
 
-        # ============================================================
-        # NOVO: Bônus estatístico baseado em sequências longas
-        # ============================================================
+        # Bônus estatístico de sequências longas
         streak = 0
         for cor in reversed(sub_pol):
             if cor == sub_pol[-1]:
@@ -164,17 +162,15 @@ class IAPreditivaV1:
             else:
                 break
 
-        # Bônus de inversão após streak longo (baseado na análise estatística)
         if streak >= 5:
             if sub_pol[-1] == 'V':
                 p_bonus += 18
             else:
                 v_bonus += 18
 
-        # Bônus após Xadrez longo quebrando
         if xadrez_len >= 5:
             expected = 'P' if sub_pol[-1] == 'V' else 'V'
-            if sub_pol[-1] != expected:  # quebrou
+            if sub_pol[-1] != expected:
                 if sub_pol[-1] == 'V':
                     v_bonus += 22
                 else:
@@ -220,15 +216,12 @@ class JuizHierarquicoModificado:
 
         direcao_ia, confianca_ia = previsao_ia
 
-        # Xadrez Quebrado normal (mantido)
         if xadrez_quebrado and direcao_ia != "NEUTRO" and confianca_ia >= 53:
             return direcao_ia, f"Xadrez Quebrado + IA ({confianca_ia:.1f}%)", "XADREZ_FORTE"
 
-        # NOVO: Inversão forte após Xadrez longo quebrando
         if xadrez_len >= 5 and xadrez_quebrou and direcao_ia != "NEUTRO":
             return direcao_ia, f"Xadrez {xadrez_len} quebrou + IA", "XADREZ_INVERSAO_FORTE"
 
-        # NOVO: Inversão após streak longo
         if streak_atual >= 6 and direcao_ia != "NEUTRO":
             return direcao_ia, f"Inversão após streak {streak_atual}", "STREAK_INVERSAO"
 
@@ -476,7 +469,6 @@ class MotorV1Completo:
             direcao_ia, conf_ia = self.ia.predizer_proxima_casa(sub_num, sub_pol)
             modo_mercado = AnalisadorContextoAvancado.detectar_modo_mercado(sub_pol)
 
-            # NOVO: Calcular streak e xadrez_len para passar ao Juiz
             streak = 0
             for c in reversed(sub_pol):
                 if c == sub_pol[-1]: streak += 1
@@ -571,7 +563,7 @@ class MotorV1Completo:
 
 
 # ============================================================
-# ProcessadorTipoB
+# ProcessadorTipoB - ATUALIZADO COM ANÁLISE COMPLETA (6 CAMADAS)
 # ============================================================
 class ProcessadorTipoB:
     def __init__(self, sequencia_12_numeros, caminho_base_dados):
@@ -592,17 +584,19 @@ class ProcessadorTipoB:
             base_rec = LeitorXLS("base_recencia_ativa.xlsx").ler_e_validar()
 
         ia = IAPreditivaV1(base, base_rec)
-        nc_ativo, motivo = MotorNoCall.checar_no_call(self.entrada, self.polaridades)
+        nc_ativo, motivo_nc = MotorNoCall.checar_no_call(self.entrada, self.polaridades)
         expectativas = MotorContagensProjetivas.mapear_janela(self.entrada, self.polaridades, "ESTÁVEL")
         inclinacao = AnalisadorContextoAvancado.calcular_numerologia_pos_numero(self.entrada[-1], [d['numero'] for d in base], [d['cor'] for d in base])
-        direcao_ia, conf = ia.predizer_proxima_casa(self.entrada, self.polaridades)
+        direcao_ia, conf_ia = ia.predizer_proxima_casa(self.entrada, self.polaridades)
         modo_mercado = AnalisadorContextoAvancado.detectar_modo_mercado(self.polaridades)
 
-        # NOVO: Calcular streak e xadrez para Tipo B
+        # Cálculo de streak e Xadrez
         streak = 0
         for c in reversed(self.polaridades):
-            if c == self.polaridades[-1]: streak += 1
-            else: break
+            if c == self.polaridades[-1]:
+                streak += 1
+            else:
+                break
 
         xadrez_len = 0
         for i in range(len(self.polaridades)-1, 0, -1):
@@ -610,12 +604,14 @@ class ProcessadorTipoB:
                 xadrez_len += 1
             else:
                 break
+
         xadrez_quebrou = (self.polaridades[-1] == self.polaridades[-2]) if len(self.polaridades) >= 2 else False
 
-        sinal, justificativa, _ = JuizHierarquicoModificado.arbitrar_sinal(
-            nc_ativo, motivo, expectativas, inclinacao, 
+        # Arbitragem final
+        sinal, justificativa, regra_id = JuizHierarquicoModificado.arbitrar_sinal(
+            nc_ativo, motivo_nc, expectativas, inclinacao, 
             AnalisadorContextoAvancado.mapear_padroes_geometria(self.polaridades),
-            (direcao_ia, conf), (False, "NORMAL", ""), 
+            (direcao_ia, conf_ia), (False, "NORMAL", ""), 
             defaultdict(lambda: {"acertos":1, "total":1}),
             modo_mercado=modo_mercado,
             streak_atual=streak,
@@ -623,23 +619,61 @@ class ProcessadorTipoB:
             xadrez_quebrou=xadrez_quebrou
         )
 
-        memoria_texto = (
-            f"[PROCESSAMENTO TIPO B]\n"
-            f"Sequência: {self.entrada}\n"
-            f"Modo de Mercado: {modo_mercado}\n"
-            f"Sinal Gerado: {sinal}\n"
-            f"Justificativa: {justificativa}\n"
-            f"Confiança da IA: {round(conf, 2)}%\n"
-            f"No Call Ativo: {nc_ativo}"
-        )
+        # Retorno estruturado em camadas (como um Analista)
+        analise_completa = {
+            "no_call": {
+                "ativo": nc_ativo,
+                "motivo": motivo_nc
+            },
+            "contexto": {
+                "streak": streak,
+                "xadrez_len": xadrez_len,
+                "xadrez_quebrou": xadrez_quebrou,
+                "modo_mercado": modo_mercado
+            },
+            "padroes": {
+                "expectativas": expectativas,
+                "geometria": AnalisadorContextoAvancado.mapear_padroes_geometria(self.polaridades),
+                "inclinacao_pos_numero": inclinacao
+            },
+            "ia": {
+                "direcao": direcao_ia,
+                "confianca": round(conf_ia, 2),
+                "barreira_usada": 55.0
+            },
+            "juiz": {
+                "sinal_final": sinal,
+                "justificativa": justificativa,
+                "regra_id": regra_id
+            },
+            "gestao_risco": self._gerar_gestao_risco(sinal, streak, xadrez_len, xadrez_quebrou, conf_ia)
+        }
 
         return {
             "sinal": sinal,
             "justificativa": justificativa,
-            "confianca_ia": round(conf, 2),
+            "confianca_ia": round(conf_ia, 2),
             "no_call": nc_ativo,
-            "memoria": memoria_texto
+            "memoria": f"[PROCESSAMENTO TIPO B] Sequência: {self.entrada}",
+            "analise_completa": analise_completa
         }
+
+    def _gerar_gestao_risco(self, sinal, streak, xadrez_len, xadrez_quebrou, confianca):
+        if sinal == "NO CALL":
+            return "Sinal bloqueado por NO CALL ou falta de confluência. Aguardar melhor setup."
+
+        risco = "BAIXO"
+        if streak >= 5 or xadrez_len >= 5:
+            risco = "MÉDIO"
+        if xadrez_quebrou and xadrez_len >= 5:
+            risco = "MÉDIO-ALTO"
+
+        if confianca >= 60:
+            return f"Sinal com boa confluência ({risco} risco). Operar com stake normal."
+        elif confianca >= 55:
+            return f"Sinal moderado ({risco} risco). Recomendado reduzir stake em 30-50%."
+        else:
+            return f"Sinal fraco ({risco} risco). Melhor aguardar ou operar com stake muito reduzido."
 
 
 # ============================================================
