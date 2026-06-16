@@ -436,10 +436,10 @@ class MotorV1Completo:
         p_fa = (stats["FALHA"] / denominador) * 100
         p_nc = (stats["NO CALL"] / (qtd_janelas if qtd_janelas > 0 else 1)) * 100
 
-        if p_fa >= 25.0: condicao_mercado = "MERCADO EM DEGRADAÇÃO"
-        elif p_g0 >= 50.0: condicao_mercado = "MERCADO PAGADOR"
-        elif p_g1 >= 40.0: condicao_mercado = "MERCADO COM ATRASO CONTROLADO"
-        else: condicao_mercado = "MERCADO INSTÁVEL"
+        if p_fa >= 25.0: condicao_market = "MERCADO EM DEGRADAÇÃO"
+        elif p_g0 >= 50.0: condicao_market = "MERCADO PAGADOR"
+        elif p_g1 >= 40.0: condicao_market = "MERCADO COM ATRASO CONTROLADO"
+        else: condicao_market = "MERCADO INSTÁVEL"
 
         output = "[MEMÓRIA DE CÁLCULO DAS JANELAS MÓVEIS]\n" + "\n".join(memorias) + "\n\n"
         output += "[RESULTADO FINAL TIPO D]\n"
@@ -451,7 +451,7 @@ class MotorV1Completo:
         output += f" - Taxa de Falha: {stats['FALHA']} Ocorrências ({p_fa:.2f}%)\n"
         output += f" - Taxa de NO CALL: {stats['NO CALL']} Ocorrências ({p_nc:.2f}%)\n\n"
         output += f"METRICA_EVOLUÇÃO_IA: {assertividade_ia:.2f}% de Assertividade Pura (Amostra: {total_ia} tomadas de decisão)\n"
-        output += f"ESTADO ATUAL DO MERCADO: {condicao_mercado}\n"
+        output += f"ESTADO ATUAL DO MERCADO: {condicao_market}\n"
         return output
 
 class ProcessadorTipoB:
@@ -465,7 +465,7 @@ class ProcessadorTipoB:
             cor = 'B' if num == 0 else ('V' if 1 <= num <= 7 else 'P')
             self.polaridades_usuario.append(cor)
 
-    def ejecutar_sinal_real(self):
+    def executar_sinal_real(self):
         if len(self.entrada_usuario) != 12: return {"erro": "Requisito de exatamente 12 números violado."}
         leitor_longo = LeitorXLS(self.caminho_base)
         base_longo = leitor_longo.ler_e_validar()
