@@ -25,6 +25,7 @@ class IAPreditivaV1:
             self._processar_bloco_dados(self.dados_recencia, multiplicador_peso=3)
 
     def _processar_bloco_dados(self, dados, multiplicador_peso):
+        # 1. TRANSMISSÃO BÁSICA DE TRANSIÇÕES DE CASAS
         for i in range(len(dados) - 2):
             estado_atual_cor = (dados[i]['cor'], dados[i+1]['cor'])
             proxima_cor = dados[i+2]['cor']
@@ -33,6 +34,27 @@ class IAPreditivaV1:
             for _ in range(multiplicador_peso):
                 self.modelo_transicao[estado_atual_cor].append(proxima_cor)
                 self.modelo_numerico[num_atual].append(proxima_cor)
+                
+        # 2. ABSORÇÃO COGNITIVA INTEGRAL: PADRÕES E NUMEROLOGIA (VOLUME 6 E 7)
+        if len(dados) >= 12:
+            for i in range(len(dados) - 12):
+                sub_window_num = [d['numero'] for d in dados[i:i+12]]
+                sub_window_pol = [d['cor'] for d in dados[i:i+12]]
+                cor_futura = dados[i+12]['cor'] if (i+12) < len(dados) else None
+                
+                if cor_futura:
+                    texto_pol = "".join(sub_window_pol)
+                    num_fechamento = sub_window_num[-1]
+                    
+                    for _ in range(multiplicador_peso):
+                        # Gravação de assinaturas geométricas complexas (Volume 6)
+                        if "PVPV" in texto_pol: self.modelo_transicao[("XADREZ", "PVPV")].append(cor_futura)
+                        if "VPVP" in texto_pol: self.modelo_transicao[("XADREZ", "VPVP")].append(cor_futura)
+                        if "VVV" in texto_pol: self.modelo_transicao[("SATURACAO", "V")].append(cor_futura)
+                        if "PPP" in texto_pol: self.modelo_transicao[("SATURACAO", "P")].append(cor_futura)
+                        
+                        # Gravação de contexto numerológico avançado (Volume 7)
+                        self.modelo_numerico[(num_fechamento, "CONTEXTO")].append(cor_futura)
 
     def injetar_aprendizado_imediato(self, sub_dados, multiplicador_peso=3):
         self._processar_bloco_dados(sub_dados, multiplicador_peso)
@@ -46,12 +68,33 @@ class IAPreditivaV1:
         proximas_cores_historicas = self.modelo_transicao.get(ultimas_cores, [])
         proximas_cores_por_num = self.modelo_numerico.get(ultimo_num, [])
         
-        has_recencia = len(self.dados_recencia) > 0 or len(self.modelo_transicao) > 0
-        peso_geometria = 0.75 if has_recencia else 0.60
-        peso_numerico = 0.25 if has_recencia else 0.40
+        # CONSULTA AOS NOVOS MODELOS DE EVOLUÇÃO COMPORTAMENTAL ABSORVIDOS
+        texto_pol = "".join(sub_pol)
+        cores_por_geometria = []
+        if "PVPV" in texto_pol: cores_por_geometria.extend(self.modelo_transicao.get(("XADREZ", "PVPV"), []))
+        if "VPVP" in texto_pol: cores_por_geometria.extend(self.modelo_transicao.get(("XADREZ", "VPVP"), []))
+        if "VVV" in texto_pol: cores_por_geometria.extend(self.modelo_transicao.get(("SATURACAO", "V"), []))
+        if "PPP" in texto_pol: cores_por_geometria.extend(self.modelo_transicao.get(("SATURACAO", "P"), []))
         
-        total_v = (proximas_cores_historicas.count('V') * peso_geometria) + (proximas_cores_por_num.count('V') * peso_numerico)
-        total_p = (proximas_cores_historicas.count('P') * peso_geometria) + (proximas_cores_por_num.count('P') * peso_numerico)
+        cores_por_numerologia = self.modelo_numerico.get((ultimo_num, "CONTEXTO"), [])
+        
+        has_recencia = len(self.dados_recencia) > 0 or len(self.modelo_transicao) > 0
+        
+        # Distribuição proporcional de pesos balanceando macro e micro contexto
+        peso_geometria = 0.40 if has_recencia else 0.30
+        peso_numerico = 0.20 if has_recencia else 0.30
+        peso_padrao_v6 = 0.25
+        peso_num_v7 = 0.15
+        
+        total_v = (proximas_cores_historicas.count('V') * peso_geometria) + \
+                  (proximas_cores_por_num.count('V') * peso_numerico) + \
+                  (cores_por_geometria.count('V') * peso_padrao_v6) + \
+                  (cores_por_numerologia.count('V') * peso_num_v7)
+                  
+        total_p = (proximas_cores_historicas.count('P') * peso_geometria) + \
+                  (proximas_cores_por_num.count('P') * peso_numerico) + \
+                  (cores_por_geometria.count('P') * peso_padrao_v6) + \
+                  (cores_por_numerologia.count('P') * peso_num_v7)
         
         soma_pesos = total_v + total_p
         if soma_pesos == 0:
@@ -129,7 +172,6 @@ class MotorContagensProjetivas:
                 passo = REGRAS_PROJECAO[num_atual]
                 alvo_idx = i + passo
                 
-                # Se o fechamento coincide com o fim da janela, gera Expectativa Vermelha (Volume 3 Cap 2)
                 if alvo_idx == 11:
                     if i < 10 and 0 in sub_num[i:11]: continue
                     lista_bruta.append({
@@ -180,66 +222,28 @@ class MotorContagensProjetivas:
         elif sub_num[10] == 5 and sub_num[11] == 10:
             lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V12_ACOPLAMENTO_5_10", "origem": "Volume 12: Cap 4 - Acoplamento 5-10"})
 
-        # =========================================================================
-        # 4. VOLUME 6: ANÁLISE DE PADRÕES DE POLARIDADES COMPLETA (NÍVEL 8 HIERÁRQUICO)
-        # =========================================================================
+        # 4. VOLUME 6: ANÁLISE DE PADRÕES DE POLARIDADES COMPLETA
         texto_pol = "".join(sub_pol)
         
-        # Correção da Janela 21: Mapeamento de Espelhamento Inverso Complexo (Alternância -> Retenção -> Alternância)
         if "PVPV" in texto_pol and "VVV" in texto_pol and texto_pol.endswith("PVPV"):
-            lista_bruta.append({
-                "direcao": "PRETO", 
-                "tipo_regra": "V6_ESPELHAMENTO_INVERSO_COMPLEXO", 
-                "origem": "Volume 6: Cap 5 - Saturação VVV cercada por estruturas Xadrez. Projeta bloco simétrico em PRETO"
-            })
+            lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V6_ESPELHAMENTO_INVERSO_COMPLEXO", "origem": "Volume 6: Cap 5 - Saturação VVV cercada por estruturas Xadrez. Projeta bloco simétrico em PRETO"})
         elif "VPVP" in texto_pol and "PPP" in texto_pol and texto_pol.endswith("VPVP"):
-            lista_bruta.append({
-                "direcao": "VERMELHO", 
-                "tipo_regra": "V6_ESPELHAMENTO_INVERSO_COMPLEXO", 
-                "origem": "Volume 6: Cap 5 - Saturação PPP cercada por estruturas Xadrez. Projeta bloco simétrico em VERMELHO"
-            })
+            lista_bruta.append({"direcao": "VERMELHO", "tipo_regra": "V6_ESPELHAMENTO_INVERSO_COMPLEXO", "origem": "Volume 6: Cap 5 - Saturação PPP cercada por estruturas Xadrez. Projeta bloco simétrico em VERMELHO"})
 
-        # Ciclo de Alternância de Fechamento (Xadrez Ativo — Cap 6)
         if texto_pol.endswith("PVPV"):
-            lista_bruta.append({
-                "direcao": "PRETO",
-                "tipo_regra": "V6_XADREZ_ATIVO",
-                "origem": "Volume 6: Cap 6 - Ciclo de Alternância Ativa de Fechamento (Xadrez) projeta PRETO"
-            })
+            lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V6_XADREZ_ATIVO", "origem": "Volume 6: Cap 6 - Ciclo de Alternância Ativa de Fechamento (Xadrez) projeta PRETO"})
         elif texto_pol.endswith("VPVP"):
-            lista_bruta.append({
-                "direcao": "VERMELHO",
-                "tipo_regra": "V6_XADREZ_ATIVO",
-                "origem": "Volume 6: Cap 6 - Ciclo de Alternância Ativa de Fechamento (Xadrez) projeta VERMELHO"
-            })
+            lista_bruta.append({"direcao": "VERMELHO", "tipo_regra": "V6_XADREZ_ATIVO", "origem": "Volume 6: Cap 6 - Ciclo de Alternância Ativa de Fechamento (Xadrez) projeta VERMELHO"})
 
-        # Falsa Quebra de Fechamento (Capítulo 8)
         if texto_pol.endswith("PPVP"):
-            lista_bruta.append({
-                "direcao": "PRETO",
-                "tipo_regra": "V6_FALSA_QUEBRA",
-                "origem": "Volume 6: Cap 8 - Falsa Quebra detectada com retorno à sustentação PRETA"
-            })
+            lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V6_FALSA_QUEBRA", "origem": "Volume 6: Cap 8 - Falsa Quebra detectada com retorno à sustentação PRETA"})
         elif texto_pol.endswith("VVPV"):
-            lista_bruta.append({
-                "direcao": "VERMELHO",
-                "tipo_regra": "V6_FALSA_QUEBRA",
-                "origem": "Volume 6: Cap 8 - Falsa Quebra detectada com retorno à sustentação VERMELHA"
-            })
+            lista_bruta.append({"direcao": "VERMELHO", "tipo_regra": "V6_FALSA_QUEBRA", "origem": "Volume 6: Cap 8 - Falsa Quebra detectada com retorno à sustentação VERMELHA"})
 
-        # Espelho Curto (Capítulo 4)
         if texto_pol.endswith("VPV"):
-            lista_bruta.append({
-                "direcao": "PRETO",
-                "tipo_regra": "V6_ESPELHO_CURTO",
-                "origem": "Volume 6: Cap 4 - Estrutura de Espelho V-P-V exigindo retorno simétrico em PRETO"
-            })
+            lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V6_ESPELHO_CURTO", "origem": "Volume 6: Cap 4 - Estrutura de Espelho V-P-V exigindo retorno simétrico em PRETO"})
         elif texto_pol.endswith("PVP"):
-            lista_bruta.append({
-                "direcao": "VERMELHO",
-                "tipo_regra": "V6_ESPELHO_CURTO",
-                "origem": "Volume 6: Cap 4 - Estrutura de Espelho P-V-P exigindo retorno simétrico em VERMELHO"
-            })
+            lista_bruta.append({"direcao": "VERMELHO", "tipo_regra": "V6_ESPELHO_CURTO", "origem": "Volume 6: Cap 4 - Estrutura de Espelho P-V-P exigindo retorno simétrico em VERMELHO"})
 
         return lista_bruta
 
@@ -384,7 +388,21 @@ class MotorV1Completo:
         corte_recencia = max(0, len(lista_dados_xls) - 150)
         self.dados_longo = lista_dados_xls[:corte_recencia]
         self.dados_curto = lista_dados_xls[corte_recencia:]
-        self.ia = IAPreditivaV1(self.dados_longo, self.dados_curto)
+        
+        # =========================================================================
+        # EVOLUÇÃO PERMANENTE: IMPORTA A BASE DE RECÊNCIA ATIVA DA IA (FIX)
+        # =========================================================================
+        base_recencia = None
+        caminho_recencia = "base_recencia_ativa.xlsx"
+        if os.path.exists(caminho_recencia):
+            try:
+                leitor_recencia = LeitorXLS(caminho_recencia)
+                base_recencia = leitor_recencia.ler_e_validar()
+            except:
+                base_recencia = None
+                
+        dados_curto_consolidados = self.dados_curto + (base_recencia if base_recencia else [])
+        self.ia = IAPreditivaV1(self.dados_longo, dados_curto_consolidados)
         self.historico_regras = defaultdict(lambda: {"acertos": 1, "total": 1})
 
     def processar_auditoria(self):
@@ -412,7 +430,7 @@ class MotorV1Completo:
             previsao_ia = (direcao_ia_pura, conf_ia_pura)
             
             expectativa_final, justificativa, regra_ativa_id = JuizHierarquicoModificado.arbitrar_sinal(
-                nc_ativo, motivo_nc, expectativas, inclinacao_num, geometria, previsao_ia, status_inv, self.historico_regras
+                nc_ativo, motivo_nc, expectations, inclinacao_num, geometria, previsao_ia, status_inv, self.historico_regras
             )
 
             if expectativa_final != "NO CALL":
@@ -479,6 +497,12 @@ class MotorV1Completo:
             memorias_calculo.append(log_linha)
             janelas_auditadas.append(classificacao)
             idx += 12 + salto
+
+        # PERSISTÊNCIA AUTOMÁTICA EM DISCO: Injeta as rodadas reais processadas na base definitiva
+        try:
+            GerenciadorMemoriaViva.injetar_rodadas_reais(self.seq.numerica, [], "base_recencia_ativa.xlsx")
+        except:
+            pass
 
         assertividade_ia = (ia_acertos_reais / ia_total_predições * 100) if ia_total_predições > 0 else 0.0
         return self._gerar_relatorio_texto(memorias_calculo, stats, len(janelas_auditadas), assertividade_ia, ia_total_predições)
@@ -642,11 +666,11 @@ class LeitorXLS:
             for _, l in df_cronologico.iterrows():
                 try:
                     num_val = int(l["numero"])
-                    if num_val in LEGENDA_BRANCO: col_final = 'B'
-                    elif num_val in LEGENDA_VERMELHO: col_final = 'V'
-                    elif num_val in LEGENDA_PRETO: col_final = 'P'
+                    if num_val in LEGENDA_BRANCO: cor_final = 'B'
+                    elif num_val in LEGENDA_VERMELHO: cor_final = 'V'
+                    elif num_val in LEGENDA_PRETO: cor_final = 'P'
                     else: continue
-                    dados_limpos.append({"numero": num_val, "cor": col_final})
+                    dados_limpos.append({"numero": num_val, "cor": cor_final})
                 except: continue
             return dados_limpos if dados_limpos else None
         except: return None
