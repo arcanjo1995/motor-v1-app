@@ -188,20 +188,18 @@ class GerenciadorMemoriaViva:
             novas_linhas.append({"numero": int(num), "cor": cor})
 
         df_novos = pd.DataFrame(novas_linhas)
-        # CORREÇÃO DE ALINHAMENTO CRONOLÓGICO: Inverte o bloco novo para manter mais recentes no topo do arquivo.
-        # Assim o LeitorXLS irá descompactar as rodadas na ordem cronológica exata de trás para frente.
         df_novos_invertido = df_novos.iloc[::-1].reset_index(drop=True)
         
         if os.path.exists(caminho_recencia):
             try:
                 df_atual = pd.read_excel(caminho_recencia)
                 df_consolidado = pd.concat([df_novos_invertido, df_atual], ignore_index=True)
-                df_consolidado = df_consolidado.drop_duplicates().reset_index(drop=True)
+                # MODIFICAÇÃO DO REFORÇO: Removido drop_duplicates() para permitir acúmulo real de peso e frequências
                 df_consolidado.to_excel(caminho_recencia, index=False)
             except:
                 df_novos_invertido.to_excel(caminho_recencia, index=False)
         else:
-            df_novos_invertido.to_excel(caminia_recencia if 'caminia_recencia' not in locals() else caminho_recencia, index=False)
+            df_novos_invertido.to_excel(caminho_recencia, index=False)
 
 class MotorNoCall:
     @staticmethod
@@ -222,7 +220,7 @@ class MotorNoCall:
                 return True, "Volume 2 Cap 3: Trava Número 2"
 
         posicoes_criticas_b = [5, 8, 9, 10, 11]
-        for pos in posicoes_criticas_b:
+        for pos in posicas_criticas_b if 'posicas_criticas_b' in locals() else posicoes_criticas_b:
             if sub_pol[pos] == "B":
                 return True, "Volume 2 Cap 5: Trava do Branco"
 
@@ -417,9 +415,10 @@ class JuizHierarquicoModificado:
                 sinal_oposto = "PRETO" if sinal_dominante == "VERMELHO" else "VERMELHO"
                 regra_vencedora_id = maior_peso_id[sinal_dominante][0]
                 
-                if forcas[sinal_oposto] > 0 and direcao_ia != "NEUTRO" and confianca_ia > 65.0:
+                # MODIFICAÇÃO DO CHOQUE: Se a IA discordar das regras fixas e tiver alta confiança por aprendizado de erros, ela assume o controle
+                if direcao_ia != "NEUTRO" and direcao_ia != sinal_dominante and confianca_ia > 65.0:
                     sinal_projetado = direcao_ia
-                    justificativa_proj = f"Veredito de Recência Extrema: IA ({confianca_ia:.1f}%) assume o controle."
+                    justificativa_proj = f"Veredito de Recência Extrema: IA ({confianca_ia:.1f}%) assume o controle por Contraditoriedade Histórica Recorrente."
                     regra_vencedora_id = "IA_ARBITRAGEM_CHOQUE"
                 else:
                     sinal_projetado = sinal_dominante
@@ -445,9 +444,16 @@ class JuizHierarquicoModificado:
             return sinal_inverso, f"Intercepção de Exaustão (4 Casas): {justificativa_inv}", "INVERSION_REAL"
 
         if sinal_projetado: return sinal_projetado, justificativa_proj, regra_vencedora_id
-        if direcao_inclinacao != "NEUTRO" and porc >= 60.0: return direcao_inclinacao, f"Matriz Pós-Número: {porc:.1f}%", "MATRIZ_INCLINA"
-        if direcao_ia != "NEUTRO" and confianca_ia >= 62.0: return direcao_ia, f"IA Preditiva: {confianca_ia:.1f}%", "IA_PREDITIVA"
-        if direcao_ia != "NEUTRO": return direcao_ia, f"Vetor Recente IA: {direcao_ia} ({confianca_ia:.1f}%)", "IA_VETOR"
+        
+        # MODIFICAÇÃO DE HIERARQUIA: A IA com alta maturação cognitiva agora precede as frequências numéricas brutas
+        if direcao_ia != "NEUTRO" and confianca_ia >= 62.0: 
+            return direcao_ia, f"IA Preditiva Evolutiva: {confianca_ia:.1f}%", "IA_PREDITIVA"
+            
+        if direcao_inclinacao != "NEUTRO" and porc >= 60.0: 
+            return direcao_inclinacao, f"Matriz Pós-Número: {porc:.1f}%", "MATRIZ_INCLINA"
+            
+        if direcao_ia != "NEUTRO": 
+            return direcao_ia, f"Vetor Recente IA: {direcao_ia} ({confianca_ia:.1f}%)", "IA_VETOR"
         
         return "NO CALL", "Volume 20: Ausência de Consenso Hierárquico Estrutural", "SISTEMA_TRAVADO"
 
@@ -495,7 +501,6 @@ class MotorV1Completo:
             direcao_ia_pura, conf_ia_pura = self.ia.predizer_proxima_casa(sub_num, sub_pol)
             previsao_ia = (direcao_ia_pura, conf_ia_pura)
             
-            # CORREÇÃO DO NAMEERROR: Alterado 'expectations' para 'expectativas'
             expectativa_final, justificativa, regra_ativa_id = JuizHierarquicoModificado.arbitrar_sinal(
                 nc_ativo, motivo_nc, expectativas, inclinacao_num, geometria, previsao_ia, status_inv, self.historico_regras
             )
@@ -565,7 +570,6 @@ class MotorV1Completo:
             janelas_auditadas.append(classificacao)
             idx += 12 + salto
 
-        # GRAVAÇÃO CONSOLIDADA E EVOLUTIVA NO BANCO DE DADOS
         try:
             GerenciadorMemoriaViva.injetar_rodadas_reais(self.seq.numerica, [], "base_recencia_ativa.xlsx")
         except:
