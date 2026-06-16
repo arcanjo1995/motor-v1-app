@@ -164,7 +164,7 @@ class IAPreditivaV1:
 
 
 # ============================================================
-# JuizHierarquicoModificado - Versão com mais respeito às regras
+# JuizHierarquicoModificado - Versão Equilibrada (Regras como Apoio Leve)
 # ============================================================
 class JuizHierarquicoModificado:
     @staticmethod
@@ -176,6 +176,7 @@ class JuizHierarquicoModificado:
         if no_call_ativo:
             return "NO CALL", motivo_nc, "SISTEMA_TRAVADO"
 
+        # 1. Padrões geométricos fortes (prioridade alta)
         if geometria_mercado == "CICLO_FECHADO_VPPV": 
             return "PRETO", "Geometria VPPV", "GEOMETRIA"
         if geometria_mercado == "CICLO_FECHADO_PVVP": 
@@ -183,38 +184,27 @@ class JuizHierarquicoModificado:
 
         direcao_ia, confianca_ia = previsao_ia
 
-        # Prioridade para reversão forte
+        # 2. Reversão forte (streak ou Xadrez longo quebrando)
         if xadrez_len >= 5 and xadrez_quebrou and direcao_ia != "NEUTRO":
-            return direcao_ia, f"Xadrez {xadrez_len} quebrou → Reversão", "XADREZ_REVERSAO"
+            return direcao_ia, f"Xadrez {xadrez_len} quebrou → Reversão provável", "XADREZ_REVERSAO"
 
         if streak_atual >= 5 and direcao_ia != "NEUTRO":
             return direcao_ia, f"Reversão após streak {streak_atual}", "STREAK_REVERSAO"
 
-        if xadrez_quebrado and direcao_ia != "NEUTRO" and confianca_ia >= 52:
+        if xadrez_quebrado and direcao_ia != "NEUTRO" and confianca_ia >= 53:
             return direcao_ia, f"Xadrez Quebrado + IA", "XADREZ_FORTE"
 
-        # ============================================================
-        # REGRAS DO MANUAL - Agora com mais peso
-        # ============================================================
-        if expectations:
-            forcas = {"VERMELHO": 0.0, "PRETO": 0.0}
+        # 3. Regras do manual como APOIO LEVE (não como força principal)
+        if expectations and direcao_ia != "NEUTRO":
             for item in expectations:
-                taxa = historico_revalida_regras[item["tipo_regra"]]["acertos"] / max(1, historico_revalida_regras[item["tipo_regra"]]["total"])
-                forcas[item["direcao"]] += 3.5 * (1.0 + taxa)
+                if item["direcao"] == direcao_ia:
+                    return direcao_ia, f"IA + Regra de apoio", "CONFLUENCIA_LEVE"
 
-            if forcas["VERMELHO"] != forcas["PRETO"]:
-                dominante = "VERMELHO" if forcas["VERMELHO"] > forcas["PRETO"] else "PRETO"
-
-                if confianca_ia >= 51:
-                    return dominante, f"Regra forte ativa ({dominante})", "REGRA_FORTE"
-
-        # ============================================================
-        # IA como fallback
-        # ============================================================
-        if direcao_ia != "NEUTRO" and confianca_ia >= 52:
+        # 4. IA como principal (previsão probabilística do que a sequência está indicando)
+        if direcao_ia != "NEUTRO" and confianca_ia >= 53:
             return direcao_ia, f"IA Preditiva ({confianca_ia:.1f}%)", "IA_PREDITIVA"
 
-        return "NO CALL", "Sem confluência suficiente", "SISTEMA_TRAVADO"
+        return "NO CALL", "Sem confluência clara", "SISTEMA_TRAVADO"
 
 
 # ============================================================
