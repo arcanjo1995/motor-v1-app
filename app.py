@@ -1,6 +1,6 @@
 import streamlit as st
 import os
-from main import LeitorXLS, MotorV1Completo, ProcessadorTipoB, GerenciadorMemoriaViva
+from main import LeitorXLS, MotorV1Completo, ProcessadorTipoB, GerenciadorMemoriaViva, EngineMatematicoAvancado
 
 st.set_page_config(page_title="MOTOR V1 - Painel Operacional", page_icon="🛡️", layout="wide")
 st.title("🛡️ Sistema de Auditoria Analítica - MOTOR V1")
@@ -75,6 +75,47 @@ with aba_tipo_b:
             else:
                 st.info(f"**EXPECTATIVA ATIVA:** Operar no {sinal}")
                 st.caption(f"Origem: {st.session_state.justificativa_pendente}")
+                
+                # =========================================================================
+                # ENGENHARIA COMPLEMENTAR ADITIVA — ANÁLISE MATEMÁTICA EM TEMPO REAL
+                # =========================================================================
+                st.write("---")
+                st.subheader("📈 Métricas Estatísticas e Gestão Matemática Avançada")
+                
+                with st.expander("Visualizar Análise de Desvio Padrão e Split-Stake", expanded=True):
+                    # 1. Cálculo de Raridade de Sequências (Binomial)
+                    analise_raridade = EngineMatematicoAvancado.calcular_raridade_sequencia(
+                        st.session_state.polaridades_usuario if 'polaridades_usuario' in locals() else [('B' if n == 0 else ('V' if 1 <= n <= 7 else 'P')) for n in st.session_state.sequencia_em_uso]
+                    )
+                    
+                    # 2. Cálculo do Viés de Surfe Macro (Últimas 100 rodadas)
+                    analise_surfe = EngineMatematicoAvancado.calcular_vies_surfe(NOME_BASE_DEFINITIVA, janela=100)
+                    
+                    # 3. Cálculo de Split-Stake Dinâmico
+                    gestao_financeira = EngineMatematicoAvancado.simular_split_stake_cobertura(stake_principal=10.0)
+                    
+                    met1, met2, met3 = st.columns(3)
+                    with met1:
+                        st.metric(label="Raridade da Sequência Atual", value=f"{analise_raridade['probabilidade']}%")
+                        st.caption(f"Sequência: {analise_raridade['streak']}x {analise_raridade['cor_sequencia']}")
+                    with met2:
+                        st.metric(label="Desvio Real Vermelho (Macro)", value=f"{analise_surfe['desvio_v']}%", delta=f"{analise_surfe['desvio_v']}% vs Teórico")
+                    with met3:
+                        st.metric(label="Desvio Real Preto (Macro)", value=f"{analise_surfe['desvio_p']}%", delta=f"{analise_surfe['desvio_p']}% vs Teórico")
+                        
+                    st.code(
+                        f"[DIAGNÓSTICO DO ALGORITMO]:\n"
+                        f"- Anomalia Curto Prazo: {analise_raridade['status']}\n"
+                        f"- Comportamento Macro (100 Giros): {analise_surfe['vies']}\n"
+                        f"  Frequências Reais -> V: {analise_surfe['frequencia_v']}% | P: {analise_surfe['frequencia_p']}% | B: {analise_surfe['frequencia_b']}%\n\n"
+                        f"[REQUISITOS FINANCEIROS MATEMÁTICOS DE SINAL (Calculado para Base R$10)]:\n"
+                        f"- Valor Esperado Fixo (House Edge): {gestao_financeira['house_edge_estatico']}\n"
+                        f"- Entrada Recomendada na Cor: R$ {gestao_financeira['stake_cor']:.2f}\n"
+                        f"- Proteção Ideal no Branco (Retorno Líquido Eficiente): R$ {gestao_financeira['cobertura_b_ideal_1_7']:.2f}\n"
+                        f"- Custo de Operação Protegido: R$ {gestao_financeira['custo_total_operacao']:.2f}\n"
+                        f"- Lucro Líquido se Bater Branco (0): R$ {gestao_financeira['lucro_liquido_se_der_branco']:.2f}",
+                        language="text"
+                    )
                 
                 st.write("---")
                 st.write("### 🎛️ Painel de Injeção de Dados Reais:")
@@ -163,6 +204,6 @@ with aba_tipo_d:
             try:
                 if os.path.exists(NOME_BASE_DEFINITIVA): os.remove(NOME_BASE_DEFINITIVA)
                 with open(NOME_BASE_DEFINITIVA, "wb") as f: f.write(arquivo_upload.getbuffer())
-                st.success(f"Sucesso! Base Histórica atualizada.")
+                st.success(f"Sucesso! Base Histórica updated.")
             except Exception as e: st.error(f"Erro ao salvar arquivo base: {e}")
             if os.path.exists(caminho_temp): os.remove(caminho_temp)
