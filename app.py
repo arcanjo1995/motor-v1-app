@@ -175,21 +175,7 @@ with aba_tipo_d:
                 memoria_d = output_d.split("[RESULTADO FINAL TIPO D]")[0]
                 resultado_d = "[RESULTADO FINAL TIPO D]" + output_d.split("[RESULTADO FINAL TIPO D]")[1]
                 
-                valor_ia = 0.0
-                for linha in resultado_d.split("\n"):
-                    if "METRICA_EVOLUÇÃO_IA:" in linha:
-                        valor_ia = float(linha.split("METRICA_EVOLUÇÃO_IA:")[1].split("%")[0].strip())
-                
                 st.write("---")
-                st.subheader("🤖 Indicador de Evolução e Assertividade da IA")
-                col_kpi1, col_kpi2 = st.columns([1, 3])
-                with col_kpi1:
-                    st.metric(label="Assertividade Pura da IA", value=f"{valor_ia:.2f}%")
-                with col_kpi2:
-                    st.caption("Barra de Maturação de Aprendizado por Recência:")
-                    st.progress(valor_ia / 100.0)
-                st.write("---")
-                
                 st.subheader("📋 Histórico das Janelas Móveis")
                 st.text_area("Processamento em Saltos", value=memoria_d, height=200)
                 st.subheader("📉 Consolidação Normativa")
