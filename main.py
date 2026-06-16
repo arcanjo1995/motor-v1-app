@@ -1,6 +1,29 @@
 import os
 import pandas as pd
 from collections import defaultdict
+import pickle
+
+# ============================================================
+# Funções de Persistência do Modelo de Longo Prazo
+# ============================================================
+def salvar_modelo_longo_prazo(ia, caminho="modelo_longo_prazo.pkl"):
+    try:
+        with open(caminho, "wb") as f:
+            pickle.dump(ia, f)
+        return True
+    except Exception as e:
+        print(f"Erro ao salvar modelo: {e}")
+        return False
+
+def carregar_modelo_longo_prazo(caminho="modelo_longo_prazo.pkl"):
+    if os.path.exists(caminho):
+        try:
+            with open(caminho, "rb") as f:
+                return pickle.load(f)
+        except:
+            return None
+    return None
+
 
 # ============================================================
 # MotorNoCall - NUNCA ALTERADO
@@ -520,7 +543,7 @@ class MotorV1Completo:
 
 
 # ============================================================
-# ProcessadorTipoB
+# ProcessadorTipoB - VERSÃO COM PERSISTÊNCIA DE MODELO
 # ============================================================
 class ProcessadorTipoB:
     def __init__(self, sequencia_12_numeros, caminho_base_dados):
@@ -532,21 +555,37 @@ class ProcessadorTipoB:
         if len(self.entrada) != 12:
             return {"erro": "Necessário exatamente 12 números"}
         
-        base = LeitorXLS(self.caminho_base).ler_e_validar()
-        if not base:
-            return {"erro": "Base de dados não encontrada"}
+        # Tenta carregar o modelo de longo prazo já treinado
+        ia = carregar_modelo_longo_prazo()
+        
+        if ia is None:
+            # Fallback: treina do zero caso não exista modelo salvo ainda
+            base = LeitorXLS(self.caminho_base).ler_e_validar()
+            if not base:
+                return {"erro": "Base de dados não encontrada"}
+            ia = IAPreditivaV1(base, None)
 
+        # Injeta a recência atual (com peso maior)
         base_rec = None
         if os.path.exists("base_recencia_ativa.xlsx"):
             base_rec = LeitorXLS("base_recencia_ativa.xlsx").ler_e_validar()
+            if base_rec:
+                ia.injetar_aprendizado_imediato(base_rec, multiplicador_peso=4)
 
-        ia = IAPreditivaV1(base, base_rec)
         nc_ativo, motivo_nc = MotorNoCall.checar_no_call(self.entrada, self.polaridades)
         expectativas = MotorContagensProjetivas.mapear_janela(self.entrada, self.polaridades, "ESTÁVEL")
-        inclinacao = AnalisadorContextoAvancado.calcular_numerologia_pos_numero(self.entrada[-1], [d['numero'] for d in base], [d['cor'] for d in base])
+        
+        base_longa = LeitorXLS(self.caminho_base).ler_e_validar() or []
+        inclinacao = AnalisadorContextoAvancado.calcular_numerologia_pos_numero(
+            self.entrada[-1], [d['numero'] for d in base_longa], [d['cor'] for d in base_longa]
+        )
+        
         direcao_ia, conf_ia = ia.predizer_proxima_casa(self.entrada, self.polaridades)
         modo_mercado = AnalisadorContextoAvancado.detectar_modo_mercado(self.polaridades)
+        geometria = AnalisadorContextoAvancado.mapear_padroes_geometria(self.polaridades)
+        status_inv = AnalisadorContextoAvancado.detectar_chance_inversao(self.polaridades)
 
+        # Cálculo de streak e xadrez
         streak = 0
         for c in reversed(self.polaridades):
             if c == self.polaridades[-1]: streak += 1
@@ -561,22 +600,28 @@ class ProcessadorTipoB:
         xadrez_quebrou = (self.polaridades[-1] == self.polaridades[-2]) if len(self.polaridades) >= 2 else False
 
         sinal, justificativa, regra_id = JuizHierarquicoModificado.arbitrar_sinal(
-            nc_ativo, motivo_nc, expectativas, inclinacao, 
-            AnalisadorContextoAvancado.mapear_padroes_geometria(self.polaridades),
-            (direcao_ia, conf_ia), (False, "NORMAL", ""), 
-            defaultdict(lambda: {"acertos":1, "total":1}),
+            nc_ativo, motivo_nc, expectativas, inclinacao, geometria,
+            (direcao_ia, conf_ia), status_inv,
+            defaultdict(lambda: {"acertos": 1, "total": 1}),
             modo_mercado=modo_mercado,
             streak_atual=streak,
             xadrez_len=xadrez_len,
             xadrez_quebrou=xadrez_quebrou
         )
 
+        # Veto de streak forte (mesma lógica da auditoria)
+        if sinal != "NO CALL" and streak >= 6:
+            if direcao_ia != sinal:
+                sinal = "NO CALL"
+                justificativa = f"Veto de streak {streak}x (contra IA)"
+                regra_id = "VETO_STREAK"
+
         analise_completa = {
             "no_call": {"ativo": nc_ativo, "motivo": motivo_nc},
             "contexto": {"streak": streak, "xadrez_len": xadrez_len, "xadrez_quebrou": xadrez_quebrou, "modo_mercado": modo_mercado},
             "padroes": {
                 "expectativas": expectativas,
-                "geometria": AnalisadorContextoAvancado.mapear_padroes_geometria(self.polaridades),
+                "geometria": geometria,
                 "inclinacao_pos_numero": inclinacao
             },
             "ia": {"direcao": direcao_ia, "confianca": round(conf_ia, 2), "barreira_usada": 52.5},
