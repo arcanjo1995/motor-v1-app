@@ -16,9 +16,22 @@ class IAPreditivaV1:
         self.modelo_transicao = defaultdict(list)
         self.modelo_numerico = defaultdict(list)
         
-        # MATRIZES DE APRENDIZADO PROFUNDO (VOLUME 6 E VOLUME 7)
-        self.stats_numerologia = defaultdict(lambda: {"V": 0, "P": 0, "B": 0, "total": 0})
+        # HISTÓRICO DE REGRAS COMPORTAMENTAIS (VOLUME 6 E 12)
         self.stats_regras = defaultdict(list)
+        
+        # MATRIZ OFICIAL VOLUME 7: UNIDADE DE ANÁLISE COMPORTAMENTAL (0 ATÉ 14)
+        self.unidade_analise = {}
+        for n in range(15):
+            self.unidade_analise[n] = {
+                "ocorrencias": 0,
+                "V": 0, "P": 0, "B": 0,
+                "freq_v": 0.0, "freq_p": 0.0, "freq_b": 0.0,
+                "estabilidade": "NEUTRO",
+                "saturacao": "NORMAL",
+                "enfraquecimento": "ESTÁVEL",
+                "consequencia_dominante": "NEUTRO"
+            }
+            
         self._treinar_modelo()
 
     def _treinar_modelo(self):
@@ -42,16 +55,36 @@ class IAPreditivaV1:
                 self.modelo_transicao[estado_atual_cor].append(proxima_cor)
                 self.modelo_numerico[num_atual].append(proxima_cor)
 
-        # 2. UNIDADE DE ANÁLISE E COMPORTAMENTO PÓS-NÚMERO (Volume 7 - Capítulos 2, 3 e 4)
+        # 2. CAPÍTULO 3 E 4 — EXTRAÇÃO DO COMPORTAMENTO DOMINANTE E PÓS-NÚMERO (0 A 14)
         for i in range(len(dados) - 1):
-            num = dados[i]['numero']
-            cor_post = dados[i+1]['cor']
+            num = int(dados[i]['numero'])
+            cor_post = str(dados[i+1]['cor']).upper()
             if 0 <= num <= 14 and cor_post in ['V', 'P', 'B']:
-                for _ in range(multiplicador_peso):
-                    self.stats_numerologia[num][cor_post] += 1
-                    self.stats_numerologia[num]["total"] += 1
+                self.unidade_analise[num]["ocorrencias"] += multiplicador_peso
+                self.unidade_analise[num][cor_post] += multiplicador_peso
+
+        # Recalcula as frequências estatísticas e estados dinâmicos após alimentação
+        for n in range(15):
+            total = self.unidade_analise[n]["ocorrencias"]
+            if total > 0:
+                self.unidade_analise[n]["freq_v"] = round((self.unidade_analise[n]["V"] / total) * 100, 2)
+                self.unidade_analise[n]["freq_p"] = round((self.unidade_analise[n]["P"] / total) * 100, 2)
+                self.unidade_analise[n]["freq_b"] = round((self.unidade_analise[n]["B"] / total) * 100, 2)
+                
+                # Definição Real do Comportamento Dominante (Capítulo 4)
+                v, p, b = self.unidade_analise[n]["V"], self.unidade_analise[n]["P"], self.unidade_analise[n]["B"]
+                if v > p and v > b: self.unidade_analise[n]["consequencia_dominante"] = "VERMELHO"
+                elif p > v and p > b: self.unidade_analise[n]["consequencia_dominante"] = "PRETO"
+                elif b > v and b > p: self.unidade_analise[n]["consequencia_dominante"] = "BRANCO"
+                else: self.unidade_analise[n]["consequencia_dominante"] = "NEUTRO"
+                
+                # Diagnóstico Comportamental de Estabilidade, Saturação e Enfraquecimento (Capítulo 3)
+                max_freq = max(self.unidade_analise[n]["freq_v"], self.unidade_analise[n]["freq_p"], self.unidade_analise[n]["freq_b"])
+                self.unidade_analise[n]["estabilidade"] = self.unidade_analise[n]["consequencia_dominante"] if max_freq >= 60.0 else "NEUTRO"
+                self.unidade_analise[n]["saturacao"] = f"SATURADO ({self.unidade_analise[n]['consequencia_dominante']})" if max_freq >= 70.0 else "NORMAL"
+                self.unidade_analise[n]["enfraquecimento"] = "ENFRAQUECIDO" if abs(self.unidade_analise[n]["freq_v"] - self.unidade_analise[n]["freq_p"]) <= 10.0 else "ESTÁVEL"
                     
-        # 3. ABSORÇÃO COGNITIVA INTEGRAL DE REGRAS E GEOMETRIAS (VOLUME 2, 3, 6 E 12)
+        # 3. ABSORÇÃO DE REGRAS CRÍTICAS E GEOMETRIAS (VOLUME 2, 3, 6 E 12)
         if len(dados) >= 12:
             for i in range(len(dados) - 12):
                 sub_window_num = [d['numero'] for d in dados[i:i+12]]
@@ -63,35 +96,23 @@ class IAPreditivaV1:
                     num_fechamento = sub_window_num[-1]
                     
                     for _ in range(multiplicador_peso):
-                        # Assinaturas Geométricas do Padrão de Polaridades (Volume 6)
                         if "PVPV" in texto_pol: self.modelo_transicao[("XADREZ", "PVPV")].append(cor_futura)
                         if "VPVP" in texto_pol: self.modelo_transicao[("XADREZ", "VPVP")].append(cor_futura)
                         if "VVV" in texto_pol: self.modelo_transicao[("SATURACAO", "V")].append(cor_futura)
                         if "PPP" in texto_pol: self.modelo_transicao[("SATURACAO", "P")].append(cor_futura)
                         self.modelo_numerico[(num_fechamento, "CONTEXTO")].append(cor_futura)
                         
-                        # Monitoramento de Sucesso das Contagens Projetivas (Volume 3)
                         REGRAS_PROJECAO = {1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7}
                         for idx in range(12):
                             n = sub_window_num[idx]
                             if n in REGRAS_PROJECAO and idx + REGRAS_PROJECAO[n] == 11:
                                 self.stats_regras[f"CONTAGEM_PROJETIVA_{n}"].append(cor_futura)
                         
-                        # Validação de Comportamento de Regras Oficiais (Volume 2 / Volume 12)
-                        if sub_window_num[-2] == 5 and sub_window_num[-1] == 10:
-                            self.stats_regras["REGRA_5_10"].append(cor_futura)
-                            
-                        if sub_window_num[-1] == 10:
-                            self.stats_regras["REGRA_10"].append(cor_futura)
-                            
-                        if sub_window_num[5] == 2:
-                            self.stats_regras["REGRA_2_POSICIONAL"].append(cor_futura)
-                            
-                        if sub_window_num[5] == 3:
-                            self.stats_regras["REGRA_3_POSICIONAL"].append(cor_futura)
-                            
-                        if sub_window_num[-1] == 4 and sub_window_pol[-2] == "P":
-                            self.stats_regras["REGRA_4_BASE_PRETA"].append(cor_futura)
+                        if sub_window_num[-2] == 5 and sub_window_num[-1] == 10: self.stats_regras["REGRA_5_10"].append(cor_futura)
+                        if sub_window_num[-1] == 10: self.stats_regras["REGRA_10"].append(cor_futura)
+                        if sub_window_num[5] == 2: self.stats_regras["REGRA_2_POSICIONAL"].append(cor_futura)
+                        if sub_window_num[5] == 3: self.stats_regras["REGRA_3_POSICIONAL"].append(cor_futura)
+                        if sub_window_num[-1] == 4 and sub_window_pol[-2] == "P": self.stats_regras["REGRA_4_BASE_PRETA"].append(cor_futura)
 
     def injetar_aprendizado_imediato(self, sub_dados, multiplicador_peso=3):
         self._processar_bloco_dados(sub_dados, multiplicador_peso)
@@ -105,7 +126,6 @@ class IAPreditivaV1:
         proximas_cores_historicas = self.modelo_transicao.get(ultimas_cores, [])
         proximas_cores_por_num = self.modelo_numerico.get(ultimo_num, [])
         
-        # CONSULTA DA HISTÓRIA DE ASSINATURAS GEOMÉTRICAS ABSORVIDAS (VOLUME 6)
         texto_pol = "".join(sub_pol)
         cores_por_geometria = []
         if "PVPV" in texto_pol: cores_por_geometria.extend(self.modelo_transicao.get(("XADREZ", "PVPV"), []))
@@ -115,7 +135,6 @@ class IAPreditivaV1:
         
         cores_por_numerologia = self.modelo_numerico.get((ultimo_num, "CONTEXTO"), [])
         
-        # CONSULTA DAS ESTATÍSTICAS COGNITIVAS DE REGRAS ESPECÍFICAS (VOLUME 2 E 12)
         cores_por_regras = []
         REGRAS_PROJECAO = {1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7}
         for idx in range(12):
@@ -123,56 +142,42 @@ class IAPreditivaV1:
             if n in REGRAS_PROJECAO and idx + REGRAS_PROJECAO[n] == 11:
                 cores_por_regras.extend(self.stats_regras.get(f"CONTAGEM_PROJETIVA_{n}", []))
                 
-        if sub_num[-2] == 5 and ultimo_num == 10:
-            cores_por_regras.extend(self.stats_regras.get("REGRA_5_10", []))
-        if ultimo_num == 10:
-            cores_por_regras.extend(self.stats_regras.get("REGRA_10", []))
-        if sub_num[5] == 2:
-            cores_por_regras.extend(self.stats_regras.get("REGRA_2_POSICIONAL", []))
-        if sub_num[5] == 3:
-            cores_por_regras.extend(self.stats_regras.get("REGRA_3_POSICIONAL", []))
-        if ultimo_num == 4 and sub_pol[-2] == "P":
-            cores_por_regras.extend(self.stats_regras.get("REGRA_4_BASE_PRETA", []))
+        if sub_num[-2] == 5 and ultimo_num == 10: cores_por_regras.extend(self.stats_regras.get("REGRA_5_10", []))
+        if ultimo_num == 10: cores_por_regras.extend(self.stats_regras.get("REGRA_10", []))
+        if sub_num[5] == 2: cores_por_regras.extend(self.stats_regras.get("REGRA_2_POSICIONAL", []))
+        if sub_num[5] == 3: cores_por_regras.extend(self.stats_regras.get("REGRA_3_POSICIONAL", []))
+        if ultimo_num == 4 and sub_pol[-2] == "P": cores_por_regras.extend(self.stats_regras.get("REGRA_4_BASE_PRETA", []))
             
-        # CONSULTA DIRETAMENTE COMPORTAMENTO PÓS-NÚMERO DA UNIDADE DE ANÁLISE (VOLUME 7)
-        num_stats = self.stats_numerologia.get(ultimo_num, {"V": 0, "P": 0, "B": 0, "total": 0})
+        # EXTRAÇÃO DOS ACÚMULOS DO VOLUME 7 PARA FORÇAR DESEMPATE REFORÇADO
+        stats_v7 = self.unidade_analise.get(ultimo_num, {"freq_v": 0.0, "freq_p": 0.0, "freq_b": 0.0, "consequencia_dominante": "NEUTRO", "estabilidade": "NEUTRO", "saturacao": "NORMAL", "enfraquecimento": "ESTÁVEL"})
+        
+        v_bonus = stats_v7["freq_v"] * 3.5
+        p_bonus = stats_v7["freq_p"] * 3.5
+        if stats_v7["estabilidade"] == "VERMELHO": v_bonus += 30.0
+        if stats_v7["estabilidade"] == "PRETO": p_bonus += 30.0
+        if "SATURADO (VERMELHO)" in stats_v7["saturacao"]: v_bonus += 40.0
+        if "SATURADO (PRETO)" in stats_v7["saturacao"]: p_bonus += 40.0
+        if stats_v7["consequencia_dominante"] == "VERMELHO": v_bonus += 25.0
+        if stats_v7["consequencia_dominante"] == "PRETO": p_bonus += 25.0
         
         has_recencia = len(self.dados_recencia) > 0 or len(self.modelo_transicao) > 0
-        
-        # PESOS BALANCEADOS PROPORCIONALMENTE INTEGRANDO TODAS AS SUB-DIRETRIZES
         p_transicao = 0.20 if has_recencia else 0.15
         p_num_base = 0.15 if has_recencia else 0.15
         p_geom_v6 = 0.20
-        p_num_v7 = 0.15
         p_regras_v2_v12 = 0.30
         
-        total_v = (proximas_cores_historicas.count('V') * p_transicao) + \
-                  (proximas_cores_por_num.count('V') * p_num_base) + \
-                  (cores_por_geometria.count('V') * p_geom_v6) + \
-                  (cores_por_numerologia.count('V') * p_num_v7) + \
-                  (cores_por_regras.count('V') * p_regras_v2_v12) + \
-                  (num_stats["V"] * 1.5)
-                  
-        total_p = (proximas_cores_historicas.count('P') * p_transicao) + \
-                  (proximas_cores_por_num.count('P') * p_num_base) + \
-                  (cores_por_geometria.count('P') * p_geom_v6) + \
-                  (cores_por_numerologia.count('P') * p_num_v7) + \
-                  (cores_por_regras.count('P') * p_regras_v2_v12) + \
-                  (num_stats["P"] * 1.5)
+        total_v = (proximas_cores_historicas.count('V') * p_transicao) + (proximas_cores_por_num.count('V') * p_num_base) + (cores_por_geometria.count('V') * p_geom_v6) + (cores_por_regras.count('V') * p_regras_v2_v12) + v_bonus
+        total_p = (proximas_cores_historicas.count('P') * p_transicao) + (proximas_cores_por_num.count('P') * p_num_base) + (cores_por_geometria.count('P') * p_geom_v6) + (cores_por_regras.count('P') * p_regras_v2_v12) + p_bonus
         
         soma_pesos = total_v + total_p
-        if soma_pesos == 0:
-            return "NEUTRO", 0.0
+        if soma_pesos == 0: return "NEUTRO", 0.0
         
         prob_v = (total_v / soma_pesos) * 100
         prob_p = (total_p / soma_pesos) * 100
         
         BARREIRA_CONFIA_IA = 62.0
-        
-        if prob_v >= BARREIRA_CONFIA_IA and prob_v > prob_p:
-            return "VERMELHO", prob_v
-        elif prob_p >= BARREIRA_CONFIA_IA and prob_p > prob_v:
-            return "PRETO", prob_p
+        if prob_v >= BARREIRA_CONFIA_IA and prob_v > prob_p: return "VERMELHO", prob_v
+        elif prob_p >= BARREIRA_CONFIA_IA and prob_p > prob_v: return "PRETO", prob_p
         return "NEUTRO", max(prob_v, prob_p)
 
 class GerenciadorMemoriaViva:
@@ -194,7 +199,6 @@ class GerenciadorMemoriaViva:
             try:
                 df_atual = pd.read_excel(caminho_recencia)
                 df_consolidado = pd.concat([df_novos_invertido, df_atual], ignore_index=True)
-                # MODIFICAÇÃO DO REFORÇO: Removido drop_duplicates() para permitir acúmulo real de peso e frequências
                 df_consolidado.to_excel(caminho_recencia, index=False)
             except:
                 df_novos_invertido.to_excel(caminho_recencia, index=False)
@@ -220,7 +224,7 @@ class MotorNoCall:
                 return True, "Volume 2 Cap 3: Trava Número 2"
 
         posicoes_criticas_b = [5, 8, 9, 10, 11]
-        for pos in posicas_criticas_b if 'posicas_criticas_b' in locals() else posicoes_criticas_b:
+        for pos in posicoes_criticas_b:
             if sub_pol[pos] == "B":
                 return True, "Volume 2 Cap 5: Trava do Branco"
 
@@ -232,7 +236,6 @@ class MotorContagensProjetivas:
         lista_bruta = []
         REGRAS_PROJECAO = {1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7}
 
-        # 1. PROCESSAMENTO DE CONTAGENS PROJETIVAS INDEPENDENTES (APARECEU ≠ ATIVOU)
         for i in range(12):
             num_atual = sub_num[i]
             if num_atual in REGRAS_PROJECAO:
@@ -247,70 +250,31 @@ class MotorContagensProjetivas:
                         "origem": f"Volume 3: Ativador {num_atual} direto no fechamento gerando Expectativa Vermelha"
                     })
 
-        # 2. REGRA DE CONTINUIDADE NUMÉRICA DE FECHAMENTO (Volume 2 - Cap 7)
         par_fechamento = (sub_num[10], sub_num[11])
         continuidade_preta_validas = [(8,9), (9,10), (10,11), (11,12), (12,13), (13,14), (14,13), (13,12), (12,11), (11,10)]
         continuidade_vermelha_validas = [(1,2), (2,3), (3,4), (4,5), (5,6), (6,7), (7,6), (6,5), (5,4), (4,3)]
 
         if par_fechamento in continuidade_preta_validas:
-            lista_bruta.append({
-                "direcao": "PRETO", 
-                "tipo_regra": "V2_CONTINUIDADE_PRETA", 
-                "origem": f"Volume 2: Continuidade Numérica Preta {par_fechamento[0]}-{par_fechamento[1]} até G1"
-            })
+            lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V2_CONTINUIDADE_PRETA", "origem": f"Volume 2: Continuidade Numérica Preta {par_fechamento[0]}-{par_fechamento[1]} até G1"})
         elif par_fechamento in continuidade_vermelha_validas:
-            lista_bruta.append({
-                "direcao": "VERMELHO", 
-                "tipo_regra": "V2_CONTINUIDADE_VERVELHA", 
-                "origem": f"Volume 2: Continuidade Numérica Vermelha {par_fechamento[0]}-{par_fechamento[1]} até G1"
-            })
+            lista_bruta.append({"direcao": "VERMELHO", "tipo_regra": "V2_CONTINUIDADE_VERVELHA", "origem": f"Volume 2: Continuidade Numérica Vermelha {par_fechamento[0]}-{par_fechamento[1]} até G1"})
 
-        # 3. REGRAS POSICIONAIS DO VOLUME 12
-        if sub_num[5] == 2:
-            lista_bruta.append({
-                "direcao": "VERMELHO", 
-                "tipo_regra": "V12_POSICIONAL_2", 
-                "origem": "Volume 12: Cap 3 - Regra Posicional do Número 2 (6 Casas de Expectativa Vermelha)"
-            })
-        if sub_num[5] == 3:
-            lista_bruta.append({
-                "direcao": "VERMELHO", 
-                "tipo_regra": "V12_POSICIONAL_3", 
-                "origem": "Volume 12: Cap 4 - Regra Posicional do Número 3 (6 Casas de Expectativa Vermelha)"
-            })
+        if sub_num[5] == 2: lista_bruta.append({"direcao": "VERMELHO", "tipo_regra": "V12_POSICIONAL_2", "origem": "Volume 12: Cap 3 - Regra Posicional do Número 2 (6 Casas de Expectativa Vermelha)"})
+        if sub_num[5] == 3: lista_bruta.append({"direcao": "VERMELHO", "tipo_regra": "V12_POSICIONAL_3", "origem": "Volume 12: Cap 4 - Regra Posicional do Número 3 (6 Casas de Expectativa Vermelha)"})
+        if sub_num[11] == 4 and sub_pol[10] == "P": lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V12_RETENCAO_4", "origem": "Volume 12: Cap 5 - Retenção do 4 sob Base Preta"})
+        elif sub_num[9] == 4 and sub_pol[10] == "P" and sub_pol[11] == "P": lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V12_ACOPLAMENTO_4PP", "origem": "Volume 12: Cap 5 - Acoplamento Posicional 4-P-P"})
+        if sub_num[11] == 10: lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V12_RESIDUO_10", "origem": "Volume 12: Cap 2 - Resíduo do 10"})
+        elif sub_num[10] == 5 and sub_num[11] == 10: lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V12_ACOPLAMENTO_5_10", "origem": "Volume 12: Cap 4 - Acoplamento 5-10"})
 
-        if sub_num[11] == 4 and sub_pol[10] == "P":
-            lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V12_RETENCAO_4", "origem": "Volume 12: Cap 5 - Retenção do 4 sob Base Preta"})
-        elif sub_num[9] == 4 and sub_pol[10] == "P" and sub_pol[11] == "P":
-            lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V12_ACOPLAMENTO_4PP", "origem": "Volume 12: Cap 5 - Acoplamento Posicional 4-P-P"})
-
-        if sub_num[11] == 10:
-            lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V12_RESIDUO_10", "origem": "Volume 12: Cap 2 - Resíduo do 10"})
-        elif sub_num[10] == 5 and sub_num[11] == 10:
-            lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V12_ACOPLAMENTO_5_10", "origem": "Volume 12: Cap 4 - Acoplamento 5-10"})
-
-        # 4. VOLUME 6: ANÁLISE DE PADRÕES DE POLARIDADES COMPLETA
         texto_pol = "".join(sub_pol)
-        
-        if "PVPV" in texto_pol and "VVV" in texto_pol and texto_pol.endswith("PVPV"):
-            lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V6_ESPELHAMENTO_INVERSO_COMPLEXO", "origem": "Volume 6: Cap 5 - Saturação VVV cercada por estruturas Xadrez. Projeta bloco simétrico em PRETO"})
-        elif "VPVP" in texto_pol and "PPP" in texto_pol and texto_pol.endswith("VPVP"):
-            lista_bruta.append({"direcao": "VERMELHO", "tipo_regra": "V6_ESPELHAMENTO_INVERSO_COMPLEXO", "origem": "Volume 6: Cap 5 - Saturação PPP cercada por estruturas Xadrez. Projeta bloco simétrico em VERMELHO"})
-
-        if texto_pol.endswith("PVPV"):
-            lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V6_XADREZ_ATIVO", "origem": "Volume 6: Cap 6 - Ciclo de Alternância Ativa de Fechamento (Xadrez) projeta PRETO"})
-        elif texto_pol.endswith("VPVP"):
-            lista_bruta.append({"direcao": "VERMELHO", "tipo_regra": "V6_XADREZ_ATIVO", "origem": "Volume 6: Cap 6 - Ciclo de Alternância Ativa de Fechamento (Xadrez) projeta VERMELHO"})
-
-        if texto_pol.endswith("PPVP"):
-            lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V6_FALSA_QUEBRA", "origem": "Volume 6: Cap 8 - Falsa Quebra detectada com retorno à sustentação PRETA"})
-        elif texto_pol.endswith("VVPV"):
-            lista_bruta.append({"direcao": "VERMELHO", "tipo_regra": "V6_FALSA_QUEBRA", "origem": "Volume 6: Cap 8 - Falsa Quebra detectada com retorno à sustentação VERMELHA"})
-
-        if texto_pol.endswith("VPV"):
-            lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V6_ESPELHO_CURTO", "origem": "Volume 6: Cap 4 - Estrutura de Espelho V-P-V exigindo retorno simétrico em PRETO"})
-        elif texto_pol.endswith("PVP"):
-            lista_bruta.append({"direcao": "VERMELHO", "tipo_regra": "V6_ESPELHO_CURTO", "origem": "Volume 6: Cap 4 - Estrutura de Espelho P-V-P exigindo retorno simétrico em VERMELHO"})
+        if "PVPV" in texto_pol and "VVV" in texto_pol and texto_pol.endswith("PVPV"): lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V6_ESPELHAMENTO_INVERSO_COMPLEXO", "origem": "Volume 6: Cap 5 - Saturação VVV cercada por estruturas Xadrez. Projeta bloco simétrico em PRETO"})
+        elif "VPVP" in texto_pol and "PPP" in texto_pol and texto_pol.endswith("VPVP"): lista_bruta.append({"direcao": "VERMELHO", "tipo_regra": "V6_ESPELHAMENTO_INVERSO_COMPLEXO", "origem": "Volume 6: Cap 5 - Saturação PPP cercada por estruturas Xadrez. Projeta bloco simétrico em VERMELHO"})
+        if texto_pol.endswith("PVPV"): lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V6_XADREZ_ATIVO", "origem": "Volume 6: Cap 6 - Ciclo de Alternância Ativa de Fechamento (Xadrez) projeta PRETO"})
+        elif texto_pol.endswith("VPVP"): lista_bruta.append({"direcao": "VERMELHO", "tipo_regra": "V6_XADREZ_ATIVO", "origem": "Volume 6: Cap 6 - Ciclo de Alternância Ativa de Fechamento (Xadrez) projeta VERMELHO"})
+        if texto_pol.endswith("PPVP"): lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V6_FALSA_QUEBRA", "origem": "Volume 6: Cap 8 - Falsa Quebra detectada com retorno à sustentação PRETA"})
+        elif texto_pol.endswith("VVPV"): lista_bruta.append({"direcao": "VERMELHO", "tipo_regra": "V6_FALSA_QUEBRA", "origem": "Volume 6: Cap 8 - Falsa Quebra detectada com retorno à sustentação VERMELHA"})
+        if texto_pol.endswith("VPV"): lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V6_ESPELHO_CURTO", "origem": "Volume 6: Cap 4 - Estrutura de Espelho V-P-V exigindo retorno simétrico em PRETO"})
+        elif texto_pol.endswith("PVP"): lista_bruta.append({"direcao": "VERMELHO", "tipo_regra": "V6_ESPELHO_CURTO", "origem": "Volume 6: Cap 4 - Estrutura de Espelho P-V-P exigindo retorno simétrico em VERMELHO"})
 
         return lista_bruta
 
@@ -326,12 +290,9 @@ class AnalisadorContextoAvancado:
                 elif proxima_cor == "B": contagem_b += 1
 
         total_ocorrencias = contagem_v + contagem_p + contagem_b
-        if total_ocorrencias < 3:
-            return "NEUTRO", 0.0
-
+        if total_ocorrencias < 3: return "NEUTRO", 0.0
         pct_v = (contagem_v / total_ocorrencias) * 100
         pct_p = (contagem_p / total_ocorrencias) * 100
-
         if pct_v >= 60.0: return "VERMELHO", pct_v
         if pct_p >= 60.0: return "PRETO", pct_p
         return "NEUTRO", max(pct_v, pct_p)
@@ -358,8 +319,7 @@ class AnalisadorContextoAvancado:
             bloco_anterior = texto_sub_pol[4:8]
             if bloco_anterior.count("P") >= 2: return True, "FALSO_RESPIRO", "Falso Respiro: Tendência de PRETO."
             return True, "INVERSÃO", "Exaustão: 4 Pretos Seguidos. Quebra para VERMELHO."
-        if texto_sub_pol.endswith("VPVPVP") or texto_sub_pol.endswith("PVPVPV"):
-            return True, "AVISO_XADREZ", "Alerta de Ciclo de Alternância Ativo."
+        if texto_sub_pol.endswith("VPVPVP") or texto_sub_pol.endswith("PVPVPV"): return True, "AVISO_XADREZ", "Alerta de Ciclo de Alternância Ativo."
         return False, "NORMAL", "Fluxo Estável."
 
     @staticmethod
@@ -415,7 +375,7 @@ class JuizHierarquicoModificado:
                 sinal_oposto = "PRETO" if sinal_dominante == "VERMELHO" else "VERMELHO"
                 regra_vencedora_id = maior_peso_id[sinal_dominante][0]
                 
-                # MODIFICAÇÃO DO CHOQUE: Se a IA discordar das regras fixas e tiver alta confiança por aprendizado de erros, ela assume o controle
+                # PROTOCOLO DE CHOQUE ATIVADO VIA PESO ACUMULADO DO VOLUME 7
                 if direcao_ia != "NEUTRO" and direcao_ia != sinal_dominante and confianca_ia > 65.0:
                     sinal_projetado = direcao_ia
                     justificativa_proj = f"Veredito de Recência Extrema: IA ({confianca_ia:.1f}%) assume o controle por Contraditoriedade Histórica Recorrente."
@@ -445,15 +405,10 @@ class JuizHierarquicoModificado:
 
         if sinal_projetado: return sinal_projetado, justificativa_proj, regra_vencedora_id
         
-        # MODIFICAÇÃO DE HIERARQUIA: A IA com alta maturação cognitiva agora precede as frequências numéricas brutas
-        if direcao_ia != "NEUTRO" and confianca_ia >= 62.0: 
-            return direcao_ia, f"IA Preditiva Evolutiva: {confianca_ia:.1f}%", "IA_PREDITIVA"
-            
-        if direcao_inclinacao != "NEUTRO" and porc >= 60.0: 
-            return direcao_inclinacao, f"Matriz Pós-Número: {porc:.1f}%", "MATRIZ_INCLINA"
-            
-        if direcao_ia != "NEUTRO": 
-            return direcao_ia, f"Vetor Recente IA: {direcao_ia} ({confianca_ia:.1f}%)", "IA_VETOR"
+        # HIERARQUIA DE PRECEDÊNCIA: A IA madura estatisticamente precede a numerologia bruta
+        if direcao_ia != "NEUTRO" and confianca_ia >= 62.0: return direcao_ia, f"IA Preditiva Evolutiva: {confianca_ia:.1f}%", "IA_PREDITIVA"
+        if direcao_inclinacao != "NEUTRO" and porc >= 60.0: return direcao_inclinacao, f"Matriz Pós-Número: {porc:.1f}%", "MATRIZ_INCLINA"
+        if direcao_ia != "NEUTRO": return direcao_ia, f"Vetor Recente IA: {direcao_ia} ({confianca_ia:.1f}%)", "IA_VETOR"
         
         return "NO CALL", "Volume 20: Ausência de Consenso Hierárquico Estrutural", "SISTEMA_TRAVADO"
 
@@ -501,6 +456,7 @@ class MotorV1Completo:
             direcao_ia_pura, conf_ia_pura = self.ia.predizer_proxima_casa(sub_num, sub_pol)
             previsao_ia = (direcao_ia_pura, conf_ia_pura)
             
+            # SOLUÇÃO DEFINITIVA DO NAMEERROR: 'expectations' alterado estritamente para 'expectativas'
             expectativa_final, justificativa, regra_ativa_id = JuizHierarquicoModificado.arbitrar_sinal(
                 nc_ativo, motivo_nc, expectativas, inclinacao_num, geometria, previsao_ia, status_inv, self.historico_regras
             )
@@ -570,10 +526,8 @@ class MotorV1Completo:
             janelas_auditadas.append(classificacao)
             idx += 12 + salto
 
-        try:
-            GerenciadorMemoriaViva.injetar_rodadas_reais(self.seq.numerica, [], "base_recencia_ativa.xlsx")
-        except:
-            pass
+        try: GerenciadorMemoriaViva.injetar_rodadas_reais(self.seq.numerica, [], "base_recencia_ativa.xlsx")
+        except: pass
 
         assertividade_ia = (ia_acertos_reais / ia_total_predições * 100) if ia_total_predições > 0 else 0.0
         return self._gerar_relatorio_texto(memorias_calculo, stats, len(janelas_auditadas), assertividade_ia, ia_total_predições)
@@ -677,30 +631,17 @@ class ProcessadorTipoB:
                 regras_b[regra_ativa_id]["total"] += 1
                 regras_b[regra_ativa_id]["acertos"] += 1
             historico_iteraçoes_log.append(f" Releitura {ciclo:02d}/15 -> Sinal: {sinal_ciclo} | Id Regra: {regra_ativa_id}")
-            if ciclo == 15:
-                sinal_final, justificativa_final = sinal_ciclo, justificativa_ciclo
+            if ciclo == 15: sinal_final, justificativa_final = sinal_ciclo, justificativa_ciclo
 
         chance_branco, casas_atraso = AnalisadorContextoAvancado.preditor_estatistico_branco(num_fechamento, num_global, pol_global)
-        
-        if casas_atraso >= 25:
-            justificativa_final += f" | PROTOCOLO GESTÃO DO BRANCO ATIVO: {casas_atraso} rodadas de atraso. Executar divisão Split-Stake (1/7 da stake na cor principal)."
+        if casas_atraso >= 25: justificativa_final += f" | PROTOCOLO GESTÃO DO BRANCO ATIVO: {casas_atraso} rodadas de atraso. Executar divisão Split-Stake (1/7 da stake na cor principal)."
 
         total_testes_regras = sum([regras_b[k]["total"] for k in regras_b]) - len(regras_b)
         score_aprendizado = "ESTABILIZANDO" if total_testes_regras > 5 else "MAPEANDO NOVO CICLO"
 
-        output_memoria = (
-            f"[PROCESSO DE 15 RELEITURAS DE VALIDAÇÃO CONSEQÜENCIAL]\n"
-            + "\n".join(historico_iteraçoes_log) + "\n\n"
-            f"[ANÁLISE DE FECHAMENTO]\n"
-            f"- Status do Aprendizado Vivo: {score_aprendizado}\n"
-            f"- Geometria: {saturacao}\n"
-            f"- Resolução Final: {justificativa_final}\n"
-        )
-
-        return {
-            "sinal": sinal_final, "justificativa": justificativa_final, "memoria": output_memoria,
-            "chance_branco": chance_branco, "atraso_branco": casas_atraso, "geometria": saturacao
-        }
+        output_memoria = (f"[PROCESSO DE 15 RELEITURAS DE VALIDAÇÃO CONSEQÜENCIAL]\n" + "\n".join(historico_iteraçoes_log) + "\n\n"
+                          f"[ANÁLISE DE FECHAMENTO]\n- Status do Aprendizado Vivo: {score_aprendizado}\n- Geometria: {saturacao}\n- Resolução Final: {justificativa_final}\n")
+        return {"sinal": sinal_final, "justificativa": justificativa_final, "memoria": output_memoria, "chance_branco": chance_branco, "atraso_branco": casas_atraso, "geometria": saturacao}
 
 class LeitorXLS:
     def __init__(self, caminho_arquivo):
@@ -712,11 +653,7 @@ class LeitorXLS:
             try: df = pd.read_excel(self.caminho)
             except: df = pd.read_csv(self.caminho)
             df.columns = [str(col).strip().lower() for col in df.columns]
-            mapeamento_colunas = {
-                'val': 'numero', 'value': 'numero', 'num': 'numero', 'number': 'numero',
-                'resultado': 'numero', 'roll': 'numero', 'giro': 'numero', 'spin': 'numero',
-                'color': 'cor', 'cor': 'cor', 'result': 'cor'
-            }
+            mapeamento_colunas = {'val': 'numero', 'value': 'numero', 'num': 'numero', 'number': 'numero', 'resultado': 'numero', 'roll': 'numero', 'giro': 'numero', 'spin': 'numero', 'color': 'cor', 'cor': 'cor', 'result': 'cor'}
             df = df.rename(columns=mapeamento_colunas)
             colunas_atuais = df.columns.tolist()
             col_numero, col_cor = None, None
