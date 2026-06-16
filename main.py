@@ -32,7 +32,7 @@ class MotorNoCall:
 
 
 # ============================================================
-# IAPreditivaV1 - Analista Probabilístico do Double
+# IAPreditivaV1 - COM AJUSTES ESTATÍSTICOS DE SEQUÊNCIAS LONGAS
 # ============================================================
 class IAPreditivaV1:
     def __init__(self, dados_longo_prazo, dados_recencia=None):
@@ -147,6 +147,39 @@ class IAPreditivaV1:
         v_bonus += concordancia * 0.7
         p_bonus += concordancia * 0.7
 
+        # ============================================================
+        # NOVO: Bônus estatístico baseado em sequências longas
+        # ============================================================
+        streak = 0
+        for cor in reversed(sub_pol):
+            if cor == sub_pol[-1]:
+                streak += 1
+            else:
+                break
+
+        xadrez_len = 0
+        for i in range(len(sub_pol)-1, 0, -1):
+            if sub_pol[i] != sub_pol[i-1]:
+                xadrez_len += 1
+            else:
+                break
+
+        # Bônus de inversão após streak longo (baseado na análise estatística)
+        if streak >= 5:
+            if sub_pol[-1] == 'V':
+                p_bonus += 18
+            else:
+                v_bonus += 18
+
+        # Bônus após Xadrez longo quebrando
+        if xadrez_len >= 5:
+            expected = 'P' if sub_pol[-1] == 'V' else 'V'
+            if sub_pol[-1] != expected:  # quebrou
+                if sub_pol[-1] == 'V':
+                    v_bonus += 22
+                else:
+                    p_bonus += 22
+
         has_rec = len(self.dados_recencia) > 0
         p_trans = 0.22 if has_rec else 0.17
         p_num = 0.18 if has_rec else 0.16
@@ -170,13 +203,14 @@ class IAPreditivaV1:
 
 
 # ============================================================
-# JuizHierarquicoModificado - Analista (regras como cenários)
+# JuizHierarquicoModificado - COM SUPORTE A PADRÕES LONGOS
 # ============================================================
 class JuizHierarquicoModificado:
     @staticmethod
     def arbitrar_sinal(no_call_ativo, motivo_nc, expectations, inclinacao_num, geometria_mercado, 
                        previsao_ia, status_inversao, historico_revalida_regras, 
-                       modo_mercado="NEUTRO", xadrez_quebrado=False):
+                       modo_mercado="NEUTRO", xadrez_quebrado=False,
+                       streak_atual=0, xadrez_len=0, xadrez_quebrou=False):
         
         if no_call_ativo:
             return "NO CALL", motivo_nc, "SISTEMA_TRAVADO"
@@ -186,8 +220,17 @@ class JuizHierarquicoModificado:
 
         direcao_ia, confianca_ia = previsao_ia
 
+        # Xadrez Quebrado normal (mantido)
         if xadrez_quebrado and direcao_ia != "NEUTRO" and confianca_ia >= 53:
             return direcao_ia, f"Xadrez Quebrado + IA ({confianca_ia:.1f}%)", "XADREZ_FORTE"
+
+        # NOVO: Inversão forte após Xadrez longo quebrando
+        if xadrez_len >= 5 and xadrez_quebrou and direcao_ia != "NEUTRO":
+            return direcao_ia, f"Xadrez {xadrez_len} quebrou + IA", "XADREZ_INVERSAO_FORTE"
+
+        # NOVO: Inversão após streak longo
+        if streak_atual >= 6 and direcao_ia != "NEUTRO":
+            return direcao_ia, f"Inversão após streak {streak_atual}", "STREAK_INVERSAO"
 
         if expectations:
             forcas = {"VERMELHO": 0.0, "PRETO": 0.0}
@@ -433,17 +476,30 @@ class MotorV1Completo:
             direcao_ia, conf_ia = self.ia.predizer_proxima_casa(sub_num, sub_pol)
             modo_mercado = AnalisadorContextoAvancado.detectar_modo_mercado(sub_pol)
 
+            # NOVO: Calcular streak e xadrez_len para passar ao Juiz
+            streak = 0
+            for c in reversed(sub_pol):
+                if c == sub_pol[-1]: streak += 1
+                else: break
+
+            xadrez_len = 0
+            for i in range(len(sub_pol)-1, 0, -1):
+                if sub_pol[i] != sub_pol[i-1]:
+                    xadrez_len += 1
+                else:
+                    break
+            xadrez_quebrou = (sub_pol[-1] == sub_pol[-2]) if len(sub_pol) >= 2 else False
+
             sinal, justificativa, regra_id = JuizHierarquicoModificado.arbitrar_sinal(
                 nc_ativo, motivo_nc, expectativas, inclinacao, geometria, 
                 (direcao_ia, conf_ia), status_inv, self.historico_regras,
-                modo_mercado=modo_mercado
+                modo_mercado=modo_mercado,
+                streak_atual=streak,
+                xadrez_len=xadrez_len,
+                xadrez_quebrou=xadrez_quebrou
             )
 
             if sinal != "NO CALL":
-                streak = 0
-                for c in reversed(sub_pol):
-                    if c == sub_pol[-1]: streak += 1
-                    else: break
                 if streak >= 6:
                     if direcao_ia != sinal:
                         sinal = "NO CALL"
@@ -542,12 +598,29 @@ class ProcessadorTipoB:
         direcao_ia, conf = ia.predizer_proxima_casa(self.entrada, self.polaridades)
         modo_mercado = AnalisadorContextoAvancado.detectar_modo_mercado(self.polaridades)
 
+        # NOVO: Calcular streak e xadrez para Tipo B
+        streak = 0
+        for c in reversed(self.polaridades):
+            if c == self.polaridades[-1]: streak += 1
+            else: break
+
+        xadrez_len = 0
+        for i in range(len(self.polaridades)-1, 0, -1):
+            if self.polaridades[i] != self.polaridades[i-1]:
+                xadrez_len += 1
+            else:
+                break
+        xadrez_quebrou = (self.polaridades[-1] == self.polaridades[-2]) if len(self.polaridades) >= 2 else False
+
         sinal, justificativa, _ = JuizHierarquicoModificado.arbitrar_sinal(
             nc_ativo, motivo, expectativas, inclinacao, 
             AnalisadorContextoAvancado.mapear_padroes_geometria(self.polaridades),
             (direcao_ia, conf), (False, "NORMAL", ""), 
             defaultdict(lambda: {"acertos":1, "total":1}),
-            modo_mercado=modo_mercado
+            modo_mercado=modo_mercado,
+            streak_atual=streak,
+            xadrez_len=xadrez_len,
+            xadrez_quebrou=xadrez_quebrou
         )
 
         memoria_texto = (
@@ -621,8 +694,8 @@ class EngineMatematicoAvancado:
         desvio_v = round(pct_v - 46.67, 2)
         desvio_p = round(pct_p - 46.67, 2)
         
-        vies = "SURFE DE MACROFREQUÊNCIA: VIÉS PARA VERMELHO ATIVO" if pct_v >= 53.0 else \
-               ("SURFE DE MACROFREQUÊNCIA: VIÉS PARA PRETO ATIVO" if pct_p >= 53.0 else "MACROANÁLISE EQUILIBRADA")
+        vies = "SURFE DE MACROFREQUÊNCIA: VIÁS PARA VERMELHO ATIVO" if pct_v >= 53.0 else \
+               ("SURFE DE MACROFREQUÊNCIA: VIÁS PARA PRETO ATIVO" if pct_p >= 53.0 else "MACROANÁLISE EQUILIBRADA")
         
         return {
             "frequencia_v": round(pct_v, 2),
