@@ -152,7 +152,7 @@ class MotorContagensProjetivas:
         elif par_fechamento in continuidade_vermelha_validas:
             lista_bruta.append({
                 "direcao": "VERMELHO", 
-                "tipo_regra": "V2_CONTINUIDADE_VERMELHA", 
+                "tipo_regra": "V2_CONTINUIDADE_VERVELHA", 
                 "origem": f"Volume 2: Continuidade Numérica Vermelha {par_fechamento[0]}-{par_fechamento[1]} até G1"
             })
 
@@ -179,6 +179,67 @@ class MotorContagensProjetivas:
             lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V12_RESIDUO_10", "origem": "Volume 12: Cap 2 - Resíduo do 10"})
         elif sub_num[10] == 5 and sub_num[11] == 10:
             lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V12_ACOPLAMENTO_5_10", "origem": "Volume 12: Cap 4 - Acoplamento 5-10"})
+
+        # =========================================================================
+        # 4. VOLUME 6: ANÁLISE DE PADRÕES DE POLARIDADES COMPLETA (NÍVEL 8 HIERÁRQUICO)
+        # =========================================================================
+        texto_pol = "".join(sub_pol)
+        
+        # Correção da Janela 21: Mapeamento de Espelhamento Inverso Complexo (Alternância -> Retenção -> Alternância)
+        if "PVPV" in texto_pol and "VVV" in texto_pol and texto_pol.endswith("PVPV"):
+            lista_bruta.append({
+                "direcao": "PRETO", 
+                "tipo_regra": "V6_ESPELHAMENTO_INVERSO_COMPLEXO", 
+                "origem": "Volume 6: Cap 5 - Saturação VVV cercada por estruturas Xadrez. Projeta bloco simétrico em PRETO"
+            })
+        elif "VPVP" in texto_pol and "PPP" in texto_pol and texto_pol.endswith("VPVP"):
+            lista_bruta.append({
+                "direcao": "VERMELHO", 
+                "tipo_regra": "V6_ESPELHAMENTO_INVERSO_COMPLEXO", 
+                "origem": "Volume 6: Cap 5 - Saturação PPP cercada por estruturas Xadrez. Projeta bloco simétrico em VERMELHO"
+            })
+
+        # Ciclo de Alternância de Fechamento (Xadrez Ativo — Cap 6)
+        if texto_pol.endswith("PVPV"):
+            lista_bruta.append({
+                "direcao": "PRETO",
+                "tipo_regra": "V6_XADREZ_ATIVO",
+                "origem": "Volume 6: Cap 6 - Ciclo de Alternância Ativa de Fechamento (Xadrez) projeta PRETO"
+            })
+        elif texto_pol.endswith("VPVP"):
+            lista_bruta.append({
+                "direcao": "VERMELHO",
+                "tipo_regra": "V6_XADREZ_ATIVO",
+                "origem": "Volume 6: Cap 6 - Ciclo de Alternância Ativa de Fechamento (Xadrez) projeta VERMELHO"
+            })
+
+        # Falsa Quebra de Fechamento (Capítulo 8)
+        if texto_pol.endswith("PPVP"):
+            lista_bruta.append({
+                "direcao": "PRETO",
+                "tipo_regra": "V6_FALSA_QUEBRA",
+                "origem": "Volume 6: Cap 8 - Falsa Quebra detectada com retorno à sustentação PRETA"
+            })
+        elif texto_pol.endswith("VVPV"):
+            lista_bruta.append({
+                "direcao": "VERMELHO",
+                "tipo_regra": "V6_FALSA_QUEBRA",
+                "origem": "Volume 6: Cap 8 - Falsa Quebra detectada com retorno à sustentação VERMELHA"
+            })
+
+        # Espelho Curto (Capítulo 4)
+        if texto_pol.endswith("VPV"):
+            lista_bruta.append({
+                "direcao": "PRETO",
+                "tipo_regra": "V6_ESPELHO_CURTO",
+                "origem": "Volume 6: Cap 4 - Estrutura de Espelho V-P-V exigindo retorno simétrico em PRETO"
+            })
+        elif texto_pol.endswith("PVP"):
+            lista_bruta.append({
+                "direcao": "VERMELHO",
+                "tipo_regra": "V6_ESPELHO_CURTO",
+                "origem": "Volume 6: Cap 4 - Estrutura de Espelho P-V-P exigindo retorno simétrico em VERMELHO"
+            })
 
         return lista_bruta
 
@@ -315,8 +376,6 @@ class JuizHierarquicoModificado:
         if direcao_ia != "NEUTRO" and confianca_ia >= 62.0: return direcao_ia, f"IA Preditiva: {confianca_ia:.1f}%", "IA_PREDITIVA"
         if direcao_ia != "NEUTRO": return direcao_ia, f"Vetor Recente IA: {direcao_ia} ({confianca_ia:.1f}%)", "IA_VETOR"
         
-        # CORREÇÃO CRÍTICA DO FALLBACK (ZONAS DE SATURAÇÃO / EVITAR CHUTE): 
-        # Em conformidade com o Volume 20, dúvidas ou empates sem regra geram NO CALL.
         return "NO CALL", "Volume 20: Ausência de Consenso Hierárquico Estrutural", "SISTEMA_TRAVADO"
 
 class MotorV1Completo:
@@ -356,14 +415,11 @@ class MotorV1Completo:
                 nc_ativo, motivo_nc, expectativas, inclinacao_num, geometria, previsao_ia, status_inv, self.historico_regras
             )
 
-            # =========================================================================
-            # INTEGRACAO ADITIVA: FILTROS MATEMÁTICOS DE SEGURANÇA (AUDITORIA)
-            # =========================================================================
             if expectativa_final != "NO CALL":
                 ultima_cor_seq = sub_pol[-1] if sub_pol else ""
                 streak_atual = 0
-                for cor_f in reversed(sub_pol):
-                    if cor_f == ultima_cor_seq: streak_atual += 1
+                for col_f in reversed(sub_pol):
+                    if col_f == ultima_cor_seq: streak_atual += 1
                     else: break
                 if streak_atual >= 5 and expectativa_final == ("VERMELHO" if ultima_cor_seq == "V" else "PRETO"):
                     expectativa_final = "NO CALL"
@@ -396,8 +452,8 @@ class MotorV1Completo:
                 salto = 1
             else:
                 letra_esperada = "V" if expectativa_final == "VERMELHO" else "P"
-                for g_idx, cor_real in enumerate(correcoes_reais):
-                    if cor_real == letra_esperada or cor_real == "B":
+                for g_idx, col_real in enumerate(correcoes_reais):
+                    if col_real == letra_esperada or col_real == "B":
                         classificacao = f"G{g_idx}"
                         salto = g_idx + 1
                         break
@@ -498,14 +554,11 @@ class ProcessadorTipoB:
                 nc_ativo, motivo_nc, expectativas, inclinacao_num, saturacao, previsao_ia, status_inv, regras_b
             )
 
-            # =========================================================================
-            # INTEGRACAO ADITIVA: FILTROS MATEMÁTICOS DE SEGURANÇA (SINAL TEMPO REAL)
-            # =========================================================================
             if sinal_ciclo != "NO CALL":
                 ultima_cor_seq = self.polaridades_usuario[-1] if self.polaridades_usuario else ""
                 streak_atual = 0
-                for cor_f in reversed(self.polaridades_usuario):
-                    if cor_f == ultima_cor_seq: streak_atual += 1
+                for col_f in reversed(self.polaridades_usuario):
+                    if col_f == ultima_cor_seq: streak_atual += 1
                     else: break
                 if streak_atual >= 5 and sinal_ciclo == ("VERMELHO" if ultima_cor_seq == "V" else "PRETO"):
                     sinal_ciclo = "NO CALL"
@@ -589,11 +642,11 @@ class LeitorXLS:
             for _, l in df_cronologico.iterrows():
                 try:
                     num_val = int(l["numero"])
-                    if num_val in LEGENDA_BRANCO: cor_final = 'B'
-                    elif num_val in LEGENDA_VERMELHO: cor_final = 'V'
-                    elif num_val in LEGENDA_PRETO: cor_final = 'P'
+                    if num_val in LEGENDA_BRANCO: col_final = 'B'
+                    elif num_val in LEGENDA_VERMELHO: col_final = 'V'
+                    elif num_val in LEGENDA_PRETO: col_final = 'P'
                     else: continue
-                    dados_limpos.append({"numero": num_val, "cor": cor_final})
+                    dados_limpos.append({"numero": num_val, "cor": col_final})
                 except: continue
             return dados_limpos if dados_limpos else None
         except: return None
