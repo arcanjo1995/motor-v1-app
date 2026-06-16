@@ -3,7 +3,7 @@ import pandas as pd
 from collections import defaultdict
 
 # ============================================================
-# MotorNoCall - MANTIDO IGUAL
+# MotorNoCall - NUNCA ALTERADO
 # ============================================================
 class MotorNoCall:
     @staticmethod
@@ -363,7 +363,6 @@ class AnalisadorContextoAvancado:
         chance = "ALTA" if atraso >= 15 or taxa >= 18 else ("MÉDIA" if atraso >= 8 else "BAIXA")
         return chance, atraso
 
-    # === NOVO: Detecção de Modo de Mercado ===
     @staticmethod
     def detectar_modo_mercado(sub_pol):
         texto = "".join(sub_pol)
@@ -377,7 +376,7 @@ class AnalisadorContextoAvancado:
 
 
 # ============================================================
-# JuizHierarquicoModificado - MELHORADO (com parâmetros opcionais)
+# JuizHierarquicoModificado - MELHORADO (mantendo nomenclatura)
 # ============================================================
 class JuizHierarquicoModificado:
     @staticmethod
@@ -394,7 +393,7 @@ class JuizHierarquicoModificado:
         direcao_ia, confianca_ia = previsao_ia
         direcao_inclinacao, porc = inclinacao_num
 
-        # Bônus de Xadrez Quebrado (inspirado no prompt)
+        # Bônus de Xadrez Quebrado (feature forte)
         if xadrez_quebrado and direcao_ia != "NEUTRO" and confianca_ia >= 54:
             return direcao_ia, f"Xadrez Quebrado + IA ({confianca_ia:.1f}%)", "XADREZ_REGRA_OURO"
 
