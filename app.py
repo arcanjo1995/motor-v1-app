@@ -77,21 +77,14 @@ with aba_tipo_b:
                 st.caption(f"Origem: {st.session_state.justificativa_pendente}")
                 
                 # =========================================================================
-                # ENGENHARIA COMPLEMENTAR ADITIVA — ANÁLISE MATEMÁTICA EM TEMPO REAL
+                # EXIBIÇÃO VISUAL COMPLEMENTAR DAS MÉTRICAS INTEGRADAS
                 # =========================================================================
                 st.write("---")
                 st.subheader("📈 Métricas Estatísticas e Gestão Matemática Avançada")
                 
                 with st.expander("Visualizar Análise de Desvio Padrão e Split-Stake", expanded=True):
-                    # 1. Cálculo de Raridade de Sequências (Binomial)
-                    analise_raridade = EngineMatematicoAvancado.calcular_raridade_sequencia(
-                        st.session_state.polaridades_usuario if 'polaridades_usuario' in locals() else [('B' if n == 0 else ('V' if 1 <= n <= 7 else 'P')) for n in st.session_state.sequencia_em_uso]
-                    )
-                    
-                    # 2. Cálculo do Viés de Surfe Macro (Últimas 100 rodadas)
+                    analise_raridade = EngineMatematicoAvancado.calcular_raridade_sequencia([('B' if n == 0 else ('V' if 1 <= n <= 7 else 'P')) for n in st.session_state.sequencia_em_uso])
                     analise_surfe = EngineMatematicoAvancado.calcular_vies_surfe(NOME_BASE_DEFINITIVA, janela=100)
-                    
-                    # 3. Cálculo de Split-Stake Dinâmico
                     gestao_financeira = EngineMatematicoAvancado.simular_split_stake_cobertura(stake_principal=10.0)
                     
                     met1, met2, met3 = st.columns(3)
@@ -104,16 +97,16 @@ with aba_tipo_b:
                         st.metric(label="Desvio Real Preto (Macro)", value=f"{analise_surfe['desvio_p']}%", delta=f"{analise_surfe['desvio_p']}% vs Teórico")
                         
                     st.code(
-                        f"[DIAGNÓSTICO DO ALGORITMO]:\n"
-                        f"- Anomalia Curto Prazo: {analise_raridade['status']}\n"
-                        f"- Comportamento Macro (100 Giros): {analise_surfe['vies']}\n"
-                        f"  Frequências Reais -> V: {analise_surfe['frequencia_v']}% | P: {analise_surfe['frequencia_p']}% | B: {analise_surfe['frequencia_b']}%\n\n"
-                        f"[REQUISITOS FINANCEIROS MATEMÁTICOS DE SINAL (Calculado para Base R$10)]:\n"
-                        f"- Valor Esperado Fixo (House Edge): {gestao_financeira['house_edge_estatico']}\n"
-                        f"- Entrada Recomendada na Cor: R$ {gestao_financeira['stake_cor']:.2f}\n"
-                        f"- Proteção Ideal no Branco (Retorno Líquido Eficiente): R$ {gestao_financeira['cobertura_b_ideal_1_7']:.2f}\n"
-                        f"- Custo de Operação Protegido: R$ {gestao_financeira['custo_total_operacao']:.2f}\n"
-                        f"- Lucro Líquido se Bater Branco (0): R$ {gestao_financeira['lucro_liquido_se_der_branco']:.2f}",
+                        f"[DIAGNÓSTICO REAL-TIME DO ALGORITMO]:\n"
+                        f"- Filtro Binomial Curtíssimo: {analise_raridade['status']}\n"
+                        f"- Comportamento Macro Estendido (100 Giros): {analise_surfe['vies']}\n"
+                        f"  Amostragem Real -> V: {analise_surfe['frequencia_v']}% | P: {analise_surfe['frequencia_p']}% | B: {analise_surfe['frequencia_b']}%\n\n"
+                        f"[GERENCIAMENTO FINANCEIRO INTEGRADO (Base Padrão R$10)]:\n"
+                        f"- Valor Esperado Teórico (House Edge): {gestao_financeira['house_edge_estatico']}\n"
+                        f"- Entrada na Cor Indicada: R$ {gestao_financeira['stake_cor']:.2f}\n"
+                        f"- Cobertura Protegida no Branco: R$ {gestao_financeira['cobertura_b_ideal_1_7']:.2f}\n"
+                        f"- Desembolso Total Calculado: R$ {gestao_financeira['custo_total_operacao']:.2f}\n"
+                        f"- Retorno Líquido no Branco (0): R$ {gestao_financeira['lucro_liquido_se_der_branco']:.2f}",
                         language="text"
                     )
                 
@@ -204,6 +197,6 @@ with aba_tipo_d:
             try:
                 if os.path.exists(NOME_BASE_DEFINITIVA): os.remove(NOME_BASE_DEFINITIVA)
                 with open(NOME_BASE_DEFINITIVA, "wb") as f: f.write(arquivo_upload.getbuffer())
-                st.success(f"Sucesso! Base Histórica updated.")
+                st.success(f"Sucesso! Base Histórica atualizada.")
             except Exception as e: st.error(f"Erro ao salvar arquivo base: {e}")
             if os.path.exists(caminho_temp): os.remove(caminho_temp)
