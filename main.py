@@ -8,26 +8,22 @@ from collections import defaultdict
 class MotorNoCall:
     @staticmethod
     def checar_no_call(sub_num, sub_pol):
-        # Duplas (mantido)
         cenarios_duplas = [(7, 8), (8, 9), (9, 10), (10, 11)]
         for idx1, idx2 in cenarios_duplas:
             if sub_num[idx1] == sub_num[idx2]:
                 return True, "Volume 2 Cap 6: Trava das Duplas Ativa"
 
-        # NÚMERO 6 - Posições críticas atualizadas
-        posicoes_criticas_6 = [3, 4, 5, 8, 9, 10, 11]   # ← ADICIONADO 3 e 4
+        posicoes_criticas_6 = [3, 4, 5, 8, 9, 10, 11]
         for pos in posicoes_criticas_6:
             if sub_num[pos] == 6:
                 return True, "Volume 2 Cap 4: Trava Número 6 (Posição de No Call Ativa)"
 
-        # NÚMERO 2 (mantido)
         posicoes_criticas_2 = [8, 9, 10, 11]
         for pos in posicoes_criticas_2:
             if sub_num[pos] == 2:
                 return True, "Volume 2 Cap 3: Trava Número 2"
 
-        # BRANCO - Posições críticas atualizadas
-        posicoes_criticas_b = [3, 4, 5, 8, 9, 10, 11]   # ← ADICIONADO 3 e 4
+        posicoes_criticas_b = [3, 4, 5, 8, 9, 10, 11]
         for pos in posicoes_criticas_b:
             if sub_pol[pos] == "B":
                 return True, "Volume 2 Cap 5: Trava do Branco"
@@ -36,7 +32,7 @@ class MotorNoCall:
 
 
 # ============================================================
-# IAPreditivaV1 (mantida igual)
+# IAPreditivaV1
 # ============================================================
 class IAPreditivaV1:
     def __init__(self, dados_longo_prazo, dados_recencia=None):
@@ -202,12 +198,21 @@ class IAPreditivaV1:
         
         v_bonus = stats_v7["freq_v"] * 3.5
         p_bonus = stats_v7["freq_p"] * 3.5
+        
         if stats_v7.get("estabilidade") == "VERMELHO": v_bonus += 30.0
         if stats_v7.get("estabilidade") == "PRETO": p_bonus += 30.0
         if "SATURADO (VERMELHO)" in stats_v7.get("saturacao", ""): v_bonus += 40.0
         if "SATURADO (PRETO)" in stats_v7.get("saturacao", ""): p_bonus += 40.0
         if stats_v7.get("consequencia_dominante") == "VERMELHO": v_bonus += 25.0
         if stats_v7.get("consequencia_dominante") == "PRETO": p_bonus += 25.0
+
+        # === NOVO: Bônus extra quando Unidade de Análise está estável ===
+        max_freq = max(stats_v7["freq_v"], stats_v7["freq_p"], stats_v7["freq_b"])
+        if stats_v7.get("estabilidade") in ["VERMELHO", "PRETO"] and max_freq >= 65:
+            if stats_v7.get("estabilidade") == "VERMELHO":
+                v_bonus += 15
+            else:
+                p_bonus += 15
         
         has_recencia = len(self.dados_recencia) > 0 or len(self.modelo_transicao) > 0
         p_transicao = 0.20 if has_recencia else 0.15
@@ -224,7 +229,8 @@ class IAPreditivaV1:
         prob_v = (total_v / soma_pesos) * 100
         prob_p = (total_p / soma_pesos) * 100
         
-        BARREIRA_CONFIA_IA = 62.0
+        # === AJUSTE: Barreira reduzida de 62% para 58% ===
+        BARREIRA_CONFIA_IA = 58.0
         if prob_v >= BARREIRA_CONFIA_IA and prob_v > prob_p: return "VERMELHO", prob_v
         elif prob_p >= BARREIRA_CONFIA_IA and prob_p > prob_v: return "PRETO", prob_p
         return "NEUTRO", max(prob_v, prob_p)
@@ -357,6 +363,9 @@ class AnalisadorContextoAvancado:
         return chance, atraso
 
 
+# ============================================================
+# JuizHierarquicoModificado - MELHORADO
+# ============================================================
 class JuizHierarquicoModificado:
     @staticmethod
     def arbitrar_sinal(no_call_ativo, motivo_nc, expectations, inclinacao_num, geometria_mercado, previsao_ia, status_inversao, historico_revalida_regras):
@@ -366,7 +375,6 @@ class JuizHierarquicoModificado:
         if geometria_mercado == "CICLO_FECHADO_VPPV": return "PRETO", "Geometria VPPV", "GEOMETRIA"
         if geometria_mercado == "CICLO_FECHADO_PVVP": return "VERMELHO", "Geometria PVVP", "GEOMETRIA"
 
-        risco_ativo, tipo_inversao, justificativa_inv = status_inversao
         direcao_ia, confianca_ia = previsao_ia
         direcao_inclinacao, porc = inclinacao_num
 
@@ -380,16 +388,25 @@ class JuizHierarquicoModificado:
             
             if forcas["VERMELHO"] != forcas["PRETO"]:
                 dominante = "VERMELHO" if forcas["VERMELHO"] > forcas["PRETO"] else "PRETO"
-                if direcao_ia != "NEUTRO" and direcao_ia != dominante and confianca_ia > 65.0:
-                    return direcao_ia, f"IA assume por contradição ({confianca_ia:.1f}%)", "IA_ARBITRAGEM_CHOQUE"
+                
+                # Se IA concorda com as regras e tem confiança razoável
+                if direcao_ia == dominante and confianca_ia >= 56:
+                    return dominante, f"Regras + IA ({confianca_ia:.1f}%)", "REGRAS_IA"
+                
+                # Se IA discorda, mas tem boa confiança → deixa IA decidir
+                if direcao_ia != dominante and confianca_ia >= 58:
+                    return direcao_ia, f"IA assume por contradição ({confianca_ia:.1f}%)", "IA_ARBITRAGEM"
+
                 return dominante, "Dominância de regras", "REGRAS"
 
-        if direcao_ia != "NEUTRO" and confianca_ia >= 62.0:
+        # IA agora consegue decidir com 58% de confiança
+        if direcao_ia != "NEUTRO" and confianca_ia >= 58.0:
             return direcao_ia, f"IA Preditiva ({confianca_ia:.1f}%)", "IA_PREDITIVA"
-        if direcao_inclinacao != "NEUTRO" and porc >= 60.0:
+        
+        if direcao_inclinacao != "NEUTRO" and porc >= 58.0:
             return direcao_inclinacao, f"Matriz Pós-Número ({porc:.1f}%)", "MATRIZ_INCLINA"
 
-        return "NO CALL", "Ausência de consenso", "SISTEMA_TRAVADO"
+        return "NO CALL", "Ausência de consenso claro", "SISTEMA_TRAVADO"
 
 
 class LeitorXLS:
@@ -429,7 +446,7 @@ class LeitorXLS:
 
 
 # ============================================================
-# MotorV1Completo (mantido)
+# MotorV1Completo
 # ============================================================
 class MotorV1Completo:
     def __init__(self, lista_dados_xls):
@@ -478,10 +495,12 @@ class MotorV1Completo:
                 for c in reversed(sub_pol):
                     if c == sub_pol[-1]: streak += 1
                     else: break
-                if streak >= 5:
-                    sinal = "NO CALL"
-                    justificativa = f"Veto de streak {streak}x"
-                    regra_id = "VETO_STREAK"
+                # === AJUSTE: Streak veto mais inteligente ===
+                if streak >= 6:
+                    if direcao_ia != sinal:
+                        sinal = "NO CALL"
+                        justificativa = f"Veto de streak {streak}x (contra IA)"
+                        regra_id = "VETO_STREAK"
 
             correcoes = self.seq.polaridades[idx+12 : idx+15]
             classificacao = "FALHA"
@@ -548,7 +567,7 @@ class MotorV1Completo:
 
 
 # ============================================================
-# ProcessadorTipoB - COM AJUSTE DA CHAVE "memoria"
+# ProcessadorTipoB
 # ============================================================
 class ProcessadorTipoB:
     def __init__(self, sequencia_12_numeros, caminho_base_dados):
@@ -579,7 +598,6 @@ class ProcessadorTipoB:
             defaultdict(lambda: {"acertos":1, "total":1})
         )
 
-        # === CORREÇÃO: Agora retorna também a chave "memoria" ===
         memoria_texto = (
             f"[PROCESSAMENTO TIPO B]\n"
             f"Sequência: {self.entrada}\n"
@@ -594,7 +612,7 @@ class ProcessadorTipoB:
             "justificativa": justificativa,
             "confianca_ia": round(conf, 2),
             "no_call": nc_ativo,
-            "memoria": memoria_texto          # ← Chave que o app.py estava procurando
+            "memoria": memoria_texto
         }
 
 
@@ -674,6 +692,7 @@ class EngineMatematicoAvancado:
             "custo_total_operacao": round(custo_total, 2),
             "house_edge_estatico": "-6.67%"
         }
+
 
 # ============================================================
 # FIM DO CÓDIGO
