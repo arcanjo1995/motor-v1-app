@@ -243,17 +243,15 @@ class JuizHierarquicoModificado:
             forcas = {"VERMELHO": 0.0, "PRETO": 0.0}
             for item in expectations:
                 taxa = historico_revalida_regras[item["tipo_regra"]]["acertos"] / max(1, historico_revalida_regras[item["tipo_regra"]]["total"])
-                peso = 2.8 * (1.0 + taxa)   # Peso reduzido (era 3.2)
+                peso = 2.8 * (1.0 + taxa)
                 forcas[item["direcao"]] += peso
 
             if forcas["VERMELHO"] != forcas["PRETO"]:
                 dominante = "VERMELHO" if forcas["VERMELHO"] > forcas["PRETO"] else "PRETO"
 
-                # Só segue a regra se a IA também estiver alinhada ou com confiança alta
                 if direcao_ia == dominante and confianca_ia >= 53:
                     return dominante, f"Confluência (Regra + IA)", "CONFLUENCIA_REGRA_IA"
                 
-                # Se a IA discorda, só aceita a regra se ela for muito forte
                 if direcao_ia != dominante and confianca_ia >= 58:
                     return direcao_ia, f"IA sobrepõe regra ({confianca_ia:.1f}%)", "IA_ARBITRAGEM"
 
@@ -267,6 +265,7 @@ class JuizHierarquicoModificado:
         # 6. Sem confluência suficiente → NO CALL
         # ============================================================
         return "NO CALL", "Sem confluência clara entre contexto, IA e regras", "SISTEMA_TRAVADO"
+
 
 # ============================================================
 # SequenciaOperacional
