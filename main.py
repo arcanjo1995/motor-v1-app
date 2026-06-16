@@ -547,6 +547,9 @@ class MotorV1Completo:
         return output
 
 
+# ============================================================
+# ProcessadorTipoB - COM AJUSTE DA CHAVE "memoria"
+# ============================================================
 class ProcessadorTipoB:
     def __init__(self, sequencia_12_numeros, caminho_base_dados):
         self.entrada = sequencia_12_numeros
@@ -576,11 +579,22 @@ class ProcessadorTipoB:
             defaultdict(lambda: {"acertos":1, "total":1})
         )
 
+        # === CORREÇÃO: Agora retorna também a chave "memoria" ===
+        memoria_texto = (
+            f"[PROCESSAMENTO TIPO B]\n"
+            f"Sequência: {self.entrada}\n"
+            f"Sinal Gerado: {sinal}\n"
+            f"Justificativa: {justificativa}\n"
+            f"Confiança da IA: {round(conf, 2)}%\n"
+            f"No Call Ativo: {nc_ativo}"
+        )
+
         return {
             "sinal": sinal,
             "justificativa": justificativa,
             "confianca_ia": round(conf, 2),
-            "no_call": nc_ativo
+            "no_call": nc_ativo,
+            "memoria": memoria_texto          # ← Chave que o app.py estava procurando
         }
 
 
