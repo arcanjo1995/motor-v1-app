@@ -199,7 +199,7 @@ class IAPreditivaV1:
 
 
 # ============================================================
-# JuizHierarquicoModificado - COM SUPORTE A PADRÕES LONGOS
+# JuizHierarquicoModificado - LÓGICA DE ANALISTA (Contexto + Probabilidade primeiro)
 # ============================================================
 class JuizHierarquicoModificado:
     @staticmethod
@@ -208,43 +208,65 @@ class JuizHierarquicoModificado:
                        modo_mercado="NEUTRO", xadrez_quebrado=False,
                        streak_atual=0, xadrez_len=0, xadrez_quebrou=False):
         
+        # 1. NO CALL tem prioridade absoluta
         if no_call_ativo:
             return "NO CALL", motivo_nc, "SISTEMA_TRAVADO"
 
-        if geometria_mercado == "CICLO_FECHADO_VPPV": return "PRETO", "Geometria VPPV", "GEOMETRIA"
-        if geometria_mercado == "CICLO_FECHADO_PVVP": return "VERMELHO", "Geometria PVVP", "GEOMETRIA"
+        # 2. Padrões geométricos fortes ainda têm prioridade
+        if geometria_mercado == "CICLO_FECHADO_VPPV": 
+            return "PRETO", "Geometria VPPV (Alta Confluência)", "GEOMETRIA"
+        if geometria_mercado == "CICLO_FECHADO_PVVP": 
+            return "VERMELHO", "Geometria PVVP (Alta Confluência)", "GEOMETRIA"
 
         direcao_ia, confianca_ia = previsao_ia
 
-        if xadrez_quebrado and direcao_ia != "NEUTRO" and confianca_ia >= 53:
+        # ============================================================
+        # 3. LÓGICA DE ANALISTA: Contexto + Reversão primeiro
+        # ============================================================
+
+        # Prioridade alta para reversão após Xadrez longo quebrando
+        if xadrez_len >= 5 and xadrez_quebrou and direcao_ia != "NEUTRO":
+            return direcao_ia, f"Xadrez {xadrez_len} quebrou → Reversão", "XADREZ_REVERSAO_FORTE"
+
+        # Prioridade alta para reversão após streak longo
+        if streak_atual >= 5 and direcao_ia != "NEUTRO":
+            return direcao_ia, f"Reversão após streak {streak_atual}", "STREAK_REVERSAO"
+
+        # Xadrez Quebrado normal (mantido como reforço)
+        if xadrez_quebrado and direcao_ia != "NEUTRO" and confianca_ia >= 52:
             return direcao_ia, f"Xadrez Quebrado + IA ({confianca_ia:.1f}%)", "XADREZ_FORTE"
 
-        if xadrez_len >= 5 and xadrez_quebrou and direcao_ia != "NEUTRO":
-            return direcao_ia, f"Xadrez {xadrez_len} quebrou + IA", "XADREZ_INVERSAO_FORTE"
-
-        if streak_atual >= 6 and direcao_ia != "NEUTRO":
-            return direcao_ia, f"Inversão após streak {streak_atual}", "STREAK_INVERSAO"
-
+        # ============================================================
+        # 4. Regras do manual agora são apoio secundário
+        # ============================================================
         if expectations:
             forcas = {"VERMELHO": 0.0, "PRETO": 0.0}
             for item in expectations:
                 taxa = historico_revalida_regras[item["tipo_regra"]]["acertos"] / max(1, historico_revalida_regras[item["tipo_regra"]]["total"])
-                peso = 3.2 * (1.0 + taxa)
+                peso = 2.8 * (1.0 + taxa)   # Peso reduzido (era 3.2)
                 forcas[item["direcao"]] += peso
 
             if forcas["VERMELHO"] != forcas["PRETO"]:
                 dominante = "VERMELHO" if forcas["VERMELHO"] > forcas["PRETO"] else "PRETO"
-                if direcao_ia == dominante and confianca_ia >= 54:
-                    return dominante, f"Confluência Alta ({confianca_ia:.1f}%)", "CONFLUENCIA_BOA"
-                if direcao_ia != dominante and confianca_ia >= 56:
-                    return direcao_ia, f"IA assume ({confianca_ia:.1f}%)", "IA_ARBITRAGEM"
-                return dominante, "Regras dominantes", "REGRAS"
 
-        if direcao_ia != "NEUTRO" and confianca_ia >= 55:
+                # Só segue a regra se a IA também estiver alinhada ou com confiança alta
+                if direcao_ia == dominante and confianca_ia >= 53:
+                    return dominante, f"Confluência (Regra + IA)", "CONFLUENCIA_REGRA_IA"
+                
+                # Se a IA discorda, só aceita a regra se ela for muito forte
+                if direcao_ia != dominante and confianca_ia >= 58:
+                    return direcao_ia, f"IA sobrepõe regra ({confianca_ia:.1f}%)", "IA_ARBITRAGEM"
+
+        # ============================================================
+        # 5. Decisão final por IA (quando contexto não é forte)
+        # ============================================================
+        if direcao_ia != "NEUTRO" and confianca_ia >= 54:
             return direcao_ia, f"IA Preditiva ({confianca_ia:.1f}%)", "IA_PREDITIVA"
 
-        return "NO CALL", "Sem confluência suficiente", "SISTEMA_TRAVADO"
-
+        # ============================================================
+        # 6. Sem confluência suficiente → NO CALL
+        # ============================================================
+        return "NO CALL", "Sem confluência clara entre contexto, IA e regras", "SISTEMA_TRAVADO"
 
 # ============================================================
 # SequenciaOperacional
