@@ -325,7 +325,6 @@ class MotorV1Completo:
         janelas_auditadas = []
         stats = {"G0": 0, "G1": 0, "G2": 0, "FALHA": 0, "NO CALL": 0}
         
-        # MEDIDORES OFICIAIS DE ASSERTIVIDADE DA IA
         ia_total_predições = 0
         ia_acertos_reais = 0
 
@@ -341,42 +340,12 @@ class MotorV1Completo:
             num_fechamento = sub_num[-1]
             inclinacao_num = AnalisadorContextoAvancado.calcular_numerologia_pos_numero(num_fechamento, self.seq.total if 'self' not in locals() else self.seq.numerica, self.seq.polaridades)
             
-            # Captura a previsão crua isolada da IA para fins de auditoria de aprendizado
             direcao_ia_pura, conf_ia_pura = self.ia.predizer_proxima_casa(sub_num, sub_pol)
             previsao_ia = (direcao_ia_pura, conf_ia_pura)
             
             expectativa_final, justificativa, regra_ativa_id = JuizHierarquicoModificado.arbitrar_sinal(
                 nc_ativo, motivo_nc, expectativas, inclinacao_num, geometria, previsao_ia, status_inv, self.historico_regras
             )
-
-            # =========================================================================
-            # INTEGRACAO ADITIVA: FILTROS MATEMÁTICOS DE SEGURANÇA (AUDITORIA)
-            # =========================================================================
-            if expectativa_final != "NO CALL":
-                # 1. Filtro de Raridade Binomial Integrado
-                ultima_cor_seq = sub_pol[-1] if sub_pol else ""
-                streak_atual = 0
-                for cor_f in reversed(sub_pol):
-                    if cor_f == ultima_cor_seq: streak_atual += 1
-                    else: break
-                if streak_atual >= 5 and expectativa_final == ("VERMELHO" if ultima_cor_seq == "V" else "PRETO"):
-                    expectativa_final = "NO CALL"
-                    justificativa = f"VETO DE RARIDADE BINOMIAL: Sequência de {streak_atual}x {ultima_cor_seq} detectada. Operação abortada."
-                    regra_ativa_id = "VETO_BINOMIAL"
-                
-                # 2. Filtro de Surfe Macro Integrado
-                if expectativa_final != "NO CALL" and idx >= 100:
-                    historico_recente_100 = self.seq.polaridades[max(0, idx+12-100) : idx+12]
-                    freq_v_macro = (historico_recente_100.count("V") / len(historico_recente_100)) * 100
-                    freq_p_macro = (historico_recente_100.count("P") / len(historico_recente_100)) * 100
-                    if freq_v_macro >= 55.0 and expectativa_final == "PRETO":
-                        expectativa_final = "NO CALL"
-                        justificativa = f"FILTRO DE SURFE MACRO: Evitando operar contra tendência de VERMELHO ({freq_v_macro:.1f}%)."
-                        regra_ativa_id = "FILTRO_SURFE"
-                    elif freq_p_macro >= 55.0 and expectativa_final == "VERMELHO":
-                        expectativa_final = "NO CALL"
-                        justificativa = f"FILTRO DE SURFE MACRO: Evitando operar contra tendência de PRETO ({freq_p_macro:.1f}%)."
-                        regra_ativa_id = "FILTRO_SURFE"
 
             horizonte_max = min(3, self.seq.total - (idx + 12))
             if horizonte_max == 0: break
@@ -399,7 +368,6 @@ class MotorV1Completo:
                 if classificacao == "FALHA": salto = 3
                 stats[classificacao] += 1
 
-            # AUDITORIA INDEPENDENTE DO APRENDIZADO DA IA
             if direcao_ia_pura != "NEUTRO":
                 ia_total_predições += 1
                 letra_ia = "V" if direcao_ia_pura == "VERMELHO" else "P"
@@ -493,36 +461,6 @@ class ProcessadorTipoB:
             sinal_ciclo, justificativa_ciclo, regra_ativa_id = JuizHierarquicoModificado.arbitrar_sinal(
                 nc_ativo, motivo_nc, expectations, inclinacao_num, saturacao, previsao_ia, status_inv, regras_b
             )
-
-            # =========================================================================
-            # INTEGRACAO ADITIVA: FILTROS MATEMÁTICOS DE SEGURANÇA (SINAL TEMPO REAL)
-            # =========================================================================
-            if sinal_ciclo != "NO CALL":
-                # 1. Filtro de Raridade Binomial Ativo
-                ultima_cor_seq = self.polaridades_usuario[-1] if self.polaridades_usuario else ""
-                streak_atual = 0
-                for cor_f in reversed(self.polaridades_usuario):
-                    if cor_f == ultima_cor_seq: streak_atual += 1
-                    else: break
-                if streak_atual >= 5 and sinal_ciclo == ("VERMELHO" if ultima_cor_seq == "V" else "PRETO"):
-                    sinal_ciclo = "NO CALL"
-                    justificativa_ciclo = f"VETO DE RARIDADE BINOMIAL: Sequência de {streak_atual}x {ultima_cor_seq} esticada. Operação bloqueada para conter Gale."
-                    regra_ativa_id = "VETO_BINOMIAL"
-                
-                # 2. Filtro de Surfe Macro Ativo
-                if sinal_ciclo != "NO CALL" and len(pol_global) >= 100:
-                    ultimos_100_giros = pol_global[-100:]
-                    freq_v_macro = (ultimos_100_giros.count("V") / 100) * 100
-                    freq_p_macro = (ultimos_100_giros.count("P") / 100) * 100
-                    if freq_v_macro >= 55.0 and sinal_ciclo == "PRETO":
-                        sinal_ciclo = "NO CALL"
-                        justificativa_ciclo = f"FILTRO DE SURFE MACRO: Evitando operar contra tendência majoritária de VERMELHO ({freq_v_macro:.1f}% nos últimos 100 giros)."
-                        regra_ativa_id = "FILTRO_SURFE"
-                    elif freq_p_macro >= 55.0 and sinal_ciclo == "VERMELHO":
-                        sinal_ciclo = "NO CALL"
-                        justificativa_ciclo = f"FILTRO DE SURFE MACRO: Evitando operar contra tendência majoritária de PRETO ({freq_p_macro:.1f}% nos últimos 100 giros)."
-                        regra_ativa_id = "FILTRO_SURFE"
-
             if regra_ativa_id != "NENHUMA" and regra_ativa_id != "SISTEMA_TRAVADO":
                 regras_b[regra_ativa_id]["total"] += 1
                 regras_b[regra_ativa_id]["acertos"] += 1
@@ -532,10 +470,6 @@ class ProcessadorTipoB:
 
         chance_branco, casas_atraso = AnalisadorContextoAvancado.preditor_estatistico_branco(num_fechamento, num_global, pol_global)
         
-        # 3. Gestão Integrada de Alvo do Branco (Alerta de Protocolo se atraso for crítico)
-        if casas_atraso >= 25:
-            justificativa_final += f" | PROTOCOLO GESTÃO DO BRANCO ATIVO: {casas_atraso} rodadas de atraso. Executar divisão Split-Stake (1/7 da stake na cor principal)."
-
         total_testes_regras = sum([regras_b[k]["total"] for k in regras_b]) - len(regras_b)
         score_aprendizado = "ESTABILIZANDO" if total_testes_regras > 5 else "MAPEANDO NOVO CICLO"
 
@@ -598,41 +532,104 @@ class LeitorXLS:
         except: return None
 
 # =========================================================================
-# CLASSE DE OTIMIZAÇÃO ADITIVA EXTRA (USADA PELO APPMOBILE/PAINEL)
+# VOLUME 21: CAMADA COMPLEMENTAR DE INTELIGÊNCIA OBSERVACIONAL 
 # =========================================================================
 class EngineMatematicoAvancado:
     @staticmethod
     def calcular_raridade_sequencia(sub_pol):
-        if not sub_pol: return {"streak": 0, "probabilidade": 100.0, "status": "SEM DADOS"}
+        """
+        Mapeia a exaustão comportamental de curto prazo (Saturação Estrutural).
+        """
+        if not sub_pol:
+            return {"streak": 0, "probabilidade": 100.0, "status": "SEM DADOS"}
+        
         ultima_cor = sub_pol[-1]
-        if ultima_cor not in ['V', 'P']: return {"streak": 0, "probabilidade": 100.0, "status": "BRANCO RECENTE"}
+        if ultima_cor not in ['V', 'P']:
+            return {"streak": 0, "probabilidade": 100.0, "status": "BRANCO NO FECHAMENTO"}
+        
         streak = 0
         for cor in reversed(sub_pol):
-            if cor == ultima_cor: streak += 1
-            else: break
+            if cor == ultima_cor:
+                streak += 1
+            else:
+                break
+                
         probabilidade_sequencia = ((7 / 15) ** streak) * 100
-        status = "ANOMALIA CRÍTICA (Gatilho de Veto Ativo)" if streak >= 5 else ("DESVIO PADRÃO EM CURSO" if streak >= 3 else "FLUXO NORMAL")
-        return {"streak": streak, "cor_sequencia": "VERMELHO" if ultima_cor == 'V' else "PRETO", "probabilidade": round(probabilidade_sequencia, 4), "status": status}
+        
+        if streak >= 5:
+            status = "SATURAÇÃO CRÍTICA (Risco Elevado de Inversão / Exaustão)"
+        elif streak >= 3:
+            status = "SATURAÇÃO EM CURSO (Fase Lateral Ativa)"
+        else:
+            status = "ESTRUTURA DENTRO DA NORMALIDADE"
+            
+        return {
+            "streak": streak,
+            "cor_sequencia": "VERMELHO" if ultima_cor == 'V' else "PRETO",
+            "probabilidade": round(probabilidade_sequencia, 2),
+            "status": status
+        }
 
     @staticmethod
     def calcular_vies_surfe(caminho_base, janela=100):
+        """
+        Executa a macroanálise das frequências reais para identificar o Viés de Surfe.
+        """
         leitor = LeitorXLS(caminho_base)
         dados = leitor.ler_e_validar()
-        if not dados: return {"vies": "INDISPONÍVEL", "desvio_v": 0.0, "desvio_p": 0.0, "frequencia_v": 0, "frequencia_p": 0, "frequencia_b": 0}
+        
+        if not dados:
+            return {"vies": "INDISPONÍVEL", "desvio_v": 0.0, "desvio_p": 0.0, "frequencia_v": 46.67, "frequencia_p": 46.67, "frequencia_b": 6.67}
+            
         ultimos_giros = dados[-janela:]
         total_giros = len(ultimos_giros)
-        if total_giros == 0: return {"vies": "INDISPONÍVEL", "desvio_v": 0.0, "desvio_p": 0.0, "frequencia_v": 0, "frequencia_p": 0, "frequencia_b": 0}
+        
+        if total_giros == 0:
+            return {"vies": "INDISPONÍVEL", "desvio_v": 0.0, "desvio_p": 0.0, "frequencia_v": 46.67, "frequencia_p": 46.67, "frequencia_b": 6.67}
+            
         v = sum(1 for d in ultimos_giros if d['cor'] == 'V')
         p = sum(1 for d in ultimos_giros if d['cor'] == 'P')
         b = sum(1 for d in ultimos_giros if d['cor'] == 'B')
-        pct_v, pct_p, pct_b = (v / total_giros) * 100, (p / total_giros) * 100, (b / total_giros) * 100
-        desvio_v, desvio_p = pct_v - 46.67, pct_p - 46.67
-        vies = "SURFE DETECTADO: ALGORITMO TENDENCIOSO PARA VERMELHO" if pct_v >= 55.0 else ("SURFE DETECTADO: ALGORITMO TENDENCIOSO PARA PRETO" if pct_p >= 55.0 else "MERCADO BALANCEADO")
-        return {"frequencia_v": round(pct_v, 2), "frequencia_p": round(pct_p, 2), "frequencia_b": round(pct_b, 2), "desvio_v": round(desvio_v, 2), "desvio_p": round(desvio_p, 2), "vies": vies}
+        
+        pct_v = (v / total_giros) * 100
+        pct_p = (p / total_giros) * 100
+        pct_b = (b / total_giros) * 100
+        
+        desvio_v = pct_v - 46.67
+        desvio_p = pct_p - 46.67
+        
+        if pct_v >= 53.0:
+            vies = "SURFE DE MACROFREQUÊNCIA: VIÉS PARA VERMELHO ATIVO"
+        elif pct_p >= 53.0:
+            vies = "SURFE DE MACROFREQUÊNCIA: VIÉS PARA PRETO ATIVO"
+        else:
+            vies = "MACROANÁLISE EQUILIBRADA (Distribuição Fiel à Probabilidade)"
+            
+        return {
+            "frequencia_v": round(pct_v, 2),
+            "frequencia_p": round(pct_p, 2),
+            "frequencia_b": round(pct_b, 2),
+            "desvio_v": round(desvio_v, 2),
+            "desvio_p": round(desvio_p, 2),
+            "vies": vies
+        }
 
     @staticmethod
     def simular_split_stake_cobertura(stake_principal=10.0):
+        """
+        Calcula as frações ideais de Split-Stake para anular o House Edge estático.
+        """
         stake_branco_ideal = round(stake_principal / 7.0, 2)
         stake_branco_conservador = round(stake_principal / 10.0, 2)
         custo_total = stake_principal + stake_branco_ideal
-        return {"stake_cor": stake_principal, "cobertura_b_ideal_1_7": stake_branco_ideal, "cobertura_b_matematica_1_10": stake_branco_conservador, "lucro_liquido_se_der_branco": round((stake_branco_ideal * 14) - custo_total, 2), "custo_total_operacao": round(custo_total, 2), "house_edge_estatico": "-6.67%"}
+        retorno_branco = stake_branco_ideal * 14
+        lucro_liquido_b = retorno_branco - custo_total
+        
+        return {
+            "stake_cor": stake_principal,
+            "cobertura_b_ideal_1_7": stake_branco_ideal,
+            "cobertura_b_matematica_1_10": stake_branco_conservador,
+            "lucro_liquido_se_der_branco": round(lucro_liquido_b, 2),
+            "custo_total_operacao": round(custo_total, 2),
+            "house_edge_estatico": "-6.67%"
+        }
