@@ -34,7 +34,7 @@ class IAPreditivaV1:
             for _ in range(multiplicador_peso):
                 self.modelo_transicao[estado_atual_cor].append(proxima_cor)
                 self.modelo_numerico[num_atual].append(proxima_cor)
-                
+                    
         # 2. ABSORÇÃO COGNITIVA INTEGRAL: PADRÕES E NUMEROLOGIA (VOLUME 6 E 7)
         if len(dados) >= 12:
             for i in range(len(dados) - 12):
@@ -84,17 +84,17 @@ class IAPreditivaV1:
         peso_geometria = 0.40 if has_recencia else 0.30
         peso_numerico = 0.20 if has_recencia else 0.30
         peso_padrao_v6 = 0.25
-        peso_num_v7 = 0.15
+        peso_padrao_v7 = 0.15
         
         total_v = (proximas_cores_historicas.count('V') * peso_geometria) + \
                   (proximas_cores_por_num.count('V') * peso_numerico) + \
                   (cores_por_geometria.count('V') * peso_padrao_v6) + \
-                  (cores_por_numerologia.count('V') * peso_num_v7)
+                  (cores_por_numerologia.count('V') * peso_padrao_v7)
                   
         total_p = (proximas_cores_historicas.count('P') * peso_geometria) + \
                   (proximas_cores_por_num.count('P') * peso_numerico) + \
                   (cores_por_geometria.count('P') * peso_padrao_v6) + \
-                  (cores_por_numerologia.count('P') * peso_num_v7)
+                  (cores_por_numerologia.count('P') * peso_padrao_v7)
         
         soma_pesos = total_v + total_p
         if soma_pesos == 0:
@@ -172,6 +172,7 @@ class MotorContagensProjetivas:
                 passo = REGRAS_PROJECAO[num_atual]
                 alvo_idx = i + passo
                 
+                # Se o fechamento coincide com o fim da janela, gera Expectativa Vermelha (Volume 3 Cap 2)
                 if alvo_idx == 11:
                     if i < 10 and 0 in sub_num[i:11]: continue
                     lista_bruta.append({
@@ -429,8 +430,9 @@ class MotorV1Completo:
             direcao_ia_pura, conf_ia_pura = self.ia.predizer_proxima_casa(sub_num, sub_pol)
             previsao_ia = (direcao_ia_pura, conf_ia_pura)
             
+            # CORREÇÃO EFETUADA AQUI: Alterado 'expectations' para 'expectativas' para matar o NameError
             expectativa_final, justificativa, regra_ativa_id = JuizHierarquicoModificado.arbitrar_sinal(
-                nc_ativo, motivo_nc, expectations, inclinacao_num, geometria, previsao_ia, status_inv, self.historico_regras
+                nc_ativo, motivo_nc, expectativas, inclinacao_num, geometria, previsao_ia, status_inv, self.historico_regras
             )
 
             if expectativa_final != "NO CALL":
@@ -498,7 +500,7 @@ class MotorV1Completo:
             janelas_auditadas.append(classificacao)
             idx += 12 + salto
 
-        # PERSISTÊNCIA AUTOMÁTICA EM DISCO: Injeta as rodadas reais processadas na base definitiva
+        # PERSISTÊNCIA AUTOMÁTICA EM DISCO
         try:
             GerenciadorMemoriaViva.injetar_rodadas_reais(self.seq.numerica, [], "base_recencia_ativa.xlsx")
         except:
