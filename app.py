@@ -1,6 +1,14 @@
 import streamlit as st
 import os
-from main import LeitorXLS, MotorV1Completo, ProcessadorTipoB, GerenciadorMemoriaViva, EngineMatematicoAvancado
+from main import (
+    LeitorXLS, 
+    MotorV1Completo, 
+    ProcessadorTipoB, 
+    GerenciadorMemoriaViva, 
+    EngineMatematicoAvancado,
+    IAPreditivaV1,
+    salvar_modelo_longo_prazo
+)
 
 st.set_page_config(page_title="MOTOR V1 - Painel Operacional", page_icon="🛡️", layout="wide")
 st.title("🛡️ Sistema de Auditoria Analítica - MOTOR V1")
@@ -184,11 +192,23 @@ with aba_tipo_d:
                 st.error("IMPOSSÍVEL CALCULAR - Estrutura fora do padrão do Volume 8.")
             if os.path.exists(caminho_temp): os.remove(caminho_temp)
 
+        # ============================================================
+        # BLOCO ATUALIZADO - SALVAR BASE + TREINAR E SALVAR MODELO
+        # ============================================================
         if salvar_como_base:
             with open(caminho_temp, "wb") as f: f.write(arquivo_upload.getbuffer())
             try:
                 if os.path.exists(NOME_BASE_DEFINITIVA): os.remove(NOME_BASE_DEFINITIVA)
                 with open(NOME_BASE_DEFINITIVA, "wb") as f: f.write(arquivo_upload.getbuffer())
-                st.success(f"Sucesso! Base Histórica atualizada.")
-            except Exception as e: st.error(f"Erro ao salvar arquivo base: {e}")
+
+                # === Treina e salva o modelo de longo prazo ===
+                dados = LeitorXLS(NOME_BASE_DEFINITIVA).ler_e_validar()
+                if dados:
+                    ia_longa = IAPreditivaV1(dados, None)
+                    salvar_modelo_longo_prazo(ia_longa)
+                    st.success("Base de Longo Prazo atualizada e modelo treinado com sucesso!")
+                else:
+                    st.warning("Base salva, mas não foi possível treinar o modelo.")
+            except Exception as e:
+                st.error(f"Erro ao salvar arquivo base: {e}")
             if os.path.exists(caminho_temp): os.remove(caminho_temp)
