@@ -164,7 +164,7 @@ class IAPreditivaV1:
 
 
 # ============================================================
-# JuizHierarquicoModificado - Mais permissivo (menos NO CALL)
+# JuizHierarquicoModificado - Versão com mais respeito às regras
 # ============================================================
 class JuizHierarquicoModificado:
     @staticmethod
@@ -193,22 +193,25 @@ class JuizHierarquicoModificado:
         if xadrez_quebrado and direcao_ia != "NEUTRO" and confianca_ia >= 52:
             return direcao_ia, f"Xadrez Quebrado + IA", "XADREZ_FORTE"
 
-        # Regras como apoio (peso menor)
+        # ============================================================
+        # REGRAS DO MANUAL - Agora com mais peso
+        # ============================================================
         if expectations:
             forcas = {"VERMELHO": 0.0, "PRETO": 0.0}
             for item in expectations:
                 taxa = historico_revalida_regras[item["tipo_regra"]]["acertos"] / max(1, historico_revalida_regras[item["tipo_regra"]]["total"])
-                forcas[item["direcao"]] += 2.5 * (1.0 + taxa)
+                forcas[item["direcao"]] += 3.5 * (1.0 + taxa)
 
             if forcas["VERMELHO"] != forcas["PRETO"]:
                 dominante = "VERMELHO" if forcas["VERMELHO"] > forcas["PRETO"] else "PRETO"
-                if direcao_ia == dominante and confianca_ia >= 52:
-                    return dominante, "Confluência (Regra + IA)", "CONFLUENCIA"
-                if direcao_ia != dominante and confianca_ia >= 57:
-                    return direcao_ia, f"IA assume", "IA_ARBITRAGEM"
 
-        # IA com confiança razoável já gera sinal
-        if direcao_ia != "NEUTRO" and confianca_ia >= 53:
+                if confianca_ia >= 51:
+                    return dominante, f"Regra forte ativa ({dominante})", "REGRA_FORTE"
+
+        # ============================================================
+        # IA como fallback
+        # ============================================================
+        if direcao_ia != "NEUTRO" and confianca_ia >= 52:
             return direcao_ia, f"IA Preditiva ({confianca_ia:.1f}%)", "IA_PREDITIVA"
 
         return "NO CALL", "Sem confluência suficiente", "SISTEMA_TRAVADO"
