@@ -38,7 +38,6 @@ class IAPreditivaV1:
     def __init__(self, dados_longo_prazo, dados_recencia=None):
         self.dados_longo = dados_longo_prazo
         self.dados_recencia = dados_recencia if dados_recencia else []
-        
         self.modelo_transicao = defaultdict(list)
         self.modelo_numerico = defaultdict(list)
         self.stats_regras = defaultdict(list)
@@ -46,44 +45,36 @@ class IAPreditivaV1:
         self.unidade_analise = {}
         for n in range(15):
             self.unidade_analise[n] = {
-                "ocorrencias": 0,
-                "V": 0, "P": 0, "B": 0,
+                "ocorrencias": 0, "V": 0, "P": 0, "B": 0,
                 "freq_v": 0.0, "freq_p": 0.0, "freq_b": 0.0,
-                "estabilidade": "NEUTRO",
-                "saturacao": "NORMAL",
-                "enfraquecimento": "ESTÁVEL",
-                "consequencia_dominante": "NEUTRO",
+                "estabilidade": "NEUTRO", "saturacao": "NORMAL",
+                "enfraquecimento": "ESTÁVEL", "consequencia_dominante": "NEUTRO",
                 "pos_numero_V": 0, "pos_numero_P": 0, "pos_numero_B": 0,
                 "pos_numero_freq_v": 0.0, "pos_numero_freq_p": 0.0, "pos_numero_freq_b": 0.0,
                 "comportamento_pos_numero": "NEUTRO"
             }
-            
         self._treinar_modelo_profundo()
 
     def _treinar_modelo_profundo(self):
         if self.dados_longo and len(self.dados_longo) >= 5:
-            self._processar_bloco_dados(self.dados_longo, multiplicador_peso=1, treinamento_profundo=True)
-            
+            self._processar_bloco_dados(self.dados_longo, 1, True)
         if self.dados_recencia and len(self.dados_recencia) >= 5:
-            self._processar_bloco_dados(self.dados_recencia, multiplicador_peso=4, treinamento_profundo=True)
+            self._processar_bloco_dados(self.dados_recencia, 4, True)
 
     def _processar_bloco_dados(self, dados, multiplicador_peso, treinamento_profundo=False):
-        if not dados:
-            return
+        if not dados: return
 
         for i in range(len(dados) - 2):
-            estado_atual_cor = (dados[i]['cor'], dados[i+1]['cor'])
-            proxima_cor = dados[i+2]['cor']
-            num_atual = dados[i+1]['numero']
-            
+            estado = (dados[i]['cor'], dados[i+1]['cor'])
+            prox = dados[i+2]['cor']
+            num = dados[i+1]['numero']
             for _ in range(multiplicador_peso):
-                self.modelo_transicao[estado_atual_cor].append(proxima_cor)
-                self.modelo_numerico[num_atual].append(proxima_cor)
+                self.modelo_transicao[estado].append(prox)
+                self.modelo_numerico[num].append(prox)
 
         for i in range(len(dados) - 1):
             num = int(dados[i]['numero'])
             cor_post = str(dados[i+1]['cor']).upper()
-            
             if 0 <= num <= 14 and cor_post in ['V', 'P', 'B']:
                 self.unidade_analise[num]["ocorrencias"] += multiplicador_peso
                 self.unidade_analise[num][cor_post] += multiplicador_peso
@@ -95,152 +86,133 @@ class IAPreditivaV1:
                 self.unidade_analise[n]["freq_v"] = round((self.unidade_analise[n]["V"] / total) * 100, 2)
                 self.unidade_analise[n]["freq_p"] = round((self.unidade_analise[n]["P"] / total) * 100, 2)
                 self.unidade_analise[n]["freq_b"] = round((self.unidade_analise[n]["B"] / total) * 100, 2)
-                
-                total_pos = self.unidade_analise[n]["pos_numero_V"] + self.unidade_analise[n]["pos_numero_P"] + self.unidade_analise[n]["pos_numero_B"]
-                if total_pos > 0:
-                    self.unidade_analise[n]["pos_numero_freq_v"] = round((self.unidade_analise[n]["pos_numero_V"] / total_pos) * 100, 2)
-                    self.unidade_analise[n]["pos_numero_freq_p"] = round((self.unidade_analise[n]["pos_numero_P"] / total_pos) * 100, 2)
-                    self.unidade_analise[n]["pos_numero_freq_b"] = round((self.unidade_analise[n]["pos_numero_B"] / total_pos) * 100, 2)
-                
-                v, p, b = self.unidade_analise[n]["V"], self.unidade_analise[n]["P"], self.unidade_analise[n]["B"]
-                if v > p and v > b:
-                    self.unidade_analise[n]["consequencia_dominante"] = "VERMELHO"
-                elif p > v and p > b:
-                    self.unidade_analise[n]["consequencia_dominante"] = "PRETO"
-                elif b > v and b > p:
-                    self.unidade_analise[n]["consequencia_dominante"] = "BRANCO"
-                else:
-                    self.unidade_analise[n]["consequencia_dominante"] = "NEUTRO"
-                
-                pv, pp, pb = self.unidade_analise[n]["pos_numero_V"], self.unidade_analise[n]["pos_numero_P"], self.unidade_analise[n]["pos_numero_B"]
-                if pv > pp and pv > pb:
-                    self.unidade_analise[n]["comportamento_pos_numero"] = "VERMELHO"
-                elif pp > pv and pp > pb:
-                    self.unidade_analise[n]["comportamento_pos_numero"] = "PRETO"
-                elif pb > pv and pb > pb:
-                    self.unidade_analise[n]["comportamento_pos_numero"] = "BRANCO"
-                else:
-                    self.unidade_analise[n]["comportamento_pos_numero"] = "NEUTRO"
-                
                 max_freq = max(self.unidade_analise[n]["freq_v"], self.unidade_analise[n]["freq_p"], self.unidade_analise[n]["freq_b"])
-                self.unidade_analise[n]["estabilidade"] = self.unidade_analise[n]["consequencia_dominante"] if max_freq >= 60.0 else "NEUTRO"
-                self.unidade_analise[n]["saturacao"] = f"SATURADO ({self.unidade_analise[n]['consequencia_dominante']})" if max_freq >= 70.0 else "NORMAL"
-                self.unidade_analise[n]["enfraquecimento"] = "ENFRAQUECIDO" if abs(self.unidade_analise[n]["freq_v"] - self.unidade_analise[n]["freq_p"]) <= 10.0 else "ESTÁVEL"
+                self.unidade_analise[n]["estabilidade"] = self.unidade_analise[n]["consequencia_dominante"] if max_freq >= 60 else "NEUTRO"
+                self.unidade_analise[n]["saturacao"] = f"SATURADO ({self.unidade_analise[n]['consequencia_dominante']})" if max_freq >= 70 else "NORMAL"
 
         if len(dados) >= 12:
             for i in range(len(dados) - 12):
-                sub_window_num = [d['numero'] for d in dados[i:i+12]]
-                sub_window_pol = [d['cor'] for d in dados[i:i+12]]
+                sub_num = [d['numero'] for d in dados[i:i+12]]
+                sub_pol = [d['cor'] for d in dados[i:i+12]]
                 cor_futura = dados[i+12]['cor'] if (i+12) < len(dados) else None
-                
                 if cor_futura:
-                    texto_pol = "".join(sub_window_pol)
-                    num_fechamento = sub_window_num[-1]
-                    
+                    texto = "".join(sub_pol)
                     for _ in range(multiplicador_peso):
-                        if "PVPV" in texto_pol: self.modelo_transicao[("XADREZ", "PVPV")].append(cor_futura)
-                        if "VPVP" in texto_pol: self.modelo_transicao[("XADREZ", "VPVP")].append(cor_futura)
-                        if "VVV" in texto_pol: self.modelo_transicao[("SATURACAO", "V")].append(cor_futura)
-                        if "PPP" in texto_pol: self.modelo_transicao[("SATURACAO", "P")].append(cor_futura)
-                        
-                        self.modelo_numerico[(num_fechamento, "CONTEXTO")].append(cor_futura)
-                        
-                        REGRAS_PROJECAO = {1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7}
-                        for idx in range(12):
-                            n = sub_window_num[idx]
-                            if n in REGRAS_PROJECAO and idx + REGRAS_PROJECAO[n] == 11:
-                                self.stats_regras[f"CONTAGEM_PROJETIVA_{n}"].append(cor_futura)
-                        
-                        if sub_window_num[-2] == 5 and sub_window_num[-1] == 10:
-                            self.stats_regras["REGRA_5_10"].append(cor_futura)
-                        if sub_window_num[-1] == 10:
-                            self.stats_regras["REGRA_10"].append(cor_futura)
-                        if sub_window_num[5] == 2:
-                            self.stats_regras["REGRA_2_POSICIONAL"].append(cor_futura)
-                        if sub_window_num[5] == 3:
-                            self.stats_regras["REGRA_3_POSICIONAL"].append(cor_futura)
-                        if sub_window_num[-1] == 4 and sub_window_pol[-2] == "P":
-                            self.stats_regras["REGRA_4_BASE_PRETA"].append(cor_futura)
+                        if "PVPV" in texto: self.modelo_transicao[("XADREZ", "PVPV")].append(cor_futura)
+                        if "VPVP" in texto: self.modelo_transicao[("XADREZ", "VPVP")].append(cor_futura)
+                        if sub_num[-2] == 5 and sub_num[-1] == 10: self.stats_regras["REGRA_5_10"].append(cor_futura)
+                        if sub_num[-1] == 10: self.stats_regras["REGRA_10"].append(cor_futura)
+                        if sub_num[5] == 2: self.stats_regras["REGRA_2_POSICIONAL"].append(cor_futura)
+                        if sub_num[5] == 3: self.stats_regras["REGRA_3_POSICIONAL"].append(cor_futura)
 
     def injetar_aprendizado_imediato(self, sub_dados, multiplicador_peso=4):
-        self._processar_bloco_dados(sub_dados, multiplicador_peso, treinamento_profundo=True)
+        self._processar_bloco_dados(sub_dados, multiplicador_peso, True)
 
     def predizer_proxima_casa(self, sub_num, sub_pol):
         if len(sub_num) < 12:
             return "NEUTRO", 0.0
+
         ultimo_num = sub_num[-1]
         ultimas_cores = (sub_pol[-2], sub_pol[-1])
-        
-        proximas_cores_historicas = self.modelo_transicao.get(ultimas_cores, [])
-        proximas_cores_por_num = self.modelo_numerico.get(ultimo_num, [])
-        
-        texto_pol = "".join(sub_pol)
-        cores_por_geometria = []
-        if "PVPV" in texto_pol: cores_por_geometria.extend(self.modelo_transicao.get(("XADREZ", "PVPV"), []))
-        if "VPVP" in texto_pol: cores_por_geometria.extend(self.modelo_transicao.get(("XADREZ", "VPVP"), []))
-        if "VVV" in texto_pol: cores_por_geometria.extend(self.modelo_transicao.get(("SATURACAO", "V"), []))
-        if "PPP" in texto_pol: cores_por_geometria.extend(self.modelo_transicao.get(("SATURACAO", "P"), []))
-        
-        cores_por_regras = []
-        REGRAS_PROJECAO = {1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7}
-        for idx in range(12):
-            n = sub_num[idx]
-            if n in REGRAS_PROJECAO and idx + REGRAS_PROJECAO[n] == 11:
-                cores_por_regras.extend(self.stats_regras.get(f"CONTAGEM_PROJETIVA_{n}", []))
-                
-        if sub_num[-2] == 5 and ultimo_num == 10: cores_por_regras.extend(self.stats_regras.get("REGRA_5_10", []))
-        if ultimo_num == 10: cores_por_regras.extend(self.stats_regras.get("REGRA_10", []))
-        if sub_num[5] == 2: cores_por_regras.extend(self.stats_regras.get("REGRA_2_POSICIONAL", []))
-        if sub_num[5] == 3: cores_por_regras.extend(self.stats_regras.get("REGRA_3_POSICIONAL", []))
-        if ultimo_num == 4 and sub_pol[-2] == "P": cores_por_regras.extend(self.stats_regras.get("REGRA_4_BASE_PRETA", []))
-            
-        stats_v7 = self.unidade_analise.get(ultimo_num, {"freq_v": 0.0, "freq_p": 0.0, "consequencia_dominante": "NEUTRO", "estabilidade": "NEUTRO", "saturacao": "NORMAL"})
-        
-        v_bonus = stats_v7["freq_v"] * 3.5
-        p_bonus = stats_v7["freq_p"] * 3.5
-        
-        if stats_v7.get("estabilidade") == "VERMELHO": v_bonus += 30.0
-        if stats_v7.get("estabilidade") == "PRETO": p_bonus += 30.0
-        if "SATURADO (VERMELHO)" in stats_v7.get("saturacao", ""): v_bonus += 40.0
-        if "SATURADO (PRETO)" in stats_v7.get("saturacao", ""): p_bonus += 40.0
-        if stats_v7.get("consequencia_dominante") == "VERMELHO": v_bonus += 25.0
-        if stats_v7.get("consequencia_dominante") == "PRETO": p_bonus += 25.0
 
-        # Bônus extra quando Unidade de Análise está estável
-        max_freq = max(stats_v7["freq_v"], stats_v7["freq_p"], stats_v7["freq_b"])
-        if stats_v7.get("estabilidade") in ["VERMELHO", "PRETO"] and max_freq >= 65:
-            if stats_v7.get("estabilidade") == "VERMELHO":
-                v_bonus += 15
-            else:
-                p_bonus += 15
-        
-        has_recencia = len(self.dados_recencia) > 0 or len(self.modelo_transicao) > 0
-        p_transicao = 0.22 if has_recencia else 0.17
-        p_num_base = 0.17 if has_recencia else 0.16
-        p_geom_v6 = 0.23
-        p_regras_v2_v12 = 0.28
-        
-        total_v = (proximas_cores_historicas.count('V') * p_transicao) + (proximas_cores_por_num.count('V') * p_num_base) + (cores_por_geometria.count('V') * p_geom_v6) + (cores_por_regras.count('V') * p_regras_v2_v12) + v_bonus
-        total_p = (proximas_cores_historicas.count('P') * p_transicao) + (proximas_cores_por_num.count('P') * p_num_base) + (cores_por_geometria.count('P') * p_geom_v6) + (cores_por_regras.count('P') * p_regras_v2_v12) + p_bonus
-        
-        soma_pesos = total_v + total_p
-        if soma_pesos == 0: return "NEUTRO", 0.0
-        
-        prob_v = (total_v / soma_pesos) * 100
-        prob_p = (total_p / soma_pesos) * 100
-        
-        BARREIRA_CONFIA_IA = 55.0
-        if prob_v >= BARREIRA_CONFIA_IA and prob_v > prob_p + 6:
+        trans = self.modelo_transicao.get(ultimas_cores, [])
+        por_num = self.modelo_numerico.get(ultimo_num, [])
+
+        texto = "".join(sub_pol)
+        geom = []
+        if "PVPV" in texto: geom.extend(self.modelo_transicao.get(("XADREZ", "PVPV"), []))
+        if "VPVP" in texto: geom.extend(self.modelo_transicao.get(("XADREZ", "VPVP"), []))
+
+        regras = []
+        if sub_num[-2] == 5 and ultimo_num == 10: regras.extend(self.stats_regras.get("REGRA_5_10", []))
+        if ultimo_num == 10: regras.extend(self.stats_regras.get("REGRA_10", []))
+        if sub_num[5] == 2: regras.extend(self.stats_regras.get("REGRA_2_POSICIONAL", []))
+        if sub_num[5] == 3: regras.extend(self.stats_regras.get("REGRA_3_POSICIONAL", []))
+
+        stats = self.unidade_analise.get(ultimo_num, {"freq_v": 0, "freq_p": 0, "estabilidade": "NEUTRO", "saturacao": "NORMAL"})
+
+        v_bonus = stats["freq_v"] * 3.5
+        p_bonus = stats["freq_p"] * 3.5
+
+        if stats.get("estabilidade") == "VERMELHO": v_bonus += 35
+        if stats.get("estabilidade") == "PRETO": p_bonus += 35
+        if "SATURADO (VERMELHO)" in stats.get("saturacao", ""): v_bonus += 45
+        if "SATURADO (PRETO)" in stats.get("saturacao", ""): p_bonus += 45
+
+        concordancia = 0
+        if geom: concordancia += 12
+        if regras: concordancia += 14
+        if stats.get("estabilidade") != "NEUTRO": concordancia += 18
+
+        v_bonus += concordancia * 0.7
+        p_bonus += concordancia * 0.7
+
+        has_rec = len(self.dados_recencia) > 0
+        p_trans = 0.22 if has_rec else 0.17
+        p_num = 0.18 if has_rec else 0.16
+        p_geom = 0.25
+        p_regras = 0.30
+
+        total_v = (trans.count('V') * p_trans) + (por_num.count('V') * p_num) + (geom.count('V') * p_geom) + (regras.count('V') * p_regras) + v_bonus
+        total_p = (trans.count('P') * p_trans) + (por_num.count('P') * p_num) + (geom.count('P') * p_geom) + (regras.count('P') * p_regras) + p_bonus
+
+        if total_v + total_p == 0: return "NEUTRO", 0.0
+
+        prob_v = (total_v / (total_v + total_p)) * 100
+        prob_p = (total_p / (total_v + total_p)) * 100
+
+        BARREIRA = 55.0
+        if prob_v >= BARREIRA and prob_v > prob_p + 6:
             return "VERMELHO", round(prob_v, 1)
-        elif prob_p >= BARREIRA_CONFIA_IA and prob_p > prob_v + 6:
+        elif prob_p >= BARREIRA and prob_p > prob_v + 6:
             return "PRETO", round(prob_p, 1)
         return "NEUTRO", round(max(prob_v, prob_p), 1)
 
 
 # ============================================================
-# DEMAIS CLASSES (mantidas exatamente como você enviou)
+# JuizHierarquicoModificado - Analista (regras como cenários)
 # ============================================================
+class JuizHierarquicoModificado:
+    @staticmethod
+    def arbitrar_sinal(no_call_ativo, motivo_nc, expectations, inclinacao_num, geometria_mercado, 
+                       previsao_ia, status_inversao, historico_revalida_regras, 
+                       modo_mercado="NEUTRO", xadrez_quebrado=False):
+        
+        if no_call_ativo:
+            return "NO CALL", motivo_nc, "SISTEMA_TRAVADO"
 
+        if geometria_mercado == "CICLO_FECHADO_VPPV": return "PRETO", "Geometria VPPV", "GEOMETRIA"
+        if geometria_mercado == "CICLO_FECHADO_PVVP": return "VERMELHO", "Geometria PVVP", "GEOMETRIA"
+
+        direcao_ia, confianca_ia = previsao_ia
+
+        if xadrez_quebrado and direcao_ia != "NEUTRO" and confianca_ia >= 53:
+            return direcao_ia, f"Xadrez Quebrado + IA ({confianca_ia:.1f}%)", "XADREZ_FORTE"
+
+        if expectations:
+            forcas = {"VERMELHO": 0.0, "PRETO": 0.0}
+            for item in expectations:
+                taxa = historico_revalida_regras[item["tipo_regra"]]["acertos"] / max(1, historico_revalida_regras[item["tipo_regra"]]["total"])
+                peso = 3.2 * (1.0 + taxa)
+                forcas[item["direcao"]] += peso
+
+            if forcas["VERMELHO"] != forcas["PRETO"]:
+                dominante = "VERMELHO" if forcas["VERMELHO"] > forcas["PRETO"] else "PRETO"
+                if direcao_ia == dominante and confianca_ia >= 54:
+                    return dominante, f"Confluência Alta ({confianca_ia:.1f}%)", "CONFLUENCIA_BOA"
+                if direcao_ia != dominante and confianca_ia >= 56:
+                    return direcao_ia, f"IA assume ({confianca_ia:.1f}%)", "IA_ARBITRAGEM"
+                return dominante, "Regras dominantes", "REGRAS"
+
+        if direcao_ia != "NEUTRO" and confianca_ia >= 55:
+            return direcao_ia, f"IA Preditiva ({confianca_ia:.1f}%)", "IA_PREDITIVA"
+
+        return "NO CALL", "Sem confluência suficiente", "SISTEMA_TRAVADO"
+
+
+# ============================================================
+# SequenciaOperacional
+# ============================================================
 class SequenciaOperacional:
     def __init__(self, lista_resultados):
         self.cronologia = lista_resultados
@@ -249,6 +221,9 @@ class SequenciaOperacional:
         self.total = len(self.numerica)
 
 
+# ============================================================
+# GerenciadorMemoriaViva
+# ============================================================
 class GerenciadorMemoriaViva:
     @staticmethod
     def injetar_rodadas_reais(sequencia_12, numeros_gales_reais, caminho_recencia="base_recencia_ativa.xlsx"):
@@ -274,6 +249,9 @@ class GerenciadorMemoriaViva:
             df_novos_invertido.to_excel(caminho_recencia, index=False)
 
 
+# ============================================================
+# MotorContagensProjetivas
+# ============================================================
 class MotorContagensProjetivas:
     @staticmethod
     def mapear_janela(sub_num, sub_pol, geometry_mercado):
@@ -311,6 +289,9 @@ class MotorContagensProjetivas:
         return lista_bruta
 
 
+# ============================================================
+# AnalisadorContextoAvancado
+# ============================================================
 class AnalisadorContextoAvancado:
     @staticmethod
     def calcular_numerologia_pos_numero(num_fechamento, sequencia_num, sequencia_pol):
@@ -367,64 +348,14 @@ class AnalisadorContextoAvancado:
     def detectar_modo_mercado(sub_pol):
         texto = "".join(sub_pol)
         alternancias = sum(1 for i in range(len(texto)-1) if texto[i] != texto[i+1])
-        
-        if alternancias >= 7:
-            return "CHUVA"
-        elif alternancias <= 3:
-            return "RECUPERACAO"
+        if alternancias >= 7: return "CHUVA"
+        elif alternancias <= 3: return "RECUPERACAO"
         return "NEUTRO"
 
 
 # ============================================================
-# JuizHierarquicoModificado - Analista (regras como cenários)
+# LeitorXLS
 # ============================================================
-class JuizHierarquicoModificado:
-    @staticmethod
-    def arbitrar_sinal(no_call_ativo, motivo_nc, expectations, inclinacao_num, geometria_mercado, 
-                       previsao_ia, status_inversao, historico_revalida_regras, 
-                       modo_mercado="NEUTRO", xadrez_quebrado=False):
-        
-        if no_call_ativo:
-            return "NO CALL", motivo_nc, "SISTEMA_TRAVADO"
-        
-        if geometria_mercado == "CICLO_FECHADO_VPPV": return "PRETO", "Geometria VPPV", "GEOMETRIA"
-        if geometria_mercado == "CICLO_FECHADO_PVVP": return "VERMELHO", "Geometria PVVP", "GEOMETRIA"
-
-        direcao_ia, confianca_ia = previsao_ia
-        direcao_inclinacao, porc = inclinacao_num
-
-        # Xadrez Quebrado como sinal forte
-        if xadrez_quebrado and direcao_ia != "NEUTRO" and confianca_ia >= 53:
-            return direcao_ia, f"Xadrez Quebrado + IA ({confianca_ia:.1f}%)", "XADREZ_FORTE"
-
-        if expectations:
-            forcas = {"VERMELHO": 0.0, "PRETO": 0.0}
-            for item in expectations:
-                id_r = item["tipo_regra"]
-                taxa = historico_revalida_regras[id_r]["acertos"] / max(1, historico_revalida_regras[id_r]["total"])
-                peso = 3.2 * (1.0 + taxa)
-                forcas[item["direcao"]] += peso
-            
-            if forcas["VERMELHO"] != forcas["PRETO"]:
-                dominante = "VERMELHO" if forcas["VERMELHO"] > forcas["PRETO"] else "PRETO"
-                
-                if direcao_ia == dominante and confianca_ia >= 54:
-                    return dominante, f"Confluência Alta ({confianca_ia:.1f}%)", "CONFLUENCIA_BOA"
-                
-                if direcao_ia != dominante and confianca_ia >= 56:
-                    return direcao_ia, f"IA assume ({confianca_ia:.1f}%)", "IA_ARBITRAGEM"
-
-                return dominante, "Regras dominantes", "REGRAS"
-
-        if direcao_ia != "NEUTRO" and confianca_ia >= 55.0:
-            return direcao_ia, f"IA Preditiva ({confianca_ia:.1f}%)", "IA_PREDITIVA"
-        
-        if direcao_inclinacao != "NEUTRO" and porc >= 58.0:
-            return direcao_inclinacao, f"Matriz Pós-Número ({porc:.1f}%)", "MATRIZ_INCLINA"
-
-        return "NO CALL", "Sem confluência suficiente", "SISTEMA_TRAVADO"
-
-
 class LeitorXLS:
     def __init__(self, caminho_arquivo):
         self.caminho = caminho_arquivo
@@ -638,6 +569,9 @@ class ProcessadorTipoB:
         }
 
 
+# ============================================================
+# EngineMatematicoAvancado
+# ============================================================
 class EngineMatematicoAvancado:
     
     @staticmethod
