@@ -32,7 +32,7 @@ class MotorNoCall:
 
 
 # ============================================================
-# IAPreditivaV1 - Versão limpa e otimizada
+# IAPreditivaV1 - Com detecção de Consequência Futura
 # ============================================================
 class IAPreditivaV1:
     def __init__(self, dados_longo_prazo, dados_recencia=None):
@@ -121,6 +121,19 @@ class IAPreditivaV1:
         v_bonus = stats.get("freq_v", 0) * 3.5
         p_bonus = stats.get("freq_p", 0) * 3.5
 
+        # ============================================================
+        # Bônus de Consequência Futura (Pós-Número)
+        # ============================================================
+        pos_v = stats.get("pos_numero_V", 0)
+        pos_p = stats.get("pos_numero_P", 0)
+        pos_total = pos_v + pos_p
+
+        if pos_total >= 5:
+            if pos_v > pos_p * 1.25:
+                v_bonus += 14
+            elif pos_p > pos_v * 1.25:
+                p_bonus += 14
+
         # Bônus de sequência longa
         streak = 0
         for cor in reversed(sub_pol):
@@ -155,16 +168,16 @@ class IAPreditivaV1:
         prob_v = (total_v / (total_v + total_p)) * 100
         prob_p = (total_p / (total_v + total_p)) * 100
 
-        BARREIRA = 53.5
-        if prob_v >= BARREIRA and prob_v > prob_p + 5:
+        BARREIRA = 52.5
+        if prob_v >= BARREIRA and prob_v > prob_p + 4:
             return "VERMELHO", round(prob_v, 1)
-        elif prob_p >= BARREIRA and prob_p > prob_v + 5:
+        elif prob_p >= BARREIRA and prob_p > prob_v + 4:
             return "PRETO", round(prob_p, 1)
         return "NEUTRO", round(max(prob_v, prob_p), 1)
 
 
 # ============================================================
-# JuizHierarquicoModificado - Versão Equilibrada (Regras como Apoio Leve)
+# JuizHierarquicoModificado - Versão Equilibrada
 # ============================================================
 class JuizHierarquicoModificado:
     @staticmethod
@@ -176,7 +189,7 @@ class JuizHierarquicoModificado:
         if no_call_ativo:
             return "NO CALL", motivo_nc, "SISTEMA_TRAVADO"
 
-        # 1. Padrões geométricos fortes (prioridade alta)
+        # 1. Padrões geométricos fortes
         if geometria_mercado == "CICLO_FECHADO_VPPV": 
             return "PRETO", "Geometria VPPV", "GEOMETRIA"
         if geometria_mercado == "CICLO_FECHADO_PVVP": 
@@ -184,7 +197,7 @@ class JuizHierarquicoModificado:
 
         direcao_ia, confianca_ia = previsao_ia
 
-        # 2. Reversão forte (streak ou Xadrez longo quebrando)
+        # 2. Reversão forte
         if xadrez_len >= 5 and xadrez_quebrou and direcao_ia != "NEUTRO":
             return direcao_ia, f"Xadrez {xadrez_len} quebrou → Reversão provável", "XADREZ_REVERSAO"
 
@@ -194,14 +207,14 @@ class JuizHierarquicoModificado:
         if xadrez_quebrado and direcao_ia != "NEUTRO" and confianca_ia >= 53:
             return direcao_ia, f"Xadrez Quebrado + IA", "XADREZ_FORTE"
 
-        # 3. Regras do manual como APOIO LEVE (não como força principal)
+        # 3. Regras como apoio leve
         if expectations and direcao_ia != "NEUTRO":
             for item in expectations:
                 if item["direcao"] == direcao_ia:
                     return direcao_ia, f"IA + Regra de apoio", "CONFLUENCIA_LEVE"
 
-        # 4. IA como principal (previsão probabilística do que a sequência está indicando)
-        if direcao_ia != "NEUTRO" and confianca_ia >= 53:
+        # 4. IA como principal
+        if direcao_ia != "NEUTRO" and confianca_ia >= 52:
             return direcao_ia, f"IA Preditiva ({confianca_ia:.1f}%)", "IA_PREDITIVA"
 
         return "NO CALL", "Sem confluência clara", "SISTEMA_TRAVADO"
@@ -524,7 +537,7 @@ class MotorV1Completo:
 
 
 # ============================================================
-# ProcessadorTipoB - ATUALIZADO COM ANÁLISE COMPLETA (6 CAMADAS)
+# ProcessadorTipoB
 # ============================================================
 class ProcessadorTipoB:
     def __init__(self, sequencia_12_numeros, caminho_base_dados):
@@ -583,7 +596,7 @@ class ProcessadorTipoB:
                 "geometria": AnalisadorContextoAvancado.mapear_padroes_geometria(self.polaridades),
                 "inclinacao_pos_numero": inclinacao
             },
-            "ia": {"direcao": direcao_ia, "confianca": round(conf_ia, 2), "barreira_usada": 53.5},
+            "ia": {"direcao": direcao_ia, "confianca": round(conf_ia, 2), "barreira_usada": 52.5},
             "juiz": {"sinal_final": sinal, "justificativa": justificativa, "regra_id": regra_id},
             "gestao_risco": self._gerar_gestao_risco(sinal, streak, xadrez_len, xadrez_quebrou, conf_ia)
         }
