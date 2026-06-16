@@ -121,47 +121,53 @@ class MotorContagensProjetivas:
     def mapear_janela(sub_num, sub_pol, geometry_mercado):
         lista_bruta = []
         REGRAS_PROJECAO = {1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7}
-        contas_ativas = []
 
+        # 1. PROCESSAMENTO DE CONTAGENS PROJETIVAS INDEPENDENTES (APARECEU ≠ ATIVOU)
         for i in range(12):
             num_atual = sub_num[i]
             if num_atual in REGRAS_PROJECAO:
                 passo = REGRAS_PROJECAO[num_atual]
                 alvo_idx = i + passo
                 
-                if contas_ativas:
-                    conta_anterior = contas_ativas[-1]
-                    if i <= conta_anterior["alvo_idx"]:
-                        tipo_id = f"V3_ASSUMIDA_{num_atual}"
-                        origem_txt = f"Volume 3: Ativador {num_atual} assume contagem anterior"
-                    else:
-                        tipo_id = f"V3_CADEIA_{num_atual}"
-                        origem_txt = f"Volume 3: Repercussão em Cadeia do Ativador {num_atual}"
-                else:
-                    tipo_id = f"V3_ATIVADOR_{num_atual}" if alvo_idx == 11 else f"V3_CADEIA_{num_atual}"
-                    origem_txt = f"Volume 3: Ativador {num_atual} direto no fechamento" if alvo_idx == 11 else f"Volume 3: Repercussão em Cadeia do Ativador {num_atual}"
-                
+                # Se o fechamento coincide com o fim da janela, gera Expectativa Vermelha (Volume 3 Cap 2)
                 if alvo_idx == 11:
                     if i < 10 and 0 in sub_num[i:11]: continue
-                    direcao_sinal = "VERMELHO" if sub_pol[i] == "P" else "PRETO"
-                else:
-                    if alvo_idx < 11 and sub_pol[alvo_idx] != sub_pol[i]:
-                        direcao_sinal = "VERMELHO" if sub_pol[i] == "V" else "PRETO"
-                    else:
-                        direcao_sinal = "PRETO" if sub_pol[i] == "V" else "VERMELHO"
-                
-                contas_ativas.append({
-                    "regra": tipo_id, "alvo_idx": alvo_idx, "origem_idx": i,
-                    "cor_origem": sub_pol[i], "direcao": direcao_sinal, "origem": origem_txt
-                })
+                    lista_bruta.append({
+                        "direcao": "VERMELHO", 
+                        "tipo_regra": f"V3_ATIVADOR_{num_atual}", 
+                        "origem": f"Volume 3: Ativador {num_atual} direto no fechamento gerando Expectativa Vermelha"
+                    })
 
-        for conta in contas_ativas:
-            alvo = conta["alvo_idx"]
-            if alvo < 11:
-                if sub_pol[alvo] == conta["cor_origem"]:
-                    continue
+        # 2. REGRA DE CONTINUIDADE NUMÉRICA DE FECHAMENTO (Volume 2 - Cap 7)
+        par_fechamento = (sub_num[10], sub_num[11])
+        continuidade_preta_validas = [(8,9), (9,10), (10,11), (11,12), (12,13), (13,14), (14,13), (13,12), (12,11), (11,10)]
+        continuidade_vermelha_validas = [(1,2), (2,3), (3,4), (4,5), (5,6), (6,7), (7,6), (6,5), (5,4), (4,3)]
+
+        if par_fechamento in continuidade_preta_validas:
             lista_bruta.append({
-                "direcao": conta["direcao"], "tipo_regra": conta["regra"], "origem": conta["origem"]
+                "direcao": "PRETO", 
+                "tipo_regra": "V2_CONTINUIDADE_PRETA", 
+                "origem": f"Volume 2: Continuidade Numérica Preta {par_fechamento[0]}-{par_fechamento[1]} até G1"
+            })
+        elif par_fechamento in continuidade_vermelha_validas:
+            lista_bruta.append({
+                "direcao": "VERMELHO", 
+                "tipo_regra": "V2_CONTINUIDADE_VERMELHA", 
+                "origem": f"Volume 2: Continuidade Numérica Vermelha {par_fechamento[0]}-{par_fechamento[1]} até G1"
+            })
+
+        # 3. REGRAS POSICIONAIS DO VOLUME 12 (CRÍTICAS DE DESTAQUE NO MANUAL)
+        if sub_num[5] == 2:
+            lista_bruta.append({
+                "direcao": "VERMELHO", 
+                "tipo_regra": "V12_POSICIONAL_2", 
+                "origem": "Volume 12: Cap 3 - Regra Posicional do Número 2 (6 Casas de Expectativa Vermelha)"
+            })
+        if sub_num[5] == 3:
+            lista_bruta.append({
+                "direcao": "VERMELHO", 
+                "tipo_regra": "V12_POSICIONAL_3", 
+                "origem": "Volume 12: Cap 4 - Regra Posicional do Número 3 (6 Casas de Expectativa Vermelha)"
             })
 
         if sub_num[11] == 4 and sub_pol[10] == "P":
@@ -308,7 +314,10 @@ class JuizHierarquicoModificado:
         if direcao_inclinacao != "NEUTRO" and porc >= 60.0: return direcao_inclinacao, f"Matriz Pós-Número: {porc:.1f}%", "MATRIZ_INCLINA"
         if direcao_ia != "NEUTRO" and confianca_ia >= 62.0: return direcao_ia, f"IA Preditiva: {confianca_ia:.1f}%", "IA_PREDITIVA"
         if direcao_ia != "NEUTRO": return direcao_ia, f"Vetor Recente IA: {direcao_ia} ({confianca_ia:.1f}%)", "IA_VETOR"
-        return "PRETO", "Consenso Operacional", "CONSENSO_FECHAMENTO"
+        
+        # CORREÇÃO CRÍTICA DO FALLBACK (ZONAS DE SATURAÇÃO / EVITAR CHUTE): 
+        # Em conformidade com o Volume 20, dúvidas ou empates sem regra geram NO CALL.
+        return "NO CALL", "Volume 20: Ausência de Consenso Hierárquico Estrutural", "SISTEMA_TRAVADO"
 
 class MotorV1Completo:
     def __init__(self, lista_dados_xls):
@@ -346,6 +355,33 @@ class MotorV1Completo:
             expectativa_final, justificativa, regra_ativa_id = JuizHierarquicoModificado.arbitrar_sinal(
                 nc_ativo, motivo_nc, expectativas, inclinacao_num, geometria, previsao_ia, status_inv, self.historico_regras
             )
+
+            # =========================================================================
+            # INTEGRACAO ADITIVA: FILTROS MATEMÁTICOS DE SEGURANÇA (AUDITORIA)
+            # =========================================================================
+            if expectativa_final != "NO CALL":
+                ultima_cor_seq = sub_pol[-1] if sub_pol else ""
+                streak_atual = 0
+                for cor_f in reversed(sub_pol):
+                    if cor_f == ultima_cor_seq: streak_atual += 1
+                    else: break
+                if streak_atual >= 5 and expectativa_final == ("VERMELHO" if ultima_cor_seq == "V" else "PRETO"):
+                    expectativa_final = "NO CALL"
+                    justificativa = f"VETO DE RARIDADE BINOMIAL: Sequência de {streak_atual}x {ultima_cor_seq} detectada. Operação abortada."
+                    regra_ativa_id = "VETO_BINOMIAL"
+                
+                if expectativa_final != "NO CALL" and idx >= 100:
+                    historico_recente_100 = self.seq.polaridades[max(0, idx+12-100) : idx+12]
+                    freq_v_macro = (historico_recente_100.count("V") / len(historico_recente_100)) * 100
+                    freq_p_macro = (historico_recente_100.count("P") / len(historico_recente_100)) * 100
+                    if freq_v_macro >= 55.0 and expectativa_final == "PRETO":
+                        expectativa_final = "NO CALL"
+                        justificativa = f"FILTRO DE SURFE MACRO: Evitando operar contra tendência de VERMELHO ({freq_v_macro:.1f}%)."
+                        regra_ativa_id = "FILTRO_SURFE"
+                    elif freq_p_macro >= 55.0 and expectativa_final == "VERMELHO":
+                        expectativa_final = "NO CALL"
+                        justificativa = f"FILTRO DE SURFE MACRO: Evitando operar contra tendência de PRETO ({freq_p_macro:.1f}%)."
+                        regra_ativa_id = "FILTRO_SURFE"
 
             horizonte_max = min(3, self.seq.total - (idx + 12))
             if horizonte_max == 0: break
@@ -429,7 +465,7 @@ class ProcessadorTipoB:
             cor = 'B' if num == 0 else ('V' if 1 <= num <= 7 else 'P')
             self.polaridades_usuario.append(cor)
 
-    def executar_sinal_real(self):
+    def ejecutar_sinal_real(self):
         if len(self.entrada_usuario) != 12: return {"erro": "Requisito de exatamente 12 números violado."}
         leitor_longo = LeitorXLS(self.caminho_base)
         base_longo = leitor_longo.ler_e_validar()
@@ -458,10 +494,37 @@ class ProcessadorTipoB:
             expectativas = MotorContagensProjetivas.mapear_janela(self.entrada_usuario, self.polaridades_usuario, saturacao)
             inclinacao_num = AnalisadorContextoAvancado.calcular_numerologia_pos_numero(num_fechamento, num_global, pol_global)
             
-            # CORREÇÃO EFETUADA AQUI: Alterado 'expectations' para 'expectativas'
             sinal_ciclo, justificativa_ciclo, regra_ativa_id = JuizHierarquicoModificado.arbitrar_sinal(
                 nc_ativo, motivo_nc, expectativas, inclinacao_num, saturacao, previsao_ia, status_inv, regras_b
             )
+
+            # =========================================================================
+            # INTEGRACAO ADITIVA: FILTROS MATEMÁTICOS DE SEGURANÇA (SINAL TEMPO REAL)
+            # =========================================================================
+            if sinal_ciclo != "NO CALL":
+                ultima_cor_seq = self.polaridades_usuario[-1] if self.polaridades_usuario else ""
+                streak_atual = 0
+                for cor_f in reversed(self.polaridades_usuario):
+                    if cor_f == ultima_cor_seq: streak_atual += 1
+                    else: break
+                if streak_atual >= 5 and sinal_ciclo == ("VERMELHO" if ultima_cor_seq == "V" else "PRETO"):
+                    sinal_ciclo = "NO CALL"
+                    justificativa_ciclo = f"VETO DE RARIDADE BINOMIAL: Sequência de {streak_atual}x {ultima_cor_seq} esticada. Operação bloqueada para conter Gale."
+                    regra_ativa_id = "VETO_BINOMIAL"
+                
+                if sinal_ciclo != "NO CALL" and len(pol_global) >= 100:
+                    ultimos_100_giros = pol_global[-100:]
+                    freq_v_macro = (ultimos_100_giros.count("V") / 100) * 100
+                    freq_p_macro = (ultimos_100_giros.count("P") / 100) * 100
+                    if freq_v_macro >= 55.0 and sinal_ciclo == "PRETO":
+                        sinal_ciclo = "NO CALL"
+                        justificativa_ciclo = f"FILTRO DE SURFE MACRO: Evitando operar contra tendência majoritária de VERMELHO ({freq_v_macro:.1f}% nos últimos 100 giros)."
+                        regra_ativa_id = "FILTRO_SURFE"
+                    elif freq_p_macro >= 55.0 and sinal_ciclo == "VERMELHO":
+                        sinal_ciclo = "NO CALL"
+                        justificativa_ciclo = f"FILTRO DE SURFE MACRO: Evitando operar contra tendência majoritária de PRETO ({freq_p_macro:.1f}% nos últimos 100 giros)."
+                        regra_ativa_id = "FILTRO_SURFE"
+
             if regra_ativa_id != "NENHUMA" and regra_ativa_id != "SISTEMA_TRAVADO":
                 regras_b[regra_ativa_id]["total"] += 1
                 regras_b[regra_ativa_id]["acertos"] += 1
@@ -471,6 +534,9 @@ class ProcessadorTipoB:
 
         chance_branco, casas_atraso = AnalisadorContextoAvancado.preditor_estatistico_branco(num_fechamento, num_global, pol_global)
         
+        if casas_atraso >= 25:
+            justificativa_final += f" | PROTOCOLO GESTÃO DO BRANCO ATIVO: {casas_atraso} rodadas de atraso. Executar divisão Split-Stake (1/7 da stake na cor principal)."
+
         total_testes_regras = sum([regras_b[k]["total"] for k in regras_b]) - len(regras_b)
         score_aprendizado = "ESTABILIZANDO" if total_testes_regras > 5 else "MAPEANDO NOVO CICLO"
 
@@ -532,105 +598,39 @@ class LeitorXLS:
             return dados_limpos if dados_limpos else None
         except: return None
 
-# =========================================================================
-# VOLUME 21: CAMADA COMPLEMENTAR DE INTELIGÊNCIA OBSERVACIONAL 
-# =========================================================================
 class EngineMatematicoAvancado:
     @staticmethod
     def calcular_raridade_sequencia(sub_pol):
-        """
-        Mapeia a exaustão comportamental de curto prazo (Saturação Estrutural).
-        """
-        if not sub_pol:
-            return {"streak": 0, "probabilidade": 100.0, "status": "SEM DADOS"}
-        
+        if not sub_pol: return {"streak": 0, "probabilidade": 100.0, "status": "SEM DADOS"}
         ultima_cor = sub_pol[-1]
-        if ultima_cor not in ['V', 'P']:
-            return {"streak": 0, "probabilidade": 100.0, "status": "BRANCO NO FECHAMENTO"}
-        
+        if ultima_cor not in ['V', 'P']: return {"streak": 0, "probabilidade": 100.0, "status": "BRANCO NO FECHAMENTO"}
         streak = 0
-        for cor in reversed(sub_pol):
-            if cor == ultima_cor:
-                streak += 1
-            else:
-                break
-                
+        for col in reversed(sub_pol):
+            if col == ultima_cor: streak += 1
+            else: break
         probabilidade_sequencia = ((7 / 15) ** streak) * 100
-        
-        if streak >= 5:
-            status = "SATURAÇÃO CRÍTICA (Risco Elevado de Inversão / Exaustão)"
-        elif streak >= 3:
-            status = "SATURAÇÃO EM CURSO (Fase Lateral Ativa)"
-        else:
-            status = "ESTRUTURA DENTRO DA NORMALIDADE"
-            
-        return {
-            "streak": streak,
-            "cor_sequencia": "VERMELHO" if ultima_cor == 'V' else "PRETO",
-            "probabilidade": round(probabilidade_sequencia, 2),
-            "status": status
-        }
+        status = "SATURAÇÃO CRÍTICA (Risco Elevado de Inversão / Exaustão)" if streak >= 5 else ("DESVIO PADRÃO EM CURSO" if streak >= 3 else "ESTRUTURA DENTRO DA NORMALIDADE")
+        return {"streak": streak, "cor_sequencia": "VERMELHO" if ultima_cor == 'V' else "PRETO", "probabilidade": round(probabilidade_sequencia, 2), "status": status}
 
     @staticmethod
     def calcular_vies_surfe(caminho_base, janela=100):
-        """
-        Executa a macroanálise das frequências reais para identificar o Viés de Surfe.
-        """
         leitor = LeitorXLS(caminho_base)
         dados = leitor.ler_e_validar()
-        
-        if not dados:
-            return {"vies": "INDISPONÍVEL", "desvio_v": 0.0, "desvio_p": 0.0, "frequencia_v": 46.67, "frequencia_p": 46.67, "frequencia_b": 6.67}
-            
+        if not dados: return {"vies": "INDISPONÍVEL", "desvio_v": 0.0, "desvio_p": 0.0, "frequencia_v": 46.67, "frequencia_p": 46.67, "frequencia_b": 6.67}
         ultimos_giros = dados[-janela:]
         total_giros = len(ultimos_giros)
-        
-        if total_giros == 0:
-            return {"vies": "INDISPONÍVEL", "desvio_v": 0.0, "desvio_p": 0.0, "frequencia_v": 46.67, "frequencia_p": 46.67, "frequencia_b": 6.67}
-            
+        if total_giros == 0: return {"vies": "INDISPONÍVEL", "desvio_v": 0.0, "desvio_p": 0.0, "frequencia_v": 46.67, "frequencia_p": 46.67, "frequencia_b": 6.67}
         v = sum(1 for d in ultimos_giros if d['cor'] == 'V')
         p = sum(1 for d in ultimos_giros if d['cor'] == 'P')
         b = sum(1 for d in ultimos_giros if d['cor'] == 'B')
-        
-        pct_v = (v / total_giros) * 100
-        pct_p = (p / total_giros) * 100
-        pct_b = (b / total_giros) * 100
-        
-        desvio_v = pct_v - 46.67
-        desvio_p = pct_p - 46.67
-        
-        if pct_v >= 53.0:
-            vies = "SURFE DE MACROFREQUÊNCIA: VIÉS PARA VERMELHO ATIVO"
-        elif pct_p >= 53.0:
-            vies = "SURFE DE MACROFREQUÊNCIA: VIÉS PARA PRETO ATIVO"
-        else:
-            vies = "MACROANÁLISE EQUILIBRADA (Distribuição Fiel à Probabilidade)"
-            
-        return {
-            "frequencia_v": round(pct_v, 2),
-            "frequencia_p": round(pct_p, 2),
-            "frequencia_b": round(pct_b, 2),
-            "desvio_v": round(desvio_v, 2),
-            "desvio_p": round(desvio_p, 2),
-            "vies": vies
-        }
+        pct_v, pct_p, pct_b = (v / total_giros) * 100, (p / total_giros) * 100, (b / total_giros) * 100
+        desvio_v, desvio_p = pct_v - 46.67, pct_p - 46.67
+        vies = "SURFE DE MACROFREQUÊNCIA: VIÉS PARA VERMELHO ATIVO" if pct_v >= 53.0 else ("SURFE DE MACROFREQUÊNCIA: VIÉS PARA PRETO ATIVO" if pct_p >= 53.0 else "MACROANÁLISE EQUILIBRADA")
+        return {"frequencia_v": round(pct_v, 2), "frequencia_p": round(pct_p, 2), "frequencia_b": round(pct_b, 2), "desvio_v": round(desvio_v, 2), "desvio_p": round(desvio_p, 2), "vies": vies}
 
     @staticmethod
     def simular_split_stake_cobertura(stake_principal=10.0):
-        """
-        Calcula as frações ideais de Split-Stake para anular o House Edge estático.
-        """
         stake_branco_ideal = round(stake_principal / 7.0, 2)
         stake_branco_conservador = round(stake_principal / 10.0, 2)
         custo_total = stake_principal + stake_branco_ideal
-        retorno_branco = stake_branco_ideal * 14
-        lucro_liquido_b = retorno_branco - custo_total
-        
-        return {
-            "stake_cor": stake_principal,
-            "cobertura_b_ideal_1_7": stake_branco_ideal,
-            "cobertura_b_matematica_1_10": stake_branco_conservador,
-            "lucro_liquido_se_der_branco": round(lucro_liquido_b, 2),
-            "custo_total_operacao": round(custo_total, 2),
-            "house_edge_estatico": "-6.67%"
-        }
+        return {"stake_cor": stake_principal, "cobertura_b_ideal_1_7": stake_branco_ideal, "cobertura_b_matematica_1_10": stake_branco_conservador, "lucro_liquido_se_der_branco": round((stake_branco_ideal * 14) - custo_total, 2), "custo_total_operacao": round(custo_total, 2), "house_edge_estatico": "-6.67%"}
