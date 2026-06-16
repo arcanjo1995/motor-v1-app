@@ -3,27 +3,31 @@ import pandas as pd
 from collections import defaultdict
 
 # ============================================================
-# CLASSE INALTERADA - MotorNoCall (REGRAS DE NO CALL NUNCA MUDAM)
+# MotorNoCall - ATUALIZADO COM NOVAS POSIÇÕES DE NO CALL
 # ============================================================
 class MotorNoCall:
     @staticmethod
     def checar_no_call(sub_num, sub_pol):
+        # Duplas (mantido)
         cenarios_duplas = [(7, 8), (8, 9), (9, 10), (10, 11)]
         for idx1, idx2 in cenarios_duplas:
             if sub_num[idx1] == sub_num[idx2]:
                 return True, "Volume 2 Cap 6: Trava das Duplas Ativa"
 
-        posicoes_criticas_6 = [5, 8, 9, 10, 11]
+        # NÚMERO 6 - Posições críticas atualizadas
+        posicoes_criticas_6 = [3, 4, 5, 8, 9, 10, 11]   # ← ADICIONADO 3 e 4
         for pos in posicoes_criticas_6:
             if sub_num[pos] == 6:
                 return True, "Volume 2 Cap 4: Trava Número 6 (Posição de No Call Ativa)"
 
+        # NÚMERO 2 (mantido)
         posicoes_criticas_2 = [8, 9, 10, 11]
         for pos in posicoes_criticas_2:
             if sub_num[pos] == 2:
                 return True, "Volume 2 Cap 3: Trava Número 2"
 
-        posicoes_criticas_b = [5, 8, 9, 10, 11]
+        # BRANCO - Posições críticas atualizadas
+        posicoes_criticas_b = [3, 4, 5, 8, 9, 10, 11]   # ← ADICIONADO 3 e 4
         for pos in posicoes_criticas_b:
             if sub_pol[pos] == "B":
                 return True, "Volume 2 Cap 5: Trava do Branco"
@@ -32,7 +36,7 @@ class MotorNoCall:
 
 
 # ============================================================
-# IAPreditivaV1 - VERSÃO APRIMORADA COM APRENDIZADO MÁXIMO
+# IAPreditivaV1 (mantida igual)
 # ============================================================
 class IAPreditivaV1:
     def __init__(self, dados_longo_prazo, dados_recencia=None):
@@ -349,7 +353,7 @@ class AnalisadorContextoAvancado:
                 if "B" in sequencia_pol[i+1:i+4]:
                     vezes_branco += 1
         taxa = (vezes_branco / vezes_num * 100) if vezes_num > 0 else 0
-        chance = "ALHA" if atraso >= 15 or taxa >= 18 else ("MÉDIA" if atraso >= 8 else "BAIXA")
+        chance = "ALTA" if atraso >= 15 or taxa >= 18 else ("MÉDIA" if atraso >= 8 else "BAIXA")
         return chance, atraso
 
 
@@ -425,7 +429,7 @@ class LeitorXLS:
 
 
 # ============================================================
-# MotorV1Completo - VERSÃO COMPLETA E CORRIGIDA
+# MotorV1Completo (mantido)
 # ============================================================
 class MotorV1Completo:
     def __init__(self, lista_dados_xls):
