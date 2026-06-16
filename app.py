@@ -193,7 +193,7 @@ with aba_tipo_d:
             if os.path.exists(caminho_temp): os.remove(caminho_temp)
 
         # ============================================================
-        # BLOCO ATUALIZADO - SALVAR BASE + TREINAR E SALVAR MODELO
+        # BLOCO CORRIGIDO - SALVAR BASE + TREINAR E SALVAR MODELO
         # ============================================================
         if salvar_como_base:
             with open(caminho_temp, "wb") as f: f.write(arquivo_upload.getbuffer())
