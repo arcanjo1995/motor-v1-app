@@ -60,8 +60,58 @@ with aba_tipo_b:
         st.write("---")
         
         # =========================================================================
-        # VOLUME 21 & 22: INTEGRAÇÃO DA CAMADA DE INTELIGÊNCIA OBSERVACIONAL
+        # 1. VEREDITO E PAINEL DE INJEÇÃO DE DADOS REAIS (TOPO)
         # =========================================================================
+        st.subheader("📊 Veredito e Alimentação Real")
+        sinal = st.session_state.sinal_pendente
+        
+        if sinal == "NO CALL":
+            st.warning(f"**EXPECTATIVA:** {sinal}")
+            st.caption(f"Motivo: {st.session_state.justificativa_pendente}")
+            if st.button("🔄 Limpar Painel"): st.session_state.sinal_pendente = None
+        else:
+            st.info(f"**EXPECTATIVA ATIVA:** Operar no {sinal}")
+            st.caption(f"Origem: {st.session_state.justificativa_pendente}")
+            
+            st.write("---")
+            st.write("### 🎛️ Painel de Injeção de Dados Reais:")
+            tipo_resultado = st.radio("Selecione o resultado real da operação:", ["G0", "G1", "G2", "FALHA"], horizontal=True)
+            
+            numeros_reais = []
+            if tipo_resultado == "G0":
+                n1 = st.number_input("Digite o número que saiu na 1ª rodada (G0):", min_value=0, max_value=14, step=1, key="n1")
+                numeros_reais = [n1]
+            elif tipo_resultado == "G1":
+                n1 = st.number_input("Número que saiu na 1ª rodada (Erro):", min_value=0, max_value=14, step=1, key="n1")
+                n2 = st.number_input("Número que saiu na 2ª rodada (G1 - Acerto):", min_value=0, max_value=14, step=1, key="n2")
+                numeros_reais = [n1, n2]
+            elif tipo_resultado == "G2":
+                n1 = st.number_input("Número que saiu na 1ª rodada (Erro):", min_value=0, max_value=14, step=1, key="n1")
+                n2 = st.number_input("Número que saiu na 2ª rodada (Erro):", min_value=0, max_value=14, step=1, key="n2")
+                n3 = st.number_input("Número que saiu na 3ª rodada (G2 - Acerto):", min_value=0, max_value=14, step=1, key="n3")
+                numeros_reais = [n1, n2, n3]
+            elif tipo_resultado == "FALHA":
+                n1 = st.number_input("Número que saiu na 1ª rodada (Erro):", min_value=0, max_value=14, step=1, key="n1")
+                n2 = st.number_input("Número que saiu na 2ª rodada (Erro):", min_value=0, max_value=14, step=1, key="n2")
+                n3 = st.number_input("Número que saiu na 3ª rodada (Erro):", min_value=0, max_value=14, step=1, key="n3")
+                numeros_reais = [n1, n2, n3]
+            
+            if st.button("💾 Gravar Números Reais e Evoluir IA"):
+                GerenciadorMemoriaViva.injetar_rodadas_reais(st.session_state.sequencia_em_uso, numeros_reais, NOME_RECENCIA_ATIVA)
+                st.success(f"Sucesso! Dados injetados com 100% de exatidão na IA.")
+                st.session_state.sinal_pendente = None
+
+        # =========================================================================
+        # 2. RASCUNHO ANALÍTICO INTERNO (EMBAIXO)
+        # =========================================================================
+        st.write("---")
+        st.subheader("📝 Rascunho Analítico Interno")
+        st.text_area("Memória de Cálculo (15 Releituras)", value=st.session_state.log_completo, height=340)
+
+        # =========================================================================
+        # 3. VOLUME 21 & 22: CAMADA DE INTELIGÊNCIA OBSERVACIONAL (FINAL)
+        # =========================================================================
+        st.write("---")
         st.subheader("📈 Volume 21: Inteligência Observacional e Métricas de Cobertura")
         with st.expander("Visualizar Diagnóstico do Algoritmo e Split-Stake", expanded=True):
             analise_raridade = EngineMatematicoAvancado.calcular_raridade_sequencia([('B' if n == 0 else ('V' if 1 <= n <= 7 else 'P')) for n in st.session_state.sequencia_em_uso])
@@ -90,53 +140,6 @@ with aba_tipo_b:
                 f"- Lucro Líquido Realizado caso Sorteado Branco (0): R$ {gestao_financeira['lucro_liquido_se_der_branco']:.2f}",
                 language="text"
             )
-            
-        st.write("---")
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("📝 Rascunho Analítico Interno")
-            st.text_area("Memória de Cálculo (15 Releituras)", value=st.session_state.log_completo, height=340)
-            
-        with col2:
-            st.subheader("📊 Veredito e Alimentação Real")
-            sinal = st.session_state.sinal_pendente
-            
-            if sinal == "NO CALL":
-                st.warning(f"**EXPECTATIVA:** {sinal}")
-                st.caption(f"Motivo: {st.session_state.justificativa_pendente}")
-                if st.button("🔄 Limpar Painel"): st.session_state.sinal_pendente = None
-            else:
-                st.info(f"**EXPECTATIVA ATIVA:** Operar no {sinal}")
-                st.caption(f"Origem: {st.session_state.justificativa_pendente}")
-                
-                st.write("---")
-                st.write("### 🎛️ Painel de Injeção de Dados Reais:")
-                tipo_resultado = st.radio("Selecione o resultado real da operação:", ["G0", "G1", "G2", "FALHA"], horizontal=True)
-                
-                numeros_reais = []
-                if tipo_resultado == "G0":
-                    n1 = st.number_input("Digite o número que saiu na 1ª rodada (G0):", min_value=0, max_value=14, step=1, key="n1")
-                    numeros_reais = [n1]
-                elif tipo_resultado == "G1":
-                    n1 = st.number_input("Número que saiu na 1ª rodada (Erro):", min_value=0, max_value=14, step=1, key="n1")
-                    n2 = st.number_input("Número que saiu na 2ª rodada (G1 - Acerto):", min_value=0, max_value=14, step=1, key="n2")
-                    numeros_reais = [n1, n2]
-                elif tipo_resultado == "G2":
-                    n1 = st.number_input("Número que saiu na 1ª rodada (Erro):", min_value=0, max_value=14, step=1, key="n1")
-                    n2 = st.number_input("Número que saiu na 2ª rodada (Erro):", min_value=0, max_value=14, step=1, key="n2")
-                    n3 = st.number_input("Número que saiu na 3ª rodada (G2 - Acerto):", min_value=0, max_value=14, step=1, key="n3")
-                    numeros_reais = [n1, n2, n3]
-                elif tipo_resultado == "FALHA":
-                    n1 = st.number_input("Número que saiu na 1ª rodada (Erro):", min_value=0, max_value=14, step=1, key="n1")
-                    n2 = st.number_input("Número que saiu na 2ª rodada (Erro):", min_value=0, max_value=14, step=1, key="n2")
-                    n3 = st.number_input("Número que saiu na 3ª rodada (Erro):", min_value=0, max_value=14, step=1, key="n3")
-                    numeros_reais = [n1, n2, n3]
-                
-                if st.button("💾 Gravar Números Reais e Evoluir IA"):
-                    GerenciadorMemoriaViva.injetar_rodadas_reais(st.session_state.sequencia_em_uso, numeros_reais, NOME_RECENCIA_ATIVA)
-                    st.success(f"Sucesso! Dados injetados com 100% de exatidão na IA.")
-                    st.session_state.sinal_pendente = None
 
 # =========================================================================
 # ABA TIPO D — AUDITORIA CRONOLÓGICA DE LONGO PRAZO
