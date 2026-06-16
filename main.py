@@ -3,7 +3,7 @@ import pandas as pd
 from collections import defaultdict
 
 # ============================================================
-# MotorNoCall - ATUALIZADO COM NOVAS POSIÇÕES DE NO CALL
+# MotorNoCall - MANTIDO IGUAL
 # ============================================================
 class MotorNoCall:
     @staticmethod
@@ -65,7 +65,7 @@ class IAPreditivaV1:
             self._processar_bloco_dados(self.dados_longo, multiplicador_peso=1, treinamento_profundo=True)
             
         if self.dados_recencia and len(self.dados_recencia) >= 5:
-            self._processar_bloco_dados(self.dados_recencia, multiplicador_peso=3, treinamento_profundo=True)
+            self._processar_bloco_dados(self.dados_recencia, multiplicador_peso=4, treinamento_profundo=True)
 
     def _processar_bloco_dados(self, dados, multiplicador_peso, treinamento_profundo=False):
         if not dados:
@@ -162,7 +162,7 @@ class IAPreditivaV1:
                         if sub_window_num[-1] == 4 and sub_window_pol[-2] == "P":
                             self.stats_regras["REGRA_4_BASE_PRETA"].append(cor_futura)
 
-    def injetar_aprendizado_imediato(self, sub_dados, multiplicador_peso=3):
+    def injetar_aprendizado_imediato(self, sub_dados, multiplicador_peso=4):
         self._processar_bloco_dados(sub_dados, multiplicador_peso, treinamento_profundo=True)
 
     def predizer_proxima_casa(self, sub_num, sub_pol):
@@ -206,7 +206,7 @@ class IAPreditivaV1:
         if stats_v7.get("consequencia_dominante") == "VERMELHO": v_bonus += 25.0
         if stats_v7.get("consequencia_dominante") == "PRETO": p_bonus += 25.0
 
-        # === NOVO: Bônus extra quando Unidade de Análise está estável ===
+        # Bônus extra quando Unidade de Análise está estável
         max_freq = max(stats_v7["freq_v"], stats_v7["freq_p"], stats_v7["freq_b"])
         if stats_v7.get("estabilidade") in ["VERMELHO", "PRETO"] and max_freq >= 65:
             if stats_v7.get("estabilidade") == "VERMELHO":
@@ -215,10 +215,10 @@ class IAPreditivaV1:
                 p_bonus += 15
         
         has_recencia = len(self.dados_recencia) > 0 or len(self.modelo_transicao) > 0
-        p_transicao = 0.20 if has_recencia else 0.15
-        p_num_base = 0.15 if has_recencia else 0.15
-        p_geom_v6 = 0.20
-        p_regras_v2_v12 = 0.30
+        p_transicao = 0.22 if has_recencia else 0.17
+        p_num_base = 0.17 if has_recencia else 0.16
+        p_geom_v6 = 0.23
+        p_regras_v2_v12 = 0.28
         
         total_v = (proximas_cores_historicas.count('V') * p_transicao) + (proximas_cores_por_num.count('V') * p_num_base) + (cores_por_geometria.count('V') * p_geom_v6) + (cores_por_regras.count('V') * p_regras_v2_v12) + v_bonus
         total_p = (proximas_cores_historicas.count('P') * p_transicao) + (proximas_cores_por_num.count('P') * p_num_base) + (cores_por_geometria.count('P') * p_geom_v6) + (cores_por_regras.count('P') * p_regras_v2_v12) + p_bonus
@@ -229,11 +229,12 @@ class IAPreditivaV1:
         prob_v = (total_v / soma_pesos) * 100
         prob_p = (total_p / soma_pesos) * 100
         
-        # === AJUSTE: Barreira reduzida de 62% para 58% ===
-        BARREIRA_CONFIA_IA = 58.0
-        if prob_v >= BARREIRA_CONFIA_IA and prob_v > prob_p: return "VERMELHO", prob_v
-        elif prob_p >= BARREIRA_CONFIA_IA and prob_p > prob_v: return "PRETO", prob_p
-        return "NEUTRO", max(prob_v, prob_p)
+        BARREIRA_CONFIA_IA = 56.0
+        if prob_v >= BARREIRA_CONFIA_IA and prob_v > prob_p + 7:
+            return "VERMELHO", round(prob_v, 1)
+        elif prob_p >= BARREIRA_CONFIA_IA and prob_p > prob_v + 7:
+            return "PRETO", round(prob_p, 1)
+        return "NEUTRO", round(max(prob_v, prob_p), 1)
 
 
 # ============================================================
@@ -362,13 +363,28 @@ class AnalisadorContextoAvancado:
         chance = "ALTA" if atraso >= 15 or taxa >= 18 else ("MÉDIA" if atraso >= 8 else "BAIXA")
         return chance, atraso
 
+    # === NOVO: Detecção de Modo de Mercado ===
+    @staticmethod
+    def detectar_modo_mercado(sub_pol):
+        texto = "".join(sub_pol)
+        alternancias = sum(1 for i in range(len(texto)-1) if texto[i] != texto[i+1])
+        
+        if alternancias >= 7:
+            return "CHUVA"
+        elif alternancias <= 3:
+            return "RECUPERACAO"
+        return "NEUTRO"
+
 
 # ============================================================
-# JuizHierarquicoModificado - MELHORADO
+# JuizHierarquicoModificado - MELHORADO (com parâmetros opcionais)
 # ============================================================
 class JuizHierarquicoModificado:
     @staticmethod
-    def arbitrar_sinal(no_call_ativo, motivo_nc, expectations, inclinacao_num, geometria_mercado, previsao_ia, status_inversao, historico_revalida_regras):
+    def arbitrar_sinal(no_call_ativo, motivo_nc, expectations, inclinacao_num, geometria_mercado, 
+                       previsao_ia, status_inversao, historico_revalida_regras, 
+                       modo_mercado="NEUTRO", xadrez_quebrado=False):
+        
         if no_call_ativo:
             return "NO CALL", motivo_nc, "SISTEMA_TRAVADO"
         
@@ -378,29 +394,30 @@ class JuizHierarquicoModificado:
         direcao_ia, confianca_ia = previsao_ia
         direcao_inclinacao, porc = inclinacao_num
 
+        # Bônus de Xadrez Quebrado (inspirado no prompt)
+        if xadrez_quebrado and direcao_ia != "NEUTRO" and confianca_ia >= 54:
+            return direcao_ia, f"Xadrez Quebrado + IA ({confianca_ia:.1f}%)", "XADREZ_REGRA_OURO"
+
         if expectations:
             forcas = {"VERMELHO": 0.0, "PRETO": 0.0}
             for item in expectations:
                 id_r = item["tipo_regra"]
                 taxa = historico_revalida_regras[id_r]["acertos"] / max(1, historico_revalida_regras[id_r]["total"])
-                peso = 3.0 * (1.0 + taxa)
+                peso = 3.5 * (1.0 + taxa)
                 forcas[item["direcao"]] += peso
             
             if forcas["VERMELHO"] != forcas["PRETO"]:
                 dominante = "VERMELHO" if forcas["VERMELHO"] > forcas["PRETO"] else "PRETO"
                 
-                # Se IA concorda com as regras e tem confiança razoável
-                if direcao_ia == dominante and confianca_ia >= 56:
-                    return dominante, f"Regras + IA ({confianca_ia:.1f}%)", "REGRAS_IA"
+                if direcao_ia == dominante and confianca_ia >= 55:
+                    return dominante, f"Alta Confluência ({confianca_ia:.1f}%)", "CONFLUENCIA_ALTA"
                 
-                # Se IA discorda, mas tem boa confiança → deixa IA decidir
-                if direcao_ia != dominante and confianca_ia >= 58:
-                    return direcao_ia, f"IA assume por contradição ({confianca_ia:.1f}%)", "IA_ARBITRAGEM"
+                if direcao_ia != dominante and confianca_ia >= 57:
+                    return direcao_ia, f"IA por contradição ({confianca_ia:.1f}%)", "IA_ARBITRAGEM"
 
                 return dominante, "Dominância de regras", "REGRAS"
 
-        # IA agora consegue decidir com 58% de confiança
-        if direcao_ia != "NEUTRO" and confianca_ia >= 58.0:
+        if direcao_ia != "NEUTRO" and confianca_ia >= 56.0:
             return direcao_ia, f"IA Preditiva ({confianca_ia:.1f}%)", "IA_PREDITIVA"
         
         if direcao_inclinacao != "NEUTRO" and porc >= 58.0:
@@ -484,10 +501,12 @@ class MotorV1Completo:
             num_fech = sub_num[-1]
             inclinacao = AnalisadorContextoAvancado.calcular_numerologia_pos_numero(num_fech, self.seq.numerica, self.seq.polaridades)
             direcao_ia, conf_ia = self.ia.predizer_proxima_casa(sub_num, sub_pol)
+            modo_mercado = AnalisadorContextoAvancado.detectar_modo_mercado(sub_pol)
 
             sinal, justificativa, regra_id = JuizHierarquicoModificado.arbitrar_sinal(
                 nc_ativo, motivo_nc, expectativas, inclinacao, geometria, 
-                (direcao_ia, conf_ia), status_inv, self.historico_regras
+                (direcao_ia, conf_ia), status_inv, self.historico_regras,
+                modo_mercado=modo_mercado
             )
 
             if sinal != "NO CALL":
@@ -495,7 +514,6 @@ class MotorV1Completo:
                 for c in reversed(sub_pol):
                     if c == sub_pol[-1]: streak += 1
                     else: break
-                # === AJUSTE: Streak veto mais inteligente ===
                 if streak >= 6:
                     if direcao_ia != sinal:
                         sinal = "NO CALL"
@@ -533,7 +551,7 @@ class MotorV1Completo:
 
             bloco = [{"numero": self.seq.numerica[k], "cor": self.seq.polaridades[k]} 
                      for k in range(idx, min(idx + 12 + salto, self.seq.total))]
-            self.ia.injetar_aprendizado_imediato(bloco, 3)
+            self.ia.injetar_aprendizado_imediato(bloco, 4)
 
             memorias.append(f"Janela {len(memorias)+1}: {sub_num} -> {sinal} | {justificativa} | {classificacao}")
             idx += 12 + salto
@@ -592,15 +610,20 @@ class ProcessadorTipoB:
         expectativas = MotorContagensProjetivas.mapear_janela(self.entrada, self.polaridades, "ESTÁVEL")
         inclinacao = AnalisadorContextoAvancado.calcular_numerologia_pos_numero(self.entrada[-1], [d['numero'] for d in base], [d['cor'] for d in base])
         direcao_ia, conf = ia.predizer_proxima_casa(self.entrada, self.polaridades)
+        modo_mercado = AnalisadorContextoAvancado.detectar_modo_mercado(self.polaridades)
 
         sinal, justificativa, _ = JuizHierarquicoModificado.arbitrar_sinal(
-            nc_ativo, motivo, expectativas, inclinacao, "ESTÁVEL", (direcao_ia, conf), (False, "NORMAL", ""), 
-            defaultdict(lambda: {"acertos":1, "total":1})
+            nc_ativo, motivo, expectativas, inclinacao, 
+            AnalisadorContextoAvancado.mapear_padroes_geometria(self.polaridades),
+            (direcao_ia, conf), (False, "NORMAL", ""), 
+            defaultdict(lambda: {"acertos":1, "total":1}),
+            modo_mercado=modo_mercado
         )
 
         memoria_texto = (
             f"[PROCESSAMENTO TIPO B]\n"
             f"Sequência: {self.entrada}\n"
+            f"Modo de Mercado: {modo_mercado}\n"
             f"Sinal Gerado: {sinal}\n"
             f"Justificativa: {justificativa}\n"
             f"Confiança da IA: {round(conf, 2)}%\n"
