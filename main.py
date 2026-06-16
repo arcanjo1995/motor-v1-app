@@ -43,7 +43,6 @@ class IAPreditivaV1:
         self.modelo_numerico = defaultdict(list)
         self.stats_regras = defaultdict(list)
         
-        # UNIDADE DE ANÁLISE OFICIAL (VOLUME 7) - Expandida
         self.unidade_analise = {}
         for n in range(15):
             self.unidade_analise[n] = {
@@ -54,7 +53,6 @@ class IAPreditivaV1:
                 "saturacao": "NORMAL",
                 "enfraquecimento": "ESTÁVEL",
                 "consequencia_dominante": "NEUTRO",
-                # Comportamento Pós-Número (Capítulo 3)
                 "pos_numero_V": 0, "pos_numero_P": 0, "pos_numero_B": 0,
                 "pos_numero_freq_v": 0.0, "pos_numero_freq_p": 0.0, "pos_numero_freq_b": 0.0,
                 "comportamento_pos_numero": "NEUTRO"
@@ -73,7 +71,6 @@ class IAPreditivaV1:
         if not dados:
             return
 
-        # 1. Transições básicas
         for i in range(len(dados) - 2):
             estado_atual_cor = (dados[i]['cor'], dados[i+1]['cor'])
             proxima_cor = dados[i+2]['cor']
@@ -83,7 +80,6 @@ class IAPreditivaV1:
                 self.modelo_transicao[estado_atual_cor].append(proxima_cor)
                 self.modelo_numerico[num_atual].append(proxima_cor)
 
-        # 2. UNIDADE DE ANÁLISE + COMPORTAMENTO PÓS-NÚMERO + COMPORTAMENTO DOMINANTE
         for i in range(len(dados) - 1):
             num = int(dados[i]['numero'])
             cor_post = str(dados[i+1]['cor']).upper()
@@ -93,7 +89,6 @@ class IAPreditivaV1:
                 self.unidade_analise[num][cor_post] += multiplicador_peso
                 self.unidade_analise[num][f"pos_numero_{cor_post}"] += multiplicador_peso
 
-        # Recalcula métricas
         for n in range(15):
             total = self.unidade_analise[n]["ocorrencias"]
             if total > 0:
@@ -107,7 +102,6 @@ class IAPreditivaV1:
                     self.unidade_analise[n]["pos_numero_freq_p"] = round((self.unidade_analise[n]["pos_numero_P"] / total_pos) * 100, 2)
                     self.unidade_analise[n]["pos_numero_freq_b"] = round((self.unidade_analise[n]["pos_numero_B"] / total_pos) * 100, 2)
                 
-                # Comportamento Dominante (Capítulo 4)
                 v, p, b = self.unidade_analise[n]["V"], self.unidade_analise[n]["P"], self.unidade_analise[n]["B"]
                 if v > p and v > b:
                     self.unidade_analise[n]["consequencia_dominante"] = "VERMELHO"
@@ -118,7 +112,6 @@ class IAPreditivaV1:
                 else:
                     self.unidade_analise[n]["consequencia_dominante"] = "NEUTRO"
                 
-                # Comportamento Pós-Número
                 pv, pp, pb = self.unidade_analise[n]["pos_numero_V"], self.unidade_analise[n]["pos_numero_P"], self.unidade_analise[n]["pos_numero_B"]
                 if pv > pp and pv > pb:
                     self.unidade_analise[n]["comportamento_pos_numero"] = "VERMELHO"
@@ -134,7 +127,6 @@ class IAPreditivaV1:
                 self.unidade_analise[n]["saturacao"] = f"SATURADO ({self.unidade_analise[n]['consequencia_dominante']})" if max_freq >= 70.0 else "NORMAL"
                 self.unidade_analise[n]["enfraquecimento"] = "ENFRAQUECIDO" if abs(self.unidade_analise[n]["freq_v"] - self.unidade_analise[n]["freq_p"]) <= 10.0 else "ESTÁVEL"
 
-        # 3. REGRAS OFICIAIS + CONTAGENS + GEOMETRIA
         if len(dados) >= 12:
             for i in range(len(dados) - 12):
                 sub_window_num = [d['numero'] for d in dados[i:i+12]]
@@ -235,7 +227,7 @@ class IAPreditivaV1:
 
 
 # ============================================================
-# DEMAIS CLASSES
+# DEMAIS CLASSES (mantidas)
 # ============================================================
 
 class SequenciaOperacional:
@@ -357,7 +349,7 @@ class AnalisadorContextoAvancado:
                 if "B" in sequencia_pol[i+1:i+4]:
                     vezes_branco += 1
         taxa = (vezes_branco / vezes_num * 100) if vezes_num > 0 else 0
-        chance = "ALTA" if atraso >= 15 or taxa >= 18 else ("MÉDIA" if atraso >= 8 else "BAIXA")
+        chance = "ALHA" if atraso >= 15 or taxa >= 18 else ("MÉDIA" if atraso >= 8 else "BAIXA")
         return chance, atraso
 
 
@@ -432,6 +424,9 @@ class LeitorXLS:
             return None
 
 
+# ============================================================
+# MotorV1Completo - VERSÃO COMPLETA E CORRIGIDA
+# ============================================================
 class MotorV1Completo:
     def __init__(self, lista_dados_xls):
         self.seq = SequenciaOperacional(lista_dados_xls)
@@ -451,8 +446,101 @@ class MotorV1Completo:
         self.historico_regras = defaultdict(lambda: {"acertos": 1, "total": 1})
 
     def processar_auditoria(self):
-        # Lógica de auditoria mantida (pode ser expandida depois)
-        return "Auditoria executada com sucesso. (Implementação completa disponível se necessário)"
+        idx = 0
+        memorias = []
+        stats = {"G0": 0, "G1": 0, "G2": 0, "FALHA": 0, "NO CALL": 0}
+        ia_total_predicoes = 0
+        ia_acertos = 0
+
+        while idx + 12 < self.seq.total:
+            sub_num = self.seq.numerica[idx:idx+12]
+            sub_pol = self.seq.polaridades[idx:idx+12]
+
+            geometria = AnalisadorContextoAvancado.mapear_padroes_geometria(sub_pol)
+            status_inv = AnalisadorContextoAvancado.detectar_chance_inversao(sub_pol)
+            nc_ativo, motivo_nc = MotorNoCall.checar_no_call(sub_num, sub_pol)
+            expectativas = MotorContagensProjetivas.mapear_janela(sub_num, sub_pol, geometria)
+            num_fech = sub_num[-1]
+            inclinacao = AnalisadorContextoAvancado.calcular_numerologia_pos_numero(num_fech, self.seq.numerica, self.seq.polaridades)
+            direcao_ia, conf_ia = self.ia.predizer_proxima_casa(sub_num, sub_pol)
+
+            sinal, justificativa, regra_id = JuizHierarquicoModificado.arbitrar_sinal(
+                nc_ativo, motivo_nc, expectativas, inclinacao, geometria, 
+                (direcao_ia, conf_ia), status_inv, self.historico_regras
+            )
+
+            if sinal != "NO CALL":
+                streak = 0
+                for c in reversed(sub_pol):
+                    if c == sub_pol[-1]: streak += 1
+                    else: break
+                if streak >= 5:
+                    sinal = "NO CALL"
+                    justificativa = f"Veto de streak {streak}x"
+                    regra_id = "VETO_STREAK"
+
+            correcoes = self.seq.polaridades[idx+12 : idx+15]
+            classificacao = "FALHA"
+            salto = 3
+
+            if sinal == "NO CALL":
+                classificacao = "NO CALL RESPEITADO"
+                stats["NO CALL"] += 1
+                salto = 1
+            else:
+                letra = "V" if sinal == "VERMELHO" else "P"
+                for g, cor in enumerate(correcoes):
+                    if cor == letra or cor == "B":
+                        classificacao = f"G{g}"
+                        salto = g + 1
+                        break
+
+            stats[classificacao] = stats.get(classificacao, 0) + 1
+
+            if direcao_ia != "NEUTRO":
+                ia_total_predicoes += 1
+                letra_ia = "V" if direcao_ia == "VERMELHO" else "P"
+                if correcoes and (correcoes[0] == letra_ia or correcoes[0] == "B"):
+                    ia_acertos += 1
+
+            if regra_id not in ["NENHUMA", "SISTEMA_TRAVADO"]:
+                self.historico_regras[regra_id]["total"] += 1
+                if classificacao in ["G0", "G1"]:
+                    self.historico_regras[regra_id]["acertos"] += 1
+
+            bloco = [{"numero": self.seq.numerica[k], "cor": self.seq.polaridades[k]} 
+                     for k in range(idx, min(idx + 12 + salto, self.seq.total))]
+            self.ia.injetar_aprendizado_imediato(bloco, 3)
+
+            memorias.append(f"Janela {len(memorias)+1}: {sub_num} -> {sinal} | {justificativa} | {classificacao}")
+            idx += 12 + salto
+
+        total_com_sinal = stats.get("G0",0) + stats.get("G1",0) + stats.get("G2",0) + stats.get("FALHA",0)
+        denom = total_com_sinal if total_com_sinal > 0 else 1
+
+        output = "[MEMÓRIA DE CÁLCULO DAS JANELAS MÓVEIS]\n"
+        output += "\n".join(memorias) + "\n\n"
+        output += "[RESULTADO FINAL TIPO D]\n"
+        output += f"CRONOLOGIA VALIDADA: {self.seq.total} Resultados\n"
+        output += f"TOTAL DE JANELAS AUDITADAS: {len(memorias)}\n"
+        output += f" - Taxa G0: {stats.get('G0',0)} Ocorrências ({(stats.get('G0',0)/denom)*100:.2f}%)\n"
+        output += f" - Taxa G1: {stats.get('G1',0)} Ocorrências ({(stats.get('G1',0)/denom)*100:.2f}%)\n"
+        output += f" - Taxa G2: {stats.get('G2',0)} Ocorrências ({(stats.get('G2',0)/denom)*100:.2f}%)\n"
+        output += f" - Taxa de Falha: {stats.get('FALHA',0)} Ocorrências ({(stats.get('FALHA',0)/denom)*100:.2f}%)\n"
+        output += f" - Taxa de NO CALL: {stats.get('NO CALL',0)} Ocorrências\n\n"
+
+        assertividade_ia = (ia_acertos / ia_total_predicoes * 100) if ia_total_predicoes > 0 else 0.0
+        output += f"METRICA_EVOLUÇÃO_IA: {assertividade_ia:.2f}% de Assertividade Pura\n"
+
+        if stats.get("FALHA", 0) >= 25:
+            condicao = "MERCADO EM DEGRADAÇÃO"
+        elif stats.get("G0", 0) >= 50:
+            condicao = "MERCADO PAGADOR"
+        else:
+            condicao = "MERCADO INSTÁVEL"
+        output += f"ESTADO ATUAL DO MERCADO: {condicao}\n"
+
+        return output
 
 
 class ProcessadorTipoB:
@@ -521,59 +609,32 @@ class EngineMatematicoAvancado:
             "status": status
         }
 
-@staticmethod
-def calcular_vies_surfe(caminho_base, janela=100):
-    leitor = LeitorXLS(caminho_base)
-    dados = leitor.ler_e_validar()
-    if not dados:
+    @staticmethod
+    def calcular_vies_surfe(caminho_base, janela=100):
+        leitor = LeitorXLS(caminho_base)
+        dados = leitor.ler_e_validar()
+        if not dados:
+            return {"vies": "INDISPONÍVEL", "desvio_v": 0.0, "desvio_p": 0.0, 
+                    "frequencia_v": 46.67, "frequencia_p": 46.67, "frequencia_b": 6.67}
+        ultimos = dados[-janela:]
+        v = sum(1 for d in ultimos if d['cor'] == 'V')
+        p = sum(1 for d in ultimos if d['cor'] == 'P')
+        b = sum(1 for d in ultimos if d['cor'] == 'B')
+        pct_v = (v / len(ultimos)) * 100
+        pct_p = (p / len(ultimos)) * 100
+        pct_b = (b / len(ultimos)) * 100
+        desvio_v = round(pct_v - 46.67, 2)
+        desvio_p = round(pct_p - 46.67, 2)
+        vies = "VIÉS VERMELHO" if pct_v >= 53 else ("VIÉS PRETO" if pct_p >= 53 else "EQUILIBRADO")
         return {
-            "vies": "INDISPONÍVEL",
-            "desvio_v": 0.0,
-            "desvio_p": 0.0,
-            "frequencia_v": 46.67,
-            "frequencia_p": 46.67,
-            "frequencia_b": 6.67
+            "frequencia_v": round(pct_v,2), 
+            "frequencia_p": round(pct_p,2), 
+            "frequencia_b": round(pct_b,2),
+            "desvio_v": desvio_v, 
+            "desvio_p": desvio_p, 
+            "vies": vies
         }
-    
-    ultimos_giros = dados[-janela:]
-    total_giros = len(ultimos_giros)
-    
-    if total_giros == 0:
-        return {
-            "vies": "INDISPONÍVEL",
-            "desvio_v": 0.0,
-            "desvio_p": 0.0,
-            "frequencia_v": 46.67,
-            "frequencia_p": 46.67,
-            "frequencia_b": 6.67
-        }
-    
-    v = sum(1 for d in ultimos_giros if d['cor'] == 'V')
-    p = sum(1 for d in ultimos_giros if d['cor'] == 'P')
-    b = sum(1 for d in ultimos_giros if d['cor'] == 'B')
-    
-    pct_v = (v / total_giros) * 100
-    pct_p = (p / total_giros) * 100
-    pct_b = (b / total_giros) * 100
-    
-    desvio_v = round(pct_v - 46.67, 2)
-    desvio_p = round(pct_p - 46.67, 2)
-    
-    if pct_v >= 53.0:
-        vies = "SURFE DE MACROFREQUÊNCIA: VIÉS PARA VERMELHO ATIVO"
-    elif pct_p >= 53.0:
-        vies = "SURFE DE MACROFREQUÊNCIA: VIÉS PARA PRETO ATIVO"
-    else:
-        vies = "MACROANÁLISE EQUILIBRADA"
-    
-    return {
-        "frequencia_v": round(pct_v, 2),
-        "frequencia_p": round(pct_p, 2),
-        "frequencia_b": round(pct_b, 2),
-        "desvio_v": desvio_v,
-        "desvio_p": desvio_p,
-        "vies": vies
-    }
+
     @staticmethod
     def simular_split_stake_cobertura(stake_principal=10.0):
         stake_branco_ideal = round(stake_principal / 7.0, 2)
