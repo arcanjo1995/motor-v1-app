@@ -121,9 +121,7 @@ class IAPreditivaV1:
         v_bonus = stats.get("freq_v", 0) * 3.5
         p_bonus = stats.get("freq_p", 0) * 3.5
 
-        # ============================================================
         # Bônus de Consequência Futura (Pós-Número)
-        # ============================================================
         pos_v = stats.get("pos_numero_V", 0)
         pos_p = stats.get("pos_numero_P", 0)
         pos_total = pos_v + pos_p
@@ -189,7 +187,6 @@ class JuizHierarquicoModificado:
         if no_call_ativo:
             return "NO CALL", motivo_nc, "SISTEMA_TRAVADO"
 
-        # 1. Padrões geométricos fortes
         if geometria_mercado == "CICLO_FECHADO_VPPV": 
             return "PRETO", "Geometria VPPV", "GEOMETRIA"
         if geometria_mercado == "CICLO_FECHADO_PVVP": 
@@ -197,7 +194,6 @@ class JuizHierarquicoModificado:
 
         direcao_ia, confianca_ia = previsao_ia
 
-        # 2. Reversão forte
         if xadrez_len >= 5 and xadrez_quebrou and direcao_ia != "NEUTRO":
             return direcao_ia, f"Xadrez {xadrez_len} quebrou → Reversão provável", "XADREZ_REVERSAO"
 
@@ -207,13 +203,11 @@ class JuizHierarquicoModificado:
         if xadrez_quebrado and direcao_ia != "NEUTRO" and confianca_ia >= 53:
             return direcao_ia, f"Xadrez Quebrado + IA", "XADREZ_FORTE"
 
-        # 3. Regras como apoio leve
         if expectations and direcao_ia != "NEUTRO":
             for item in expectations:
                 if item["direcao"] == direcao_ia:
                     return direcao_ia, f"IA + Regra de apoio", "CONFLUENCIA_LEVE"
 
-        # 4. IA como principal
         if direcao_ia != "NEUTRO" and confianca_ia >= 52:
             return direcao_ia, f"IA Preditiva ({confianca_ia:.1f}%)", "IA_PREDITIVA"
 
@@ -427,8 +421,6 @@ class MotorV1Completo:
         idx = 0
         memorias = []
         stats = {"G0": 0, "G1": 0, "G2": 0, "FALHA": 0, "NO CALL": 0}
-        ia_total_predicoes = 0
-        ia_acertos = 0
 
         while idx + 12 < self.seq.total:
             sub_num = self.seq.numerica[idx:idx+12]
@@ -490,12 +482,6 @@ class MotorV1Completo:
 
             stats[classificacao] = stats.get(classificacao, 0) + 1
 
-            if direcao_ia != "NEUTRO":
-                ia_total_predicoes += 1
-                letra_ia = "V" if direcao_ia == "VERMELHO" else "P"
-                if correcoes and (correcoes[0] == letra_ia or correcoes[0] == "B"):
-                    ia_acertos += 1
-
             if regra_id not in ["NENHUMA", "SISTEMA_TRAVADO"]:
                 self.historico_regras[regra_id]["total"] += 1
                 if classificacao in ["G0", "G1"]:
@@ -521,9 +507,6 @@ class MotorV1Completo:
         output += f" - Taxa G2: {stats.get('G2',0)} Ocorrências ({(stats.get('G2',0)/denom)*100:.2f}%)\n"
         output += f" - Taxa de Falha: {stats.get('FALHA',0)} Ocorrências ({(stats.get('FALHA',0)/denom)*100:.2f}%)\n"
         output += f" - Taxa de NO CALL: {stats.get('NO CALL',0)} Ocorrências\n\n"
-
-        assertividade_ia = (ia_acertos / ia_total_predicoes * 100) if ia_total_predicoes > 0 else 0.0
-        output += f"METRICA_EVOLUÇÃO_IA: {assertividade_ia:.2f}% de Assertividade Pura\n"
 
         if stats.get("FALHA", 0) >= 25:
             condicao = "MERCADO EM DEGRADAÇÃO"
