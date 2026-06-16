@@ -32,7 +32,7 @@ class MotorNoCall:
 
 
 # ============================================================
-# IAPreditivaV1
+# IAPreditivaV1 - Analista Probabilístico do Double
 # ============================================================
 class IAPreditivaV1:
     def __init__(self, dados_longo_prazo, dados_recencia=None):
@@ -229,16 +229,16 @@ class IAPreditivaV1:
         prob_v = (total_v / soma_pesos) * 100
         prob_p = (total_p / soma_pesos) * 100
         
-        BARREIRA_CONFIA_IA = 56.0
-        if prob_v >= BARREIRA_CONFIA_IA and prob_v > prob_p + 7:
+        BARREIRA_CONFIA_IA = 55.0
+        if prob_v >= BARREIRA_CONFIA_IA and prob_v > prob_p + 6:
             return "VERMELHO", round(prob_v, 1)
-        elif prob_p >= BARREIRA_CONFIA_IA and prob_p > prob_v + 7:
+        elif prob_p >= BARREIRA_CONFIA_IA and prob_p > prob_v + 6:
             return "PRETO", round(prob_p, 1)
         return "NEUTRO", round(max(prob_v, prob_p), 1)
 
 
 # ============================================================
-# DEMAIS CLASSES (mantidas)
+# DEMAIS CLASSES (mantidas exatamente como você enviou)
 # ============================================================
 
 class SequenciaOperacional:
@@ -376,7 +376,7 @@ class AnalisadorContextoAvancado:
 
 
 # ============================================================
-# JuizHierarquicoModificado - MELHORADO (mantendo nomenclatura)
+# JuizHierarquicoModificado - Analista (regras como cenários)
 # ============================================================
 class JuizHierarquicoModificado:
     @staticmethod
@@ -393,36 +393,36 @@ class JuizHierarquicoModificado:
         direcao_ia, confianca_ia = previsao_ia
         direcao_inclinacao, porc = inclinacao_num
 
-        # Bônus de Xadrez Quebrado (feature forte)
-        if xadrez_quebrado and direcao_ia != "NEUTRO" and confianca_ia >= 54:
-            return direcao_ia, f"Xadrez Quebrado + IA ({confianca_ia:.1f}%)", "XADREZ_REGRA_OURO"
+        # Xadrez Quebrado como sinal forte
+        if xadrez_quebrado and direcao_ia != "NEUTRO" and confianca_ia >= 53:
+            return direcao_ia, f"Xadrez Quebrado + IA ({confianca_ia:.1f}%)", "XADREZ_FORTE"
 
         if expectations:
             forcas = {"VERMELHO": 0.0, "PRETO": 0.0}
             for item in expectations:
                 id_r = item["tipo_regra"]
                 taxa = historico_revalida_regras[id_r]["acertos"] / max(1, historico_revalida_regras[id_r]["total"])
-                peso = 3.5 * (1.0 + taxa)
+                peso = 3.2 * (1.0 + taxa)
                 forcas[item["direcao"]] += peso
             
             if forcas["VERMELHO"] != forcas["PRETO"]:
                 dominante = "VERMELHO" if forcas["VERMELHO"] > forcas["PRETO"] else "PRETO"
                 
-                if direcao_ia == dominante and confianca_ia >= 55:
-                    return dominante, f"Alta Confluência ({confianca_ia:.1f}%)", "CONFLUENCIA_ALTA"
+                if direcao_ia == dominante and confianca_ia >= 54:
+                    return dominante, f"Confluência Alta ({confianca_ia:.1f}%)", "CONFLUENCIA_BOA"
                 
-                if direcao_ia != dominante and confianca_ia >= 57:
-                    return direcao_ia, f"IA por contradição ({confianca_ia:.1f}%)", "IA_ARBITRAGEM"
+                if direcao_ia != dominante and confianca_ia >= 56:
+                    return direcao_ia, f"IA assume ({confianca_ia:.1f}%)", "IA_ARBITRAGEM"
 
-                return dominante, "Dominância de regras", "REGRAS"
+                return dominante, "Regras dominantes", "REGRAS"
 
-        if direcao_ia != "NEUTRO" and confianca_ia >= 56.0:
+        if direcao_ia != "NEUTRO" and confianca_ia >= 55.0:
             return direcao_ia, f"IA Preditiva ({confianca_ia:.1f}%)", "IA_PREDITIVA"
         
         if direcao_inclinacao != "NEUTRO" and porc >= 58.0:
             return direcao_inclinacao, f"Matriz Pós-Número ({porc:.1f}%)", "MATRIZ_INCLINA"
 
-        return "NO CALL", "Ausência de consenso claro", "SISTEMA_TRAVADO"
+        return "NO CALL", "Sem confluência suficiente", "SISTEMA_TRAVADO"
 
 
 class LeitorXLS:
