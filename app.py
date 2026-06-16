@@ -60,49 +60,54 @@ with aba_tipo_b:
         st.write("---")
         
         # =========================================================================
-        # 1. VEREDITO E PAINEL DE INJEÇÃO DE DADOS REAIS (TOPO)
+        # 1. VEREDITO E PAINEL DE INJEÇÃO DE DADOS REAIS (TOPO — LADO A LADO)
         # =========================================================================
-        st.subheader("📊 Veredito e Alimentação Real")
+        col_veredicto, col_injecao = st.columns(2)
         sinal = st.session_state.sinal_pendente
         
-        if sinal == "NO CALL":
-            st.warning(f"**EXPECTATIVA:** {sinal}")
-            st.caption(f"Motivo: {st.session_state.justificativa_pendente}")
-            if st.button("🔄 Limpar Painel"): st.session_state.sinal_pendente = None
-        else:
-            st.info(f"**EXPECTATIVA ATIVA:** Operar no {sinal}")
-            st.caption(f"Origem: {st.session_state.justificativa_pendente}")
-            
-            st.write("---")
-            st.write("### 🎛️ Painel de Injeção de Dados Reais:")
-            tipo_resultado = st.radio("Selecione o resultado real da operação:", ["G0", "G1", "G2", "FALHA"], horizontal=True)
-            
-            numeros_reais = []
-            if tipo_resultado == "G0":
-                n1 = st.number_input("Digite o número que saiu na 1ª rodada (G0):", min_value=0, max_value=14, step=1, key="n1")
-                numeros_reais = [n1]
-            elif tipo_resultado == "G1":
-                n1 = st.number_input("Número que saiu na 1ª rodada (Erro):", min_value=0, max_value=14, step=1, key="n1")
-                n2 = st.number_input("Número que saiu na 2ª rodada (G1 - Acerto):", min_value=0, max_value=14, step=1, key="n2")
-                numeros_reais = [n1, n2]
-            elif tipo_resultado == "G2":
-                n1 = st.number_input("Número que saiu na 1ª rodada (Erro):", min_value=0, max_value=14, step=1, key="n1")
-                n2 = st.number_input("Número que saiu na 2ª rodada (Erro):", min_value=0, max_value=14, step=1, key="n2")
-                n3 = st.number_input("Número que saiu na 3ª rodada (G2 - Acerto):", min_value=0, max_value=14, step=1, key="n3")
-                numeros_reais = [n1, n2, n3]
-            elif tipo_resultado == "FALHA":
-                n1 = st.number_input("Número que saiu na 1ª rodada (Erro):", min_value=0, max_value=14, step=1, key="n1")
-                n2 = st.number_input("Número que saiu na 2ª rodada (Erro):", min_value=0, max_value=14, step=1, key="n2")
-                n3 = st.number_input("Número que saiu na 3ª rodada (Erro):", min_value=0, max_value=14, step=1, key="n3")
-                numeros_reais = [n1, n2, n3]
-            
-            if st.button("💾 Gravar Números Reais e Evoluir IA"):
-                GerenciadorMemoriaViva.injetar_rodadas_reais(st.session_state.sequencia_em_uso, numeros_reais, NOME_RECENCIA_ATIVA)
-                st.success(f"Sucesso! Dados injetados com 100% de exatidão na IA.")
-                st.session_state.sinal_pendente = None
+        with col_veredicto:
+            st.subheader("📊 Veredito e Alimentação Real")
+            if sinal == "NO CALL":
+                st.warning(f"**EXPECTATIVA:** {sinal}")
+                st.caption(f"Motivo: {st.session_state.justificativa_pendente}")
+                if st.button("🔄 Limpar Painel"): st.session_state.sinal_pendente = None
+            else:
+                st.info(f"**EXPECTATIVA ATIVA:** Operar no {sinal}")
+                st.caption(f"Origem: {st.session_state.justificativa_pendente}")
+                
+        with col_injecao:
+            st.subheader("🎛️ Painel de Injeção de Dados Reais")
+            if sinal == "NO CALL":
+                st.info("Painel suspenso: Nenhuma ação de injeção manual é necessária para cenários de NO CALL.")
+            else:
+                tipo_resultado = st.radio("Selecione o resultado real da operação:", ["G0", "G1", "G2", "FALHA"], horizontal=True)
+                
+                numeros_reais = []
+                if tipo_resultado == "G0":
+                    n1 = st.number_input("Digite o número que saiu na 1ª rodada (G0):", min_value=0, max_value=14, step=1, key="n1")
+                    numeros_reais = [n1]
+                elif tipo_resultado == "G1":
+                    n1 = st.number_input("Número que saiu na 1ª rodada (Erro):", min_value=0, max_value=14, step=1, key="n1")
+                    n2 = st.number_input("Número que saiu na 2ª rodada (G1 - Acerto):", min_value=0, max_value=14, step=1, key="n2")
+                    numeros_reais = [n1, n2]
+                elif tipo_resultado == "G2":
+                    n1 = st.number_input("Número que saiu na 1ª rodada (Erro):", min_value=0, max_value=14, step=1, key="n1")
+                    n2 = st.number_input("Número que saiu na 2ª rodada (Erro):", min_value=0, max_value=14, step=1, key="n2")
+                    n3 = st.number_input("Número que saiu na 3ª rodada (G2 - Acerto):", min_value=0, max_value=14, step=1, key="n3")
+                    numeros_reais = [n1, n2, n3]
+                elif tipo_resultado == "FALHA":
+                    n1 = st.number_input("Número que saiu na 1ª rodada (Erro):", min_value=0, max_value=14, step=1, key="n1")
+                    n2 = st.number_input("Número que saiu na 2ª rodada (Erro):", min_value=0, max_value=14, step=1, key="n2")
+                    n3 = st.number_input("Número que saiu na 3ª rodada (Erro):", min_value=0, max_value=14, step=1, key="n3")
+                    numeros_reais = [n1, n2, n3]
+                
+                if st.button("💾 Gravar Números Reais e Evoluir IA"):
+                    GerenciadorMemoriaViva.injetar_rodadas_reais(st.session_state.sequencia_em_uso, numeros_reais, NOME_RECENCIA_ATIVA)
+                    st.success(f"Sucesso! Dados injetados com 100% de exatidão na IA.")
+                    st.session_state.sinal_pendente = None
 
         # =========================================================================
-        # 2. RASCUNHO ANALÍTICO INTERNO (EMBAIXO)
+        # 2. RASCUNHO ANALÍTICO INTERNO (MEIO — LARGURA COMPLETA)
         # =========================================================================
         st.write("---")
         st.subheader("📝 Rascunho Analítico Interno")
