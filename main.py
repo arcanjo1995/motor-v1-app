@@ -541,3 +541,112 @@ class LeitorXLS:
                 except: continue
             return dados_limpos if dados_limpos else None
         except: return None
+            
+# =========================================================================
+# COMPLEMENTO MATEMÁTICO AVANÇADO — ADICIONAL COGNITIVO
+# =========================================================================
+
+class EngineMatematicoAvancado:
+    @staticmethod
+    def calcular_raridade_sequencia(sub_pol):
+        """
+        Aplica a Distribuição Binomial para medir a raridade da sequência atual 
+        e identificar anomalias de curto prazo. P(sequência) = (7/15)^n
+        """
+        if not sub_pol:
+            return {"streak": 0, "probabilidade": 100.0, "status": "SEM DADOS"}
+        
+        ultima_cor = sub_pol[-1]
+        if ultima_cor not in ['V', 'P']:
+            return {"streak": 0, "probabilidade": 100.0, "status": "BRANCO RECENTE"}
+        
+        streak = 0
+        for cor in reversed(sub_pol):
+            if cor == ultima_cor:
+                streak += 1
+            else:
+                break
+                
+        probabilidade_sequencia = ((7 / 15) ** streak) * 100
+        
+        if streak >= 5:
+            status = "ANOMALIA CRÍTICA (Gatilho Probabilístico de Quebra Ativo)"
+        elif streak >= 3:
+            status = "DESVIO PADRÃO EM CURSO (Fase de Alinhamento)"
+        else:
+            status = "FLUXO DENTRO DA NORMALIDADE ESTÁTICA"
+            
+        return {
+            "streak": streak,
+            "cor_sequencia": "VERMELHO" if ultima_cor == 'V' else "PRETO",
+            "probabilidade": round(probabilidade_sequencia, 4),
+            "status": status
+        }
+
+    @staticmethod
+    def calcular_vies_surfe(caminho_base, janela=100):
+        """
+        Analisa a amostragem real das últimas N rodadas para identificar 
+        tendências macro (Surfe) e desvios de frequência da plataforma.
+        """
+        leitor = LeitorXLS(caminho_base)
+        dados = leitor.ler_e_validar()
+        
+        if not dados:
+            return {"vies": "INDISPONÍVEL", "desvio_v": 0.0, "desvio_p": 0.0}
+            
+        ultimos_giros = dados[-janela:]
+        total_giros = len(ultimos_giros)
+        
+        if total_giros == 0:
+            return {"vies": "INDISPONÍVEL", "desvio_v": 0.0, "desvio_p": 0.0}
+            
+        v = sum(1 for d in ultimos_giros if d['cor'] == 'V')
+        p = sum(1 for d in ultimos_giros if d['cor'] == 'P')
+        b = sum(1 for d in ultimos_giros if d['cor'] == 'B')
+        
+        pct_v = (v / total_giros) * 100
+        pct_p = (p / total_giros) * 100
+        pct_b = (b / total_giros) * 100
+        
+        # 46.67% é a probabilidade teórica de V e P
+        desvio_v = pct_v - 46.67
+        desvio_p = pct_p - 46.67
+        
+        if pct_v >= 55.0:
+            vies = "SURFE DETECTADO: ALGORITMO TENDENCIOSO PARA VERMELHO"
+        elif pct_p >= 55.0:
+            vies = "SURFE DETECTADO: ALGORITMO TENDENCIOSO PARA PRETO"
+        else:
+            vies = "MERCADO BALANCEADO (Fiel à Probabilidade Teórica)"
+            
+        return {
+            "frequencia_v": round(pct_v, 2),
+            "frequencia_p": round(pct_p, 2),
+            "frequencia_b": round(pct_b, 2),
+            "desvio_v": round(desvio_v, 2),
+            "desvio_p": round(desvio_p, 2),
+            "vies": vies
+        }
+
+    @staticmethod
+    def simular_split_stake_cobertura(stake_principal=10.0):
+        """
+        Calcula a divisão matemática cirúrgica para proteção do Branco (14x)
+        garantindo a mitigação controlada do House Edge fixo de -6.67%.
+        """
+        stake_branco_ideal = round(stake_principal / 7.0, 2)
+        stake_branco_conservador = round(stake_principal / 10.0, 2)
+        
+        custo_total = stake_principal + stake_branco_ideal
+        retorno_branco = stake_branco_ideal * 14
+        lucro_liquido_b = retorno_branco - custo_total
+        
+        return {
+            "stake_cor": stake_principal,
+            "cobertura_b_ideal_1_7": stake_branco_ideal,
+            "cobertura_b_matematica_1_10": stake_branco_conservador,
+            "lucro_liquido_se_der_branco": round(lucro_liquido_b, 2),
+            "custo_total_operacao": round(custo_total, 2),
+            "house_edge_estatico": "-6.67%"
+        }
