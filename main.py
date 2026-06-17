@@ -122,6 +122,7 @@ class IAPreditivaV1:
                         if "VPVP" in texto: self.modelo_transicao[("XADREZ", "VPVP")].append(cor_futura)
 
     def injetar_aprendizado_imediato(self, sub_dados, multiplicador_peso=4):
+        self.dados_recencia.extend(sub_dados)
         self._processar_bloco_dados(sub_dados, multiplicador_peso, True)
 
     def predizer_proxima_casa(self, sub_num, sub_pol):
@@ -144,7 +145,6 @@ class IAPreditivaV1:
         v_bonus = stats.get("freq_v", 0) * 3.5
         p_bonus = stats.get("freq_p", 0) * 3.5
 
-        # Bônus de Consequência Futura (Pós-Número)
         pos_v = stats.get("pos_numero_V", 0)
         pos_p = stats.get("pos_numero_P", 0)
         pos_total = pos_v + pos_p
@@ -155,7 +155,6 @@ class IAPreditivaV1:
             elif pos_p > pos_v * 1.25:
                 p_bonus += 14
 
-        # Bônus de sequência longa
         streak = 0
         for cor in reversed(sub_pol):
             if cor == sub_pol[-1]: streak += 1
@@ -543,7 +542,7 @@ class MotorV1Completo:
 
 
 # ============================================================
-# ProcessadorTipoB - VERSÃO COM PERSISTÊNCIA DE MODELO
+# ProcessadorTipoB - LIGADO AO FLUXO QUE VOCÊ QUER
 # ============================================================
 class ProcessadorTipoB:
     def __init__(self, sequencia_12_numeros, caminho_base_dados):
@@ -555,17 +554,14 @@ class ProcessadorTipoB:
         if len(self.entrada) != 12:
             return {"erro": "Necessário exatamente 12 números"}
         
-        # Tenta carregar o modelo de longo prazo já treinado
         ia = carregar_modelo_longo_prazo()
         
         if ia is None:
-            # Fallback: treina do zero caso não exista modelo salvo ainda
             base = LeitorXLS(self.caminho_base).ler_e_validar()
             if not base:
                 return {"erro": "Base de dados não encontrada"}
             ia = IAPreditivaV1(base, None)
 
-        # Injeta a recência atual (com peso maior)
         base_rec = None
         if os.path.exists("base_recencia_ativa.xlsx"):
             base_rec = LeitorXLS("base_recencia_ativa.xlsx").ler_e_validar()
@@ -585,7 +581,6 @@ class ProcessadorTipoB:
         geometria = AnalisadorContextoAvancado.mapear_padroes_geometria(self.polaridades)
         status_inv = AnalisadorContextoAvancado.detectar_chance_inversao(self.polaridades)
 
-        # Cálculo de streak e xadrez
         streak = 0
         for c in reversed(self.polaridades):
             if c == self.polaridades[-1]: streak += 1
@@ -609,7 +604,6 @@ class ProcessadorTipoB:
             xadrez_quebrou=xadrez_quebrou
         )
 
-        # Veto de streak forte (mesma lógica da auditoria)
         if sinal != "NO CALL" and streak >= 6:
             if direcao_ia != sinal:
                 sinal = "NO CALL"
@@ -619,11 +613,7 @@ class ProcessadorTipoB:
         analise_completa = {
             "no_call": {"ativo": nc_ativo, "motivo": motivo_nc},
             "contexto": {"streak": streak, "xadrez_len": xadrez_len, "xadrez_quebrou": xadrez_quebrou, "modo_mercado": modo_mercado},
-            "padroes": {
-                "expectativas": expectativas,
-                "geometria": geometria,
-                "inclinacao_pos_numero": inclinacao
-            },
+            "padroes": {"expectativas": expectativas, "geometria": geometria, "inclinacao_pos_numero": inclinacao},
             "ia": {"direcao": direcao_ia, "confianca": round(conf_ia, 2), "barreira_usada": 52.5},
             "juiz": {"sinal_final": sinal, "justificativa": justificativa, "regra_id": regra_id},
             "gestao_risco": self._gerar_gestao_risco(sinal, streak, xadrez_len, xadrez_quebrou, conf_ia)
