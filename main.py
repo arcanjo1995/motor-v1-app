@@ -570,7 +570,7 @@ class MotorV1Completo:
 
 
 # ============================================================
-# ProcessadorTipoB - Atualizado
+# ProcessadorTipoB - Com rastreabilidade melhorada
 # ============================================================
 class ProcessadorTipoB:
     def __init__(self, sequencia_12_numeros, caminho_base_dados):
@@ -581,7 +581,7 @@ class ProcessadorTipoB:
     def executar_sinal_real(self):
         if len(self.entrada) != 12:
             return {"erro": "Necessário exatamente 12 números"}
-        
+
         ia = carregar_modelo_longo_prazo()
         if ia is None:
             base = LeitorXLS(self.caminho_base).ler_e_validar()
@@ -589,78 +589,104 @@ class ProcessadorTipoB:
                 return {"erro": "Base de dados não encontrada"}
             ia = IAPreditivaV1(base, None)
 
+        # Injeta recência (se existir)
         base_rec = None
         if os.path.exists("base_recencia_ativa.xlsx"):
             base_rec = LeitorXLS("base_recencia_ativa.xlsx").ler_e_validar()
             if base_rec:
                 ia.injetar_aprendizado_imediato(base_rec, multiplicador_peso=4)
 
-        evidencias = []
+        # ============================================================
+        # RASTREAMENTO DE RACIOCÍNIO (NOVO)
+        # ============================================================
+        raciocinio_trace = []
 
-        # RELEITURA 1 - Segurança (NO CALL)
+        # === CAMADA 1: Segurança (NO CALL) ===
         nc_ativo, motivo_nc = MotorNoCall.checar_no_call(self.entrada, self.polaridades)
-        evidencias.append({"releitura": 1, "tipo": "Segurança (NO CALL)", "resultado": {"ativo": nc_ativo, "motivo": motivo_nc}})
+        raciocinio_trace.append({
+            "camada": 1,
+            "nome": "Segurança (NO CALL)",
+            "resultado": f"Ativo={nc_ativo}",
+            "detalhe": motivo_nc,
+            "impacto": "BLOQUEIO" if nc_ativo else "APROVADO"
+        })
 
-        # RELEITURA 2 - Geometria
+        # === CAMADA 2: Geometria ===
         geometria = AnalisadorContextoAvancado.mapear_padroes_geometria(self.polaridades)
-        evidencias.append({"releitura": 2, "tipo": "Geometria", "resultado": geometria})
+        raciocinio_trace.append({
+            "camada": 2,
+            "nome": "Geometria",
+            "resultado": geometria,
+            "detalhe": "Padrão geométrico detectado",
+            "impacto": "FORTE" if geometria in ["CICLO_FECHADO_VPPV", "CICLO_FECHADO_PVVP"] else "NEUTRO"
+        })
 
-        # RELEITURA 3 - Regras Projetivas (Volume 12)
+        # === CAMADA 3: Regras Posicionais ===
         expectativas = MotorContagensProjetivas.mapear_janela(self.entrada, self.polaridades, geometria)
-        evidencias.append({"releitura": 3, "tipo": "Regras Projetivas (Volume 12)", "resultado": expectativas})
+        raciocinio_trace.append({
+            "camada": 3,
+            "nome": "Regras Posicionais (Volume 12)",
+            "resultado": f"{len(expectativas)} regras ativas",
+            "detalhe": [e["tipo_regra"] for e in expectativas] if expectativas else "Nenhuma regra forte",
+            "impacto": "ALTO" if expectativas else "BAIXO"
+        })
 
-        # RELEITURA 4 - Contexto Avançado
+        # === CAMADA 4: Contexto Avançado ===
         base_longa = LeitorXLS(self.caminho_base).ler_e_validar() or []
         inclinacao = AnalisadorContextoAvancado.calcular_numerologia_pos_numero(
             self.entrada[-1], [d['numero'] for d in base_longa], [d['cor'] for d in base_longa]
         )
         modo_mercado = AnalisadorContextoAvancado.detectar_modo_mercado(self.polaridades)
-        evidencias.append({"releitura": 4, "tipo": "Contexto Avançado", "resultado": {"inclinacao": inclinacao, "modo_mercado": modo_mercado}})
+        raciocinio_trace.append({
+            "camada": 4,
+            "nome": "Contexto Avançado",
+            "resultado": f"Inclinação: {inclinacao[0]}",
+            "detalhe": f"Modo de mercado: {modo_mercado}",
+            "impacto": "MÉDIO"
+        })
 
-        # RELEITURA 5 - IA Probabilística
+        # === CAMADA 5: IA Probabilística ===
         direcao_ia, conf_ia, raciocinio_ia = ia.predizer_proxima_casa(self.entrada, self.polaridades)
-        evidencias.append({"releitura": 5, "tipo": "IA Probabilística", "resultado": {"direcao": direcao_ia, "confianca": conf_ia, "raciocinio": raciocinio_ia}})
+        raciocinio_trace.append({
+            "camada": 5,
+            "nome": "IA Probabilística",
+            "resultado": f"{direcao_ia} ({conf_ia}%)",
+            "detalhe": raciocinio_ia,
+            "impacto": "ALTO" if conf_ia >= 52 else "MÉDIO"
+        })
 
-        # RELEITURA 6 - Análise Sequencial
-        streak = 0
-        for c in reversed(self.polaridades):
-            if c == self.polaridades[-1]: streak += 1
-            else: break
-
+        # === CAMADA 6: Contexto de Reversão ===
+        streak = sum(1 for c in reversed(self.polaridades) if c == self.polaridades[-1])
         xadrez_len = 0
         for i in range(len(self.polaridades)-1, 0, -1):
             if self.polaridades[i] != self.polaridades[i-1]:
                 xadrez_len += 1
-            else: break
-
+            else:
+                break
         xadrez_quebrou = (self.polaridades[-1] == self.polaridades[-2]) if len(self.polaridades) >= 2 else False
         contexto_exaustao = (streak >= 5) or (xadrez_len >= 5 and xadrez_quebrou)
 
-        evidencias.append({
-            "releitura": 6, 
-            "tipo": "Análise Sequencial (Streak/Xadrez/Exaustão)", 
-            "resultado": {
-                "streak": streak, 
-                "xadrez_len": xadrez_len, 
-                "xadrez_quebrou": xadrez_quebrou,
-                "contexto_exaustao": contexto_exaustao
-            }
+        raciocinio_trace.append({
+            "camada": 6,
+            "nome": "Contexto de Reversão",
+            "resultado": f"Streak={streak}x | Xadrez={xadrez_len}",
+            "detalhe": f"Exaustão={contexto_exaustao}",
+            "impacto": "ALTO" if contexto_exaustao else "BAIXO"
         })
 
+        # ============================================================
+        # SÍNTESE FINAL DO RACIOCÍNIO
+        # ============================================================
         sintese = []
-        if nc_ativo:
-            sintese.append("Bloqueio por NO CALL ativo.")
-        if geometria in ["CICLO_FECHADO_VPPV", "CICLO_FECHADO_PVVP"]:
-            sintese.append(f"Padrão geométrico forte detectado: {geometria}.")
-        if expectativas:
-            sintese.append(f"Regras projetivas ativas ({len(expectativas)} evidências).")
-        if direcao_ia != "NEUTRO" and conf_ia >= 52:
-            sintese.append(f"IA com sinal {direcao_ia} e confiança {conf_ia}%.")
-        if contexto_exaustao:
-            sintese.append("Contexto de exaustão/streak longo favorece reversão.")
+        for item in raciocinio_trace:
+            if item["impacto"] in ["ALTO", "FORTE", "BLOQUEIO"]:
+                sintese.append(f"[{item['nome']}] {item['resultado']} → {item['detalhe']}")
 
         raciocinio_final = " | ".join(sintese) if sintese else "Análise sem confluência forte entre as camadas."
 
+        # ============================================================
+        # CHAMADA DO JUIZ
+        # ============================================================
         sinal, justificativa, regra_id = JuizHierarquicoModificado.arbitrar_sinal(
             nc_ativo, motivo_nc, expectativas, inclinacao, geometria,
             (direcao_ia, conf_ia, raciocinio_ia), None,
@@ -673,6 +699,7 @@ class ProcessadorTipoB:
             sintese_evidencias=raciocinio_final
         )
 
+        # Veto adicional de streak
         if sinal != "NO CALL" and streak >= 6:
             if direcao_ia != sinal:
                 sinal = "NO CALL"
@@ -684,10 +711,13 @@ class ProcessadorTipoB:
             "justificativa": justificativa,
             "confianca_ia": round(conf_ia, 2),
             "no_call": nc_ativo,
-            "memoria": f"[PROCESSAMENTO TIPO B - RELEITURAS ESTRUTURADAS] Sequência: {self.entrada}",
-            "releituras": evidencias,
-            "sintese_raciocinio": raciocinio_final,
-            "decisao_final": {"sinal": sinal, "justificativa": justificativa, "regra_id": regra_id}
+            "raciocinio_trace": raciocinio_trace,
+            "raciocinio_final": raciocinio_final,
+            "decisao_final": {
+                "sinal": sinal,
+                "justificativa": justificativa,
+                "regra_id": regra_id
+            }
         }
 
 
