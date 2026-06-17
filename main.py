@@ -55,7 +55,7 @@ class MotorNoCall:
 
 
 # ============================================================
-# IAPreditivaV1 (mantida)
+# IAPreditivaV1
 # ============================================================
 class IAPreditivaV1:
     def __init__(self, dados_longo_prazo, dados_recencia=None):
@@ -178,7 +178,7 @@ class IAPreditivaV1:
 
 
 # ============================================================
-# JuizHierarquicoModificado - COM FILTRO DE CONTEXTO NA GEOMETRIA
+# JuizHierarquicoModificado
 # ============================================================
 class JuizHierarquicoModificado:
     @staticmethod
@@ -192,9 +192,6 @@ class JuizHierarquicoModificado:
         if no_call_ativo:
             return "NO CALL", motivo_nc, "SISTEMA_TRAVADO"
 
-        # ============================================================
-        # MELHORIA 1: FILTRO DE CONTEXTO NA GEOMETRIA FORTE
-        # ============================================================
         if geometria_mercado in ["CICLO_FECHADO_VPPV", "CICLO_FECHADO_PVVP"]:
             if streak_atual >= 4 or xadrez_len >= 4:
                 return "NO CALL", f"Geometria forte, mas contexto de alta alternância/streak ({streak_atual}x) - aguardar confirmação", "GEOMETRIA_CONTEXTO"
@@ -206,7 +203,6 @@ class JuizHierarquicoModificado:
 
         direcao_ia, confianca_ia, raciocinio_ia = previsao_ia
 
-        # Prioridade 2: Regras do manual com boa confluência
         if expectations:
             count_v = sum(1 for item in expectations if item["direcao"] == "VERMELHO")
             count_p = sum(1 for item in expectations if item["direcao"] == "PRETO")
@@ -216,13 +212,11 @@ class JuizHierarquicoModificado:
             elif count_p > count_v:
                 return "PRETO", "Regra do manual ativa com apoio", "REGRA_MANUAL"
 
-        # Prioridade 3: IA com confiança razoável + contexto favorável
         if direcao_ia != "NEUTRO" and confianca_ia >= 52:
             if contexto_exaustao or (streak_atual >= 5) or (xadrez_len >= 4 and xadrez_quebrou):
                 return direcao_ia, f"IA + Contexto de reversão ({raciocinio_ia})", "IA_CONTEXTO_REVERSAO"
             return direcao_ia, f"IA Preditiva ({confianca_ia:.1f}%) - {raciocinio_ia}", "IA_PREDITIVA"
 
-        # Prioridade 4: Contexto de exaustão forte
         if contexto_exaustao and direcao_ia != "NEUTRO":
             return direcao_ia, "Contexto de exaustão forte + IA", "CONTEXTO_EXAUSTAO"
 
@@ -230,7 +224,7 @@ class JuizHierarquicoModificado:
 
 
 # ============================================================
-# MotorContagensProjetivas - COM FILTRO DE BRANCOS RECENTES
+# MotorContagensProjetivas
 # ============================================================
 class MotorContagensProjetivas:
     @staticmethod
@@ -260,10 +254,7 @@ class MotorContagensProjetivas:
         elif par_fechamento in continuidade_vermelha_validas:
             lista_bruta.append({"direcao": "VERMELHO", "tipo_regra": "V2_CONTINUIDADE_VERMELHA", "origem": "Volume 2"})
 
-        # ============================================================
-        # MELHORIA 2: FILTRO DE BRANCOS RECENTES (Posições 8~11)
-        # ============================================================
-        tem_branco_recente = any(p == "B" for p in sub_pol[7:11])  # índices 7 a 10 = posições 8 a 11
+        tem_branco_recente = any(p == "B" for p in sub_pol[7:11])
 
         if not tem_branco_recente:
             if sub_num[5] == 2:
@@ -281,9 +272,8 @@ class MotorContagensProjetivas:
 
 
 # ============================================================
-# (Classes auxiliares mantidas)
+# Classes Auxiliares
 # ============================================================
-
 class SequenciaOperacional:
     def __init__(self, lista_resultados):
         self.cronologia = lista_resultados
@@ -375,41 +365,70 @@ class AnalisadorContextoAvancado:
         elif alternancias <= 3: return "RECUPERACAO"
         return "NEUTRO"
 
+
+# ============================================================
+# LeitorXLS - SIMPLIFICADO E ROBUSTO (para arquivos com Número e Cor)
+# ============================================================
 class LeitorXLS:
     def __init__(self, caminho_arquivo):
         self.caminho = caminho_arquivo
 
     def ler_e_validar(self):
-        if not os.path.exists(self.caminho): return None
+        """
+        Lê o arquivo XLS/CSV com colunas 'Número' e 'Cor'.
+        Sempre retorna os dados do mais antigo para o mais novo.
+        """
+        if not os.path.exists(self.caminho):
+            return None
+
         try:
-            try: df = pd.read_excel(self.caminho)
-            except: df = pd.read_csv(self.caminho)
+            df = pd.read_excel(self.caminho)
             df.columns = [str(col).strip().lower() for col in df.columns]
-            mapeamento = {'val': 'numero', 'value': 'numero', 'num': 'numero', 'number': 'numero', 
-                          'resultado': 'numero', 'roll': 'numero', 'giro': 'numero', 'spin': 'numero',
-                          'color': 'cor', 'cor': 'cor', 'result': 'cor'}
-            df = df.rename(columns=mapeamento)
-            cols = df.columns.tolist()
-            col_num = next((c for c in cols if any(x in str(c).lower() for x in ['num','val','roll','giro','spin'])), cols[0] if cols else None)
-            col_cor = next((c for c in cols if 'cor' in str(c).lower() or 'color' in str(c).lower()), cols[1] if len(cols) > 1 else None)
-            if not col_num or not col_cor: return None
-            df = df.rename(columns={col_num: 'numero', col_cor: 'cor'})
+
+            # Busca colunas de forma simples e direta
+            col_num = None
+            for c in df.columns:
+                if c in ['número', 'numero', 'num']:
+                    col_num = c
+                    break
+
+            if col_num is None:
+                return None
+
+            df = df.rename(columns={col_num: 'numero'})
+
+            # Inversão obrigatória: mais antigo primeiro
             df = df.iloc[::-1].reset_index(drop=True)
-            if len(df) < 15: return None
+
+            if len(df) < 5:
+                return None
+
             dados = []
             for _, row in df.iterrows():
                 try:
                     num = int(row['numero'])
-                    if num == 0: cor = 'B'
-                    elif 1 <= num <= 7: cor = 'V'
-                    elif 8 <= num <= 14: cor = 'P'
-                    else: continue
+                    if num == 0:
+                        cor = 'B'
+                    elif 1 <= num <= 7:
+                        cor = 'V'
+                    elif 8 <= num <= 14:
+                        cor = 'P'
+                    else:
+                        continue
                     dados.append({"numero": num, "cor": cor})
-                except: continue
-            return dados if dados else None
-        except:
+                except:
+                    continue
+
+            return dados if len(dados) >= 5 else None
+
+        except Exception as e:
+            print(f"[LeitorXLS] Erro: {e}")
             return None
 
+
+# ============================================================
+# MotorV1Completo + ProcessadorTipoB + Engine
+# ============================================================
 class MotorV1Completo:
     def __init__(self, lista_dados_xls):
         self.seq = SequenciaOperacional(lista_dados_xls)
@@ -468,12 +487,11 @@ class MotorV1Completo:
                 xadrez_quebrou=xadrez_quebrou
             )
 
-            if sinal != "NO CALL":
-                if streak >= 6:
-                    if direcao_ia != sinal:
-                        sinal = "NO CALL"
-                        justificativa = f"Veto de streak {streak}x (contra IA)"
-                        regra_id = "VETO_STREAK"
+            if sinal != "NO CALL" and streak >= 6:
+                if direcao_ia != sinal:
+                    sinal = "NO CALL"
+                    justificativa = f"Veto de streak {streak}x (contra IA)"
+                    regra_id = "VETO_STREAK"
 
             correcoes = self.seq.polaridades[idx+12 : idx+15]
             classificacao = "FALHA"
@@ -530,13 +548,11 @@ class MotorV1Completo:
         return output
 
 
-# ============================================================
-# ProcessadorTipoB - COM SÍNTESE DE RACIOCÍNIO
-# ============================================================
 class ProcessadorTipoB:
     def __init__(self, sequencia_12_numeros, caminho_base_dados):
         self.entrada = sequencia_12_numeros
         self.caminho_base = caminho_base_dados
+        # Conversão explícita de números para cores
         self.polaridades = ['B' if n == 0 else ('V' if 1 <= n <= 7 else 'P') for n in sequencia_12_numeros]
 
     def executar_sinal_real(self):
@@ -646,9 +662,6 @@ class ProcessadorTipoB:
         }
 
 
-# ============================================================
-# EngineMatematicoAvancado
-# ============================================================
 class EngineMatematicoAvancado:
     
     @staticmethod
