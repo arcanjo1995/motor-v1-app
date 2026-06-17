@@ -6,9 +6,7 @@ from main import (
     ProcessadorTipoB, 
     GerenciadorMemoriaViva, 
     EngineMatematicoAvancado,
-    IAPreditivaV1,
-    salvar_modelo_longo_prazo,
-    treinar_base_longo_prazo_com_janelas   # <-- Nova função importada
+    treinar_base_longo_prazo_com_janelas
 )
 
 st.set_page_config(page_title="MOTOR V1 - Painel Operacional", page_icon="🛡️", layout="wide")
@@ -24,7 +22,7 @@ NOME_BASE_DEFINITIVA = "resultados_blaze.xlsx"
 NOME_RECENCIA_ATIVA = "base_recencia_ativa.xlsx"
 
 # =========================================================================
-# ABA TIPO B — SEQUÊNCIA OPERACIONAL E ALIMENTAÇÃO REAL
+# ABA TIPO B
 # =========================================================================
 with aba_tipo_b:
     st.header("🎯 Processamento Operacional Tipo B")
@@ -68,7 +66,6 @@ with aba_tipo_b:
     if st.session_state.sinal_pendente:
         st.write("---")
         
-        # VEREDITO E PAINEL DE INJEÇÃO
         col_veredicto, col_injecao = st.columns(2)
         sinal = st.session_state.sinal_pendente
         
@@ -113,12 +110,10 @@ with aba_tipo_b:
                     st.success(f"Sucesso! Dados injetados com 100% de exatidão na IA.")
                     st.session_state.sinal_pendente = None
 
-        # RASCUNHO ANALÍTICO
         st.write("---")
         st.subheader("📝 Rascunho Analítico Interno")
         st.text_area("Memória de Cálculo (15 Releituras)", value=st.session_state.log_completo, height=340)
 
-        # VOLUME 21 & 22
         st.write("---")
         st.subheader("📈 Volume 21: Inteligência Observacional e Métricas de Cobertura")
         with st.expander("Visualizar Diagnóstico do Algoritmo e Split-Stake", expanded=True):
@@ -150,7 +145,7 @@ with aba_tipo_b:
             )
 
 # =========================================================================
-# ABA TIPO D — AUDITORIA CRONOLÓGICA DE LONGO PRAZO
+# ABA TIPO D
 # =========================================================================
 with aba_tipo_d:
     st.header("📊 Auditoria Cronológica Tipo D")
@@ -188,7 +183,7 @@ with aba_tipo_d:
             if os.path.exists(caminho_temp): os.remove(caminho_temp)
 
         # ============================================================
-        # BLOCO ATUALIZADO COM RELATÓRIO DE TREINAMENTO
+        # BLOCO COM RELATÓRIO (CORRIGIDO)
         # ============================================================
         if salvar_como_base:
             with open(caminho_temp, "wb") as f: f.write(arquivo_upload.getbuffer())
