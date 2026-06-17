@@ -24,6 +24,25 @@ def carregar_modelo_longo_prazo(caminho="modelo_longo_prazo.pkl"):
             return None
     return None
 
+# ============================================================
+# NOVA FUNÇÃO: Treinamento Profundo com Janelas Móveis
+# ============================================================
+def treinar_base_longo_prazo_com_janelas(dados_completos):
+    """
+    Treina a IA usando o processamento completo de janelas móveis
+    (igual ao Tipo D). Isso faz a IA aprender com G0/G1/G2/FALHA
+    das janelas históricas, não só com estatística.
+    """
+    if not dados_completos or len(dados_completos) < 20:
+        print("[AVISO] Base muito pequena para treinamento por janelas.")
+        return IAPreditivaV1(dados_completos, None)
+
+    print(f"[INFO] Iniciando treinamento profundo com {len(dados_completos)} registros...")
+    motor = MotorV1Completo(dados_completos)
+    motor.processar_auditoria()  # Roda todas as janelas móveis + injeta aprendizado real
+    print("[INFO] Treinamento por janelas móveis concluído.")
+    return motor.ia
+
 
 # ============================================================
 # MotorNoCall - NUNCA ALTERADO
@@ -55,7 +74,7 @@ class MotorNoCall:
 
 
 # ============================================================
-# IAPreditivaV1
+# IAPreditivaV1 (mantida igual)
 # ============================================================
 class IAPreditivaV1:
     def __init__(self, dados_longo_prazo, dados_recencia=None):
@@ -178,7 +197,8 @@ class IAPreditivaV1:
 
 
 # ============================================================
-# JuizHierarquicoModificado
+# JuizHierarquicoModificado + MotorContagensProjetivas + Classes Auxiliares
+# (mantidos exatamente iguais)
 # ============================================================
 class JuizHierarquicoModificado:
     @staticmethod
@@ -223,9 +243,6 @@ class JuizHierarquicoModificado:
         return "NO CALL", "Sem confluência suficiente após análise profunda", "SISTEMA_TRAVADO"
 
 
-# ============================================================
-# MotorContagensProjetivas
-# ============================================================
 class MotorContagensProjetivas:
     @staticmethod
     def mapear_janela(sub_num, sub_pol, geometry_mercado):
@@ -271,9 +288,6 @@ class MotorContagensProjetivas:
         return lista_bruta
 
 
-# ============================================================
-# Classes Auxiliares
-# ============================================================
 class SequenciaOperacional:
     def __init__(self, lista_resultados):
         self.cronologia = lista_resultados
@@ -367,37 +381,28 @@ class AnalisadorContextoAvancado:
 
 
 # ============================================================
-# LeitorXLS - SIMPLIFICADO E ROBUSTO (para arquivos com Número e Cor)
+# LeitorXLS (mantido)
 # ============================================================
 class LeitorXLS:
     def __init__(self, caminho_arquivo):
         self.caminho = caminho_arquivo
 
     def ler_e_validar(self):
-        """
-        Lê o arquivo XLS/CSV com colunas 'Número' e 'Cor'.
-        Sempre retorna os dados do mais antigo para o mais novo.
-        """
         if not os.path.exists(self.caminho):
             return None
-
         try:
             df = pd.read_excel(self.caminho)
             df.columns = [str(col).strip().lower() for col in df.columns]
 
-            # Busca colunas de forma simples e direta
             col_num = None
             for c in df.columns:
                 if c in ['número', 'numero', 'num']:
                     col_num = c
                     break
-
             if col_num is None:
                 return None
 
             df = df.rename(columns={col_num: 'numero'})
-
-            # Inversão obrigatória: mais antigo primeiro
             df = df.iloc[::-1].reset_index(drop=True)
 
             if len(df) < 5:
@@ -407,27 +412,21 @@ class LeitorXLS:
             for _, row in df.iterrows():
                 try:
                     num = int(row['numero'])
-                    if num == 0:
-                        cor = 'B'
-                    elif 1 <= num <= 7:
-                        cor = 'V'
-                    elif 8 <= num <= 14:
-                        cor = 'P'
-                    else:
-                        continue
+                    if num == 0: cor = 'B'
+                    elif 1 <= num <= 7: cor = 'V'
+                    elif 8 <= num <= 14: cor = 'P'
+                    else: continue
                     dados.append({"numero": num, "cor": cor})
                 except:
                     continue
-
             return dados if len(dados) >= 5 else None
-
         except Exception as e:
             print(f"[LeitorXLS] Erro: {e}")
             return None
 
 
 # ============================================================
-# MotorV1Completo + ProcessadorTipoB + Engine
+# MotorV1Completo (mantido)
 # ============================================================
 class MotorV1Completo:
     def __init__(self, lista_dados_xls):
@@ -548,11 +547,13 @@ class MotorV1Completo:
         return output
 
 
+# ============================================================
+# ProcessadorTipoB + EngineMatematicoAvancado (mantidos)
+# ============================================================
 class ProcessadorTipoB:
     def __init__(self, sequencia_12_numeros, caminho_base_dados):
         self.entrada = sequencia_12_numeros
         self.caminho_base = caminho_base_dados
-        # Conversão explícita de números para cores
         self.polaridades = ['B' if n == 0 else ('V' if 1 <= n <= 7 else 'P') for n in sequencia_12_numeros]
 
     def executar_sinal_real(self):
