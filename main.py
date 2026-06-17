@@ -16,7 +16,7 @@ def salvar_log_json(dados, nome_arquivo="logs/sinais_tipo_b.jsonl"):
 
 
 # ============================================================
-# NÚCLEO COMPARTILHADO - MotorAnalise
+# MotorAnalise (Núcleo Compartilhado)
 # ============================================================
 class MotorAnalise:
     @staticmethod
@@ -32,7 +32,6 @@ class MotorAnalise:
             "controlador_retardador": {}
         }
 
-        # Camada 1 - NO CALL
         nc_ativo, motivo_nc = MotorNoCall.checar_no_call(sub_num, sub_pol)
         resultado["no_call"] = {"ativo": nc_ativo, "motivo": motivo_nc}
         resultado["camadas"].append({
@@ -44,7 +43,6 @@ class MotorAnalise:
         if nc_ativo:
             return resultado
 
-        # Camada 2 - Geometria
         geometria = AnalisadorContextoAvancado.mapear_padroes_geometria(sub_pol)
         resultado["geometria"] = geometria
         resultado["camadas"].append({
@@ -53,7 +51,6 @@ class MotorAnalise:
             "impacto": "FORTE" if geometria in ["CICLO_FECHADO_VPPV", "CICLO_FECHADO_PVVP"] else "NEUTRO"
         })
 
-        # Camada 3 - Regras Posicionais
         expectativas = MotorContagensProjetivas.mapear_janela(sub_num, sub_pol, geometria)
         resultado["regras_posicionais"] = expectativas
         resultado["camadas"].append({
@@ -63,7 +60,6 @@ class MotorAnalise:
             "impacto": "ALTO" if expectativas else "BAIXO"
         })
 
-        # Camada 4 - Contexto Avançado
         modo_mercado = AnalisadorContextoAvancado.detectar_modo_mercado(sub_pol)
         resultado["contexto_avancado"] = {"modo_mercado": modo_mercado}
         resultado["camadas"].append({
@@ -71,7 +67,6 @@ class MotorAnalise:
             "resultado": f"Modo: {modo_mercado}", "detalhe": "Detecção de regime de mercado", "impacto": "MÉDIO"
         })
 
-        # Camada 5 - IA com bônus de memória
         contexto_para_ia = {
             "geometria": geometria,
             "regras_posicionais": expectativas,
@@ -93,7 +88,6 @@ class MotorAnalise:
             "impacto": "ALTO" if conf_ia >= 52 else "MÉDIO"
         })
 
-        # Camada 6 - Contexto de Reversão
         streak, xadrez_len, xadrez_quebrou, exaustao = MotorAnalise._calcular_contexto_reversao(sub_pol)
         resultado["contexto_reversao"] = {
             "streak": streak, "xadrez_len": xadrez_len,
@@ -106,7 +100,6 @@ class MotorAnalise:
             "impacto": "ALTO" if exaustao else "BAIXO"
         })
 
-        # Camada 7 - Controlador vs Retardador
         ctrl_ret = MotorAnalise._detectar_controlador_retardador(
             sub_num, sub_pol, expectativas, geometria, modo_mercado
         )
@@ -160,7 +153,7 @@ class MotorAnalise:
 
 
 # ============================================================
-# IAPreditivaV1 com Memória de Padrões Vencedores
+# IAPreditivaV1 (com Memória de Padrões Vencedores)
 # ============================================================
 class IAPreditivaV1:
     def __init__(self, dados_longo_prazo, dados_recencia=None):
@@ -181,7 +174,6 @@ class IAPreditivaV1:
                 "comportamento_pos_numero": "NEUTRO"
             }
 
-        # Memória de Padrões Vencedores
         self.memoria_padroes_vencedores = []
         self.historico_regras = defaultdict(lambda: {"acertos": 0, "total": 0})
         self.controladores_fortes = defaultdict(int)
@@ -321,7 +313,6 @@ class IAPreditivaV1:
         total_v = (trans.count('V') * p_trans) + (por_num.count('V') * p_num) + (geom.count('V') * p_geom) + v_bonus
         total_p = (trans.count('P') * p_trans) + (por_num.count('P') * p_num) + (geom.count('P') * p_geom) + p_bonus
 
-        # === BÔNUS DIRETO DA MEMÓRIA DE PADRÕES VENCEDORES ===
         if analise_contexto:
             bonus_memoria = self.calcular_bonus_memoria(analise_contexto)
             if total_v > total_p:
@@ -344,7 +335,7 @@ class IAPreditivaV1:
 
 
 # ============================================================
-# MotorNoCall
+# MotorNoCall (COMPLETO)
 # ============================================================
 class MotorNoCall:
     @staticmethod
@@ -373,7 +364,7 @@ class MotorNoCall:
 
 
 # ============================================================
-# JuizHierarquicoModificado
+# JuizHierarquicoModificado (COMPLETO)
 # ============================================================
 class JuizHierarquicoModificado:
     @staticmethod
@@ -415,7 +406,7 @@ class JuizHierarquicoModificado:
 
 
 # ============================================================
-# MotorContagensProjetivas
+# MotorContagensProjetivas (COMPLETO)
 # ============================================================
 class MotorContagensProjetivas:
     @staticmethod
@@ -463,7 +454,7 @@ class MotorContagensProjetivas:
 
 
 # ============================================================
-# AnalisadorContextoAvancado
+# AnalisadorContextoAvancado (COMPLETO)
 # ============================================================
 class AnalisadorContextoAvancado:
     @staticmethod
@@ -486,7 +477,7 @@ class AnalisadorContextoAvancado:
 
 
 # ============================================================
-# LeitorXLS
+# LeitorXLS (COMPLETO)
 # ============================================================
 class LeitorXLS:
     def __init__(self, caminho_arquivo):
@@ -522,7 +513,18 @@ class LeitorXLS:
 
 
 # ============================================================
-# MotorV1Completo
+# SequenciaOperacional
+# ============================================================
+class SequenciaOperacional:
+    def __init__(self, lista_resultados):
+        self.cronologia = lista_resultados
+        self.numerica = [int(r['numero']) for r in self.cronologia]
+        self.polaridades = [str(r['cor']).upper() for r in self.cronologia]
+        self.total = len(self.numerica)
+
+
+# ============================================================
+# MotorV1Completo (COMPLETO)
 # ============================================================
 class MotorV1Completo:
     def __init__(self, lista_dados_xls):
@@ -655,7 +657,7 @@ class MotorV1Completo:
 
 
 # ============================================================
-# ProcessadorTipoB
+# ProcessadorTipoB (COMPLETO)
 # ============================================================
 class ProcessadorTipoB:
     def __init__(self, sequencia_12_numeros, caminho_base_dados):
@@ -742,7 +744,7 @@ class ProcessadorTipoB:
 
 
 # ============================================================
-# EngineMatematicoAvancado
+# EngineMatematicoAvancado (COMPLETO)
 # ============================================================
 class EngineMatematicoAvancado:
     
@@ -821,7 +823,7 @@ class EngineMatematicoAvancado:
 
 
 # ============================================================
-# Funções Auxiliares
+# Funções de Persistência e Treinamento
 # ============================================================
 def salvar_modelo_longo_prazo(ia, caminho="modelo_longo_prazo.pkl"):
     try:
@@ -849,7 +851,6 @@ def reforcar_aprendizado_tipo_d(ia):
                 "padrao": padrao,
                 "peso": qtd * 2
             })
-
     ia.padroes_fortes = sorted(ia.padroes_fortes, key=lambda x: x.get("peso", 0), reverse=True)[:30]
 
 
@@ -893,14 +894,6 @@ def treinar_base_longo_prazo_com_janelas(dados_completos):
         "modelo_salvo_com_sucesso": sucesso_salvar,
         "mensagem": "Treinamento profundo por janelas móveis concluído com sucesso."
     }
-
-
-class SequenciaOperacional:
-    def __init__(self, lista_resultados):
-        self.cronologia = lista_resultados
-        self.numerica = [int(r['numero']) for r in self.cronologia]
-        self.polaridades = [str(r['cor']).upper() for r in self.cronologia]
-        self.total = len(self.numerica)
 
 
 # ============================================================
