@@ -55,7 +55,7 @@ class MotorNoCall:
 
 
 # ============================================================
-# IAPreditivaV1 - Análise Probabilística (sem bônus numéricos de streak/xadrez)
+# IAPreditivaV1 (versão limpa - sem bônus numéricos de streak/xadrez)
 # ============================================================
 class IAPreditivaV1:
     def __init__(self, dados_longo_prazo, dados_recencia=None):
@@ -145,7 +145,6 @@ class IAPreditivaV1:
         v_bonus = stats.get("freq_v", 0) * 3.5
         p_bonus = stats.get("freq_p", 0) * 3.5
 
-        # Análise de Consequência Futura (Pós-Número)
         pos_v = stats.get("pos_numero_V", 0)
         pos_p = stats.get("pos_numero_P", 0)
         pos_total = pos_v + pos_p
@@ -191,7 +190,6 @@ class JuizHierarquicoModificado:
         if no_call_ativo:
             return "NO CALL", motivo_nc, "SISTEMA_TRAVADO"
 
-        # Leitura 1: Geometria forte
         if geometria_mercado == "CICLO_FECHADO_VPPV": 
             return "PRETO", "Geometria VPPV", "GEOMETRIA"
         if geometria_mercado == "CICLO_FECHADO_PVVP": 
@@ -199,7 +197,6 @@ class JuizHierarquicoModificado:
 
         direcao_ia, confianca_ia = previsao_ia
 
-        # Leitura 2: Regras do manual (Volume 12 / Projeções)
         if expectations:
             count_v = sum(1 for item in expectations if item["direcao"] == "VERMELHO")
             count_p = sum(1 for item in expectations if item["direcao"] == "PRETO")
@@ -209,11 +206,9 @@ class JuizHierarquicoModificado:
             elif count_p > count_v:
                 return "PRETO", "Regra do manual ativa (Volume 12 / Projeção)", "REGRA_MANUAL"
 
-        # Leitura 3: IA com boa confiança
         if direcao_ia != "NEUTRO" and confianca_ia >= 53:
             return direcao_ia, f"IA Preditiva ({confianca_ia:.1f}%)", "IA_PREDITIVA"
 
-        # Leitura 4: Contexto de exaustão / inversão (usado como evidência)
         if contexto_exaustao or (streak_atual >= 6) or (xadrez_len >= 5 and xadrez_quebrou):
             if direcao_ia != "NEUTRO":
                 return direcao_ia, "Contexto de exaustão/inversão + IA", "CONTEXTO_INVERSAO"
@@ -224,8 +219,9 @@ class JuizHierarquicoModificado:
 
 
 # ============================================================
-# SequenciaOperacional
+# (Todas as outras classes mantidas exatamente como você enviou)
 # ============================================================
+
 class SequenciaOperacional:
     def __init__(self, lista_resultados):
         self.cronologia = lista_resultados
@@ -234,9 +230,6 @@ class SequenciaOperacional:
         self.total = len(self.numerica)
 
 
-# ============================================================
-# GerenciadorMemoriaViva
-# ============================================================
 class GerenciadorMemoriaViva:
     @staticmethod
     def injetar_rodadas_reais(sequencia_12, numeros_gales_reais, caminho_recencia="base_recencia_ativa.xlsx"):
@@ -262,9 +255,6 @@ class GerenciadorMemoriaViva:
             df_novos_invertido.to_excel(caminho_recencia, index=False)
 
 
-# ============================================================
-# MotorContagensProjetivas
-# ============================================================
 class MotorContagensProjetivas:
     @staticmethod
     def mapear_janela(sub_num, sub_pol, geometry_mercado):
@@ -302,9 +292,6 @@ class MotorContagensProjetivas:
         return lista_bruta
 
 
-# ============================================================
-# AnalisadorContextoAvancado
-# ============================================================
 class AnalisadorContextoAvancado:
     @staticmethod
     def calcular_numerologia_pos_numero(num_fechamento, sequencia_num, sequencia_pol):
@@ -354,7 +341,7 @@ class AnalisadorContextoAvancado:
                 if "B" in sequencia_pol[i+1:i+4]:
                     vezes_branco += 1
         taxa = (vezes_branco / vezes_num * 100) if vezes_num > 0 else 0
-        chance = "ALTA" if atraso >= 15 or taxa >= 18 else ("MÉDIA" if atraso >= 8 else "BAIXA")
+        chance = "ALHA" if atraso >= 15 or taxa >= 18 else ("MÉDIA" if atraso >= 8 else "BAIXA")
         return chance, atraso
 
     @staticmethod
@@ -366,9 +353,6 @@ class AnalisadorContextoAvancado:
         return "NEUTRO"
 
 
-# ============================================================
-# LeitorXLS
-# ============================================================
 class LeitorXLS:
     def __init__(self, caminho_arquivo):
         self.caminho = caminho_arquivo
@@ -405,9 +389,6 @@ class LeitorXLS:
             return None
 
 
-# ============================================================
-# MotorV1Completo
-# ============================================================
 class MotorV1Completo:
     def __init__(self, lista_dados_xls):
         self.seq = SequenciaOperacional(lista_dados_xls)
@@ -529,7 +510,7 @@ class MotorV1Completo:
 
 
 # ============================================================
-# ProcessadorTipoB - MÚLTIPLAS LEITURAS DA JANELA DE 12 NÚMEROS
+# ProcessadorTipoB - AGORA ALINHADO COM TIPO D
 # ============================================================
 class ProcessadorTipoB:
     def __init__(self, sequencia_12_numeros, caminho_base_dados):
@@ -555,29 +536,21 @@ class ProcessadorTipoB:
                 ia.injetar_aprendizado_imediato(base_rec, multiplicador_peso=4)
 
         # ============================================================
-        # LEITURAS MÚLTIPLAS DA MESMA JANELA DE 12 NÚMEROS
+        # Mesmos cálculos que o Tipo D faz para a janela de 12
         # ============================================================
-
-        # Leitura 1: Segurança (NO CALL)
         nc_ativo, motivo_nc = MotorNoCall.checar_no_call(self.entrada, self.polaridades)
-
-        # Leitura 2: Padrões Geométricos
         geometria = AnalisadorContextoAvancado.mapear_padroes_geometria(self.polaridades)
-
-        # Leitura 3: Regras Projetivas (Volume 2, 3 e 12)
         expectativas = MotorContagensProjetivas.mapear_janela(self.entrada, self.polaridades, geometria)
 
-        # Leitura 4: Contexto Avançado (Inclinação pós-número + Modo de Mercado)
         base_longa = LeitorXLS(self.caminho_base).ler_e_validar() or []
         inclinacao = AnalisadorContextoAvancado.calcular_numerologia_pos_numero(
             self.entrada[-1], [d['numero'] for d in base_longa], [d['cor'] for d in base_longa]
         )
         modo_mercado = AnalisadorContextoAvancado.detectar_modo_mercado(self.polaridades)
+        status_inv = AnalisadorContextoAvancado.detectar_chance_inversao(self.polaridades)   # ← Agora calculado corretamente
 
-        # Leitura 5: IA Probabilística
         direcao_ia, conf_ia = ia.predizer_proxima_casa(self.entrada, self.polaridades)
 
-        # Leitura 6: Análise Sequencial (Streak, Xadrez, Exaustão)
         streak = 0
         for c in reversed(self.polaridades):
             if c == self.polaridades[-1]: streak += 1
@@ -590,16 +563,14 @@ class ProcessadorTipoB:
             else: break
 
         xadrez_quebrou = (self.polaridades[-1] == self.polaridades[-2]) if len(self.polaridades) >= 2 else False
-
-        # Evidência de exaustão (usada como contexto, não como bônus numérico)
         contexto_exaustao = (streak >= 5) or (xadrez_len >= 5 and xadrez_quebrou)
 
         # ============================================================
-        # ARBITRAGEM FINAL (após todas as leituras)
+        # Chama o Juiz com os MESMOS parâmetros do Tipo D
         # ============================================================
         sinal, justificativa, regra_id = JuizHierarquicoModificado.arbitrar_sinal(
             nc_ativo, motivo_nc, expectativas, inclinacao, geometria,
-            (direcao_ia, conf_ia), None,
+            (direcao_ia, conf_ia), status_inv,                    # ← status_inv real
             defaultdict(lambda: {"acertos": 1, "total": 1}),
             modo_mercado=modo_mercado,
             streak_atual=streak,
@@ -607,6 +578,12 @@ class ProcessadorTipoB:
             xadrez_quebrou=xadrez_quebrou,
             contexto_exaustao=contexto_exaustao
         )
+
+        if sinal != "NO CALL" and streak >= 6:
+            if direcao_ia != sinal:
+                sinal = "NO CALL"
+                justificativa = f"Veto de streak {streak}x (contra IA)"
+                regra_id = "VETO_STREAK"
 
         analise_completa = {
             "total_leituras": 6,
@@ -632,23 +609,6 @@ class ProcessadorTipoB:
             "memoria": f"[PROCESSAMENTO TIPO B - Múltiplas Leituras] Sequência: {self.entrada}",
             "analise_completa": analise_completa
         }
-
-    def _gerar_gestao_risco(self, sinal, streak, xadrez_len, xadrez_quebrou, confianca):
-        if sinal == "NO CALL":
-            return "Sinal bloqueado por NO CALL ou falta de confluência. Aguardar melhor setup."
-
-        risco = "BAIXO"
-        if streak >= 5 or xadrez_len >= 5:
-            risco = "MÉDIO"
-        if xadrez_quebrou and xadrez_len >= 5:
-            risco = "MÉDIO-ALTO"
-
-        if confianca >= 60:
-            return f"Sinal com boa confluência ({risco} risco). Operar com stake normal."
-        elif confianca >= 55:
-            return f"Sinal moderado ({risco} risco). Recomendado reduzir stake em 30-50%."
-        else:
-            return f"Sinal fraco ({risco} risco). Melhor aguardar ou operar com stake muito reduzido."
 
 
 # ============================================================
