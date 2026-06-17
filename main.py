@@ -25,7 +25,7 @@ def carregar_modelo_longo_prazo(caminho="modelo_longo_prazo.pkl"):
     return None
 
 # ============================================================
-# FUNÇÃO PRINCIPAL: Treinamento com Relatório de Longo Prazo
+# FUNÇÃO: Treinamento com Relatório de Longo Prazo
 # ============================================================
 def treinar_base_longo_prazo_com_janelas(dados_completos):
     if not dados_completos or len(dados_completos) < 30:
@@ -218,7 +218,7 @@ class IAPreditivaV1:
 
 
 # ============================================================
-# JuizHierarquicoModificado
+# JuizHierarquicoModificado - Reforçado com Hierarquia mais clara
 # ============================================================
 class JuizHierarquicoModificado:
     @staticmethod
@@ -229,42 +229,43 @@ class JuizHierarquicoModificado:
                        contexto_exaustao=False,
                        sintese_evidencias=None):
         
+        # 1. NO CALL tem prioridade absoluta
         if no_call_ativo:
             return "NO CALL", motivo_nc, "SISTEMA_TRAVADO"
 
+        direcao_ia, confianca_ia, raciocinio_ia = previsao_ia
+
+        # 2. Regras posicionais fortes (prioridade alta)
+        if expectations:
+            count_v = sum(1 for item in expectations if item["direcao"] == "VERMELHO")
+            count_p = sum(1 for item in expectations if item["direcao"] == "PRETO")
+
+            if count_v > count_p:
+                return "VERMELHO", "Regra posicional ativa com apoio", "REGRA_POSICIONAL"
+            elif count_p > count_v:
+                return "PRETO", "Regra posicional ativa com apoio", "REGRA_POSICIONAL"
+
+        # 3. Geometria forte (com contexto)
         if geometria_mercado in ["CICLO_FECHADO_VPPV", "CICLO_FECHADO_PVVP"]:
             if streak_atual >= 4 or xadrez_len >= 4:
-                return "NO CALL", f"Geometria forte, mas contexto de alta alternância/streak ({streak_atual}x) - aguardar confirmação", "GEOMETRIA_CONTEXTO"
+                return "NO CALL", f"Geometria forte, mas contexto de alta alternância/streak ({streak_atual}x)", "GEOMETRIA_CONTEXTO"
             
             if geometria_mercado == "CICLO_FECHADO_VPPV": 
                 return "PRETO", "Geometria VPPV (Padrão forte)", "GEOMETRIA_FORTE"
             if geometria_mercado == "CICLO_FECHADO_PVVP": 
                 return "VERMELHO", "Geometria PVVP (Padrão forte)", "GEOMETRIA_FORTE"
 
-        direcao_ia, confianca_ia, raciocinio_ia = previsao_ia
-
-        if expectations:
-            count_v = sum(1 for item in expectations if item["direcao"] == "VERMELHO")
-            count_p = sum(1 for item in expectations if item["direcao"] == "PRETO")
-
-            if count_v > count_p:
-                return "VERMELHO", "Regra do manual ativa com apoio", "REGRA_MANUAL"
-            elif count_p > count_v:
-                return "PRETO", "Regra do manual ativa com apoio", "REGRA_MANUAL"
-
+        # 4. IA com contexto de reversão
         if direcao_ia != "NEUTRO" and confianca_ia >= 52:
             if contexto_exaustao or (streak_atual >= 5) or (xadrez_len >= 4 and xadrez_quebrou):
                 return direcao_ia, f"IA + Contexto de reversão ({raciocinio_ia})", "IA_CONTEXTO_REVERSAO"
-            return direcao_ia, f"IA Preditiva ({confianca_ia:.1f}%) - {raciocinio_ia}", "IA_PREDITIVA"
+            return direcao_ia, f"IA Preditiva ({confianca_ia:.1f}%)", "IA_PREDITIVA"
 
-        if contexto_exaustao and direcao_ia != "NEUTRO":
-            return direcao_ia, "Contexto de exaustão forte + IA", "CONTEXTO_EXAUSTAO"
-
-        return "NO CALL", "Sem confluência suficiente após análise profunda", "SISTEMA_TRAVADO"
+        return "NO CALL", "Sem confluência suficiente após análise estruturada", "SISTEMA_TRAVADO"
 
 
 # ============================================================
-# MotorContagensProjetivas
+# MotorContagensProjetivas + Classes Auxiliares (mantidos)
 # ============================================================
 class MotorContagensProjetivas:
     @staticmethod
@@ -311,9 +312,6 @@ class MotorContagensProjetivas:
         return lista_bruta
 
 
-# ============================================================
-# Classes Auxiliares
-# ============================================================
 class SequenciaOperacional:
     def __init__(self, lista_resultados):
         self.cronologia = lista_resultados
@@ -449,7 +447,7 @@ class LeitorXLS:
 
 
 # ============================================================
-# MotorV1Completo (com self.stats)
+# MotorV1Completo
 # ============================================================
 class MotorV1Completo:
     def __init__(self, lista_dados_xls):
@@ -573,7 +571,7 @@ class MotorV1Completo:
 
 
 # ============================================================
-# ProcessadorTipoB
+# ProcessadorTipoB - Atualizado com Hierarquia mais clara
 # ============================================================
 class ProcessadorTipoB:
     def __init__(self, sequencia_12_numeros, caminho_base_dados):
@@ -600,15 +598,19 @@ class ProcessadorTipoB:
 
         evidencias = []
 
+        # RELEITURA 1 - Segurança (NO CALL)
         nc_ativo, motivo_nc = MotorNoCall.checar_no_call(self.entrada, self.polaridades)
         evidencias.append({"releitura": 1, "tipo": "Segurança (NO CALL)", "resultado": {"ativo": nc_ativo, "motivo": motivo_nc}})
 
+        # RELEITURA 2 - Geometria
         geometria = AnalisadorContextoAvancado.mapear_padroes_geometria(self.polaridades)
         evidencias.append({"releitura": 2, "tipo": "Geometria", "resultado": geometria})
 
+        # RELEITURA 3 - Regras Projetivas (Volume 12)
         expectativas = MotorContagensProjetivas.mapear_janela(self.entrada, self.polaridades, geometria)
         evidencias.append({"releitura": 3, "tipo": "Regras Projetivas (Volume 12)", "resultado": expectativas})
 
+        # RELEITURA 4 - Contexto Avançado
         base_longa = LeitorXLS(self.caminho_base).ler_e_validar() or []
         inclinacao = AnalisadorContextoAvancado.calcular_numerologia_pos_numero(
             self.entrada[-1], [d['numero'] for d in base_longa], [d['cor'] for d in base_longa]
@@ -616,9 +618,11 @@ class ProcessadorTipoB:
         modo_mercado = AnalisadorContextoAvancado.detectar_modo_mercado(self.polaridades)
         evidencias.append({"releitura": 4, "tipo": "Contexto Avançado", "resultado": {"inclinacao": inclinacao, "modo_mercado": modo_mercado}})
 
+        # RELEITURA 5 - IA Probabilística
         direcao_ia, conf_ia, raciocinio_ia = ia.predizer_proxima_casa(self.entrada, self.polaridades)
         evidencias.append({"releitura": 5, "tipo": "IA Probabilística", "resultado": {"direcao": direcao_ia, "confianca": conf_ia, "raciocinio": raciocinio_ia}})
 
+        # RELEITURA 6 - Análise Sequencial
         streak = 0
         for c in reversed(self.polaridades):
             if c == self.polaridades[-1]: streak += 1
@@ -681,7 +685,7 @@ class ProcessadorTipoB:
             "justificativa": justificativa,
             "confianca_ia": round(conf_ia, 2),
             "no_call": nc_ativo,
-            "memoria": f"[PROCESSAMENTO TIPO B - RELEITURAS + SÍNTESE] Sequência: {self.entrada}",
+            "memoria": f"[PROCESSAMENTO TIPO B - RELEITURAS ESTRUTURADAS] Sequência: {self.entrada}",
             "releituras": evidencias,
             "sintese_raciocinio": raciocinio_final,
             "decisao_final": {"sinal": sinal, "justificativa": justificativa, "regra_id": regra_id}
