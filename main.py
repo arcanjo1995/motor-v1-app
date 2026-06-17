@@ -24,9 +24,6 @@ def carregar_modelo_longo_prazo(caminho="modelo_longo_prazo.pkl"):
             return None
     return None
 
-# ============================================================
-# FUNÇÃO: Treinamento com Relatório de Longo Prazo
-# ============================================================
 def treinar_base_longo_prazo_com_janelas(dados_completos):
     if not dados_completos or len(dados_completos) < 30:
         return {
@@ -95,7 +92,7 @@ class MotorNoCall:
 
 
 # ============================================================
-# IAPreditivaV1
+# IAPreditivaV1 - Completo
 # ============================================================
 class IAPreditivaV1:
     def __init__(self, dados_longo_prazo, dados_recencia=None):
@@ -218,34 +215,33 @@ class IAPreditivaV1:
 
 
 # ============================================================
-# JuizHierarquicoModificado - Reforçado com Hierarquia mais clara
+# JuizHierarquicoModificado - Refatorado com Hierarquia Clara
 # ============================================================
 class JuizHierarquicoModificado:
     @staticmethod
     def arbitrar_sinal(no_call_ativo, motivo_nc, expectations, inclinacao_num, geometria_mercado, 
-                       previsao_ia, status_inversao, historico_revalida_regras, 
+                       previsao_ia, status_inversao, historico_regras,
                        modo_mercado="NEUTRO", 
                        streak_atual=0, xadrez_len=0, xadrez_quebrou=False,
-                       contexto_exaustao=False,
-                       sintese_evidencias=None):
+                       contexto_exaustao=False, sintese_evidencias=None):
         
-        # 1. NO CALL tem prioridade absoluta
+        # === CAMADA 1: NO CALL (Prioridade Absoluta) ===
         if no_call_ativo:
             return "NO CALL", motivo_nc, "SISTEMA_TRAVADO"
 
         direcao_ia, confianca_ia, raciocinio_ia = previsao_ia
 
-        # 2. Regras posicionais fortes (prioridade alta)
+        # === CAMADA 2: Regras Posicionais Fortes ===
         if expectations:
             count_v = sum(1 for item in expectations if item["direcao"] == "VERMELHO")
             count_p = sum(1 for item in expectations if item["direcao"] == "PRETO")
 
             if count_v > count_p:
-                return "VERMELHO", "Regra posicional ativa com apoio", "REGRA_POSICIONAL"
+                return "VERMELHO", "Regra posicional forte ativa", "REGRA_POSICIONAL"
             elif count_p > count_v:
-                return "PRETO", "Regra posicional ativa com apoio", "REGRA_POSICIONAL"
+                return "PRETO", "Regra posicional forte ativa", "REGRA_POSICIONAL"
 
-        # 3. Geometria forte (com contexto)
+        # === CAMADA 3: Geometria com Contexto ===
         if geometria_mercado in ["CICLO_FECHADO_VPPV", "CICLO_FECHADO_PVVP"]:
             if streak_atual >= 4 or xadrez_len >= 4:
                 return "NO CALL", f"Geometria forte, mas contexto de alta alternância/streak ({streak_atual}x)", "GEOMETRIA_CONTEXTO"
@@ -255,17 +251,17 @@ class JuizHierarquicoModificado:
             if geometria_mercado == "CICLO_FECHADO_PVVP": 
                 return "VERMELHO", "Geometria PVVP (Padrão forte)", "GEOMETRIA_FORTE"
 
-        # 4. IA com contexto de reversão
+        # === CAMADA 4: IA + Contexto de Reversão ===
         if direcao_ia != "NEUTRO" and confianca_ia >= 52:
             if contexto_exaustao or (streak_atual >= 5) or (xadrez_len >= 4 and xadrez_quebrou):
-                return direcao_ia, f"IA + Contexto de reversão ({raciocinio_ia})", "IA_CONTEXTO_REVERSAO"
+                return direcao_ia, f"IA + Contexto de reversão forte", "IA_REVERSAO"
             return direcao_ia, f"IA Preditiva ({confianca_ia:.1f}%)", "IA_PREDITIVA"
 
         return "NO CALL", "Sem confluência suficiente após análise estruturada", "SISTEMA_TRAVADO"
 
 
 # ============================================================
-# MotorContagensProjetivas + Classes Auxiliares (mantidos)
+# MotorContagensProjetivas
 # ============================================================
 class MotorContagensProjetivas:
     @staticmethod
@@ -312,6 +308,9 @@ class MotorContagensProjetivas:
         return lista_bruta
 
 
+# ============================================================
+# Classes Auxiliares
+# ============================================================
 class SequenciaOperacional:
     def __init__(self, lista_resultados):
         self.cronologia = lista_resultados
@@ -447,7 +446,7 @@ class LeitorXLS:
 
 
 # ============================================================
-# MotorV1Completo
+# MotorV1Completo - Completo
 # ============================================================
 class MotorV1Completo:
     def __init__(self, lista_dados_xls):
@@ -571,7 +570,7 @@ class MotorV1Completo:
 
 
 # ============================================================
-# ProcessadorTipoB - Atualizado com Hierarquia mais clara
+# ProcessadorTipoB - Atualizado
 # ============================================================
 class ProcessadorTipoB:
     def __init__(self, sequencia_12_numeros, caminho_base_dados):
@@ -692,6 +691,9 @@ class ProcessadorTipoB:
         }
 
 
+# ============================================================
+# EngineMatematicoAvancado - Completo
+# ============================================================
 class EngineMatematicoAvancado:
     
     @staticmethod
