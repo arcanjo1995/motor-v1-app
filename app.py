@@ -7,7 +7,8 @@ from main import (
     GerenciadorMemoriaViva, 
     EngineMatematicoAvancado,
     IAPreditivaV1,
-    salvar_modelo_longo_prazo
+    salvar_modelo_longo_prazo,
+    treinar_base_longo_prazo_com_janelas   # <-- Nova função importada
 )
 
 st.set_page_config(page_title="MOTOR V1 - Painel Operacional", page_icon="🛡️", layout="wide")
@@ -67,9 +68,7 @@ with aba_tipo_b:
     if st.session_state.sinal_pendente:
         st.write("---")
         
-        # =========================================================================
-        # 1. VEREDITO E PAINEL DE INJEÇÃO DE DADOS REAIS (TOPO — LADO A LADO)
-        # =========================================================================
+        # VEREDITO E PAINEL DE INJEÇÃO
         col_veredicto, col_injecao = st.columns(2)
         sinal = st.session_state.sinal_pendente
         
@@ -114,16 +113,12 @@ with aba_tipo_b:
                     st.success(f"Sucesso! Dados injetados com 100% de exatidão na IA.")
                     st.session_state.sinal_pendente = None
 
-        # =========================================================================
-        # 2. RASCUNHO ANALÍTICO INTERNO (MEIO — LARGURA COMPLETA)
-        # =========================================================================
+        # RASCUNHO ANALÍTICO
         st.write("---")
         st.subheader("📝 Rascunho Analítico Interno")
         st.text_area("Memória de Cálculo (15 Releituras)", value=st.session_state.log_completo, height=340)
 
-        # =========================================================================
-        # 3. VOLUME 21 & 22: CAMADA DE INTELIGÊNCIA OBSERVACIONAL (FINAL)
-        # =========================================================================
+        # VOLUME 21 & 22
         st.write("---")
         st.subheader("📈 Volume 21: Inteligência Observacional e Métricas de Cobertura")
         with st.expander("Visualizar Diagnóstico do Algoritmo e Split-Stake", expanded=True):
@@ -193,7 +188,7 @@ with aba_tipo_d:
             if os.path.exists(caminho_temp): os.remove(caminho_temp)
 
         # ============================================================
-        # BLOCO CORRIGIDO - SALVAR BASE + TREINAR E SALVAR MODELO
+        # BLOCO ATUALIZADO COM RELATÓRIO DE TREINAMENTO
         # ============================================================
         if salvar_como_base:
             with open(caminho_temp, "wb") as f: f.write(arquivo_upload.getbuffer())
@@ -201,14 +196,33 @@ with aba_tipo_d:
                 if os.path.exists(NOME_BASE_DEFINITIVA): os.remove(NOME_BASE_DEFINITIVA)
                 with open(NOME_BASE_DEFINITIVA, "wb") as f: f.write(arquivo_upload.getbuffer())
 
-                # === Treina e salva o modelo de longo prazo ===
                 dados = LeitorXLS(NOME_BASE_DEFINITIVA).ler_e_validar()
                 if dados:
-                    ia_longa = IAPreditivaV1(dados, None)
-                    salvar_modelo_longo_prazo(ia_longa)
-                    st.success("Base de Longo Prazo atualizada e modelo treinado com sucesso!")
+                    relatorio = treinar_base_longo_prazo_com_janelas(dados)
+                    
+                    if relatorio.get("sucesso"):
+                        st.success("✅ Base de Longo Prazo treinada com sucesso!")
+                        
+                        st.subheader("📊 Relatório de Treinamento da Base Longa")
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("Registros Processados", relatorio["registros_processados"])
+                            st.metric("Janelas Analisadas", relatorio["janelas_analisadas"])
+                        with col2:
+                            st.metric("G0", relatorio["G0"])
+                            st.metric("G1", relatorio["G1"])
+                            st.metric("G2", relatorio["G2"])
+                        with col3:
+                            st.metric("Falhas", relatorio["FALHA"])
+                            st.metric("NO CALL", relatorio["NO CALL"])
+                            st.metric("Regras Boas", relatorio["regras_com_boa_performance"])
+
+                        st.info(f"Assertividade G0 + G1: **{relatorio['assertividade_g0_g1_percent']}%**")
+                        st.caption(relatorio["mensagem"])
+                    else:
+                        st.warning(relatorio.get("mensagem"))
                 else:
-                    st.warning("Base salva, mas não foi possível treinar o modelo.")
+                    st.error("Não foi possível ler os dados do arquivo.")
             except Exception as e:
-                st.error(f"Erro ao salvar arquivo base: {e}")
+                st.error(f"Erro ao salvar e treinar base: {e}")
             if os.path.exists(caminho_temp): os.remove(caminho_temp)
