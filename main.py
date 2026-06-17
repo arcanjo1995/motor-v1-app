@@ -9,104 +9,158 @@ from datetime import datetime
 # Função de Log JSON
 # ============================================================
 def salvar_log_json(dados, nome_arquivo="logs/sinais_tipo_b.jsonl"):
-    """Salva o log da decisão em formato JSON Lines"""
     os.makedirs("logs", exist_ok=True)
     dados["timestamp"] = datetime.now().isoformat()
-    
     with open(nome_arquivo, "a", encoding="utf-8") as f:
         f.write(json.dumps(dados, ensure_ascii=False) + "\n")
 
 
 # ============================================================
-# Funções de Persistência do Modelo de Longo Prazo
+# NÚCLEO COMPARTILHADO - MotorAnalise
 # ============================================================
-def salvar_modelo_longo_prazo(ia, caminho="modelo_longo_prazo.pkl"):
-    try:
-        with open(caminho, "wb") as f:
-            pickle.dump(ia, f)
-        return True
-    except Exception as e:
-        print(f"Erro ao salvar modelo: {e}")
-        return False
-
-def carregar_modelo_longo_prazo(caminho="modelo_longo_prazo.pkl"):
-    if os.path.exists(caminho):
-        try:
-            with open(caminho, "rb") as f:
-                return pickle.load(f)
-        except:
-            return None
-    return None
-
-def treinar_base_longo_prazo_com_janelas(dados_completos):
-    if not dados_completos or len(dados_completos) < 30:
-        return {
-            "sucesso": False,
-            "mensagem": "Base muito pequena para treinamento profundo (mínimo 30 registros)."
+class MotorAnalise:
+    @staticmethod
+    def analisar_janela(sub_num, sub_pol, ia_modelo, base_longa=None):
+        resultado = {
+            "camadas": [],
+            "no_call": None,
+            "geometria": None,
+            "regras_posicionais": [],
+            "contexto_avancado": {},
+            "ia": {},
+            "contexto_reversao": {},
+            "controlador_retardador": {}
         }
 
-    motor = MotorV1Completo(dados_completos)
-    motor.processar_auditoria()
+        # Camada 1 - NO CALL
+        nc_ativo, motivo_nc = MotorNoCall.checar_no_call(sub_num, sub_pol)
+        resultado["no_call"] = {"ativo": nc_ativo, "motivo": motivo_nc}
+        resultado["camadas"].append({
+            "camada": 1, "nome": "Segurança (NO CALL)",
+            "resultado": f"Ativo={nc_ativo}", "detalhe": motivo_nc,
+            "impacto": "BLOQUEIO" if nc_ativo else "APROVADO"
+        })
 
-    stats = getattr(motor, 'stats', {"G0": 0, "G1": 0, "G2": 0, "FALHA": 0, "NO CALL": 0})
-    total_janelas = sum(stats.values()) if stats else 0
+        if nc_ativo:
+            return resultado
 
-    regras_boas = 0
-    for regra, dados in motor.historico_regras.items():
-        if dados["total"] >= 5 and (dados["acertos"] / dados["total"]) >= 0.55:
-            regras_boas += 1
+        # Camada 2 - Geometria
+        geometria = AnalisadorContextoAvancado.mapear_padroes_geometria(sub_pol)
+        resultado["geometria"] = geometria
+        resultado["camadas"].append({
+            "camada": 2, "nome": "Geometria",
+            "resultado": geometria, "detalhe": "Padrão geométrico detectado",
+            "impacto": "FORTE" if geometria in ["CICLO_FECHADO_VPPV", "CICLO_FECHADO_PVVP"] else "NEUTRO"
+        })
 
-    taxa_g0_g1 = ((stats.get("G0", 0) + stats.get("G1", 0)) / total_janelas * 100) if total_janelas > 0 else 0
+        # Camada 3 - Regras Posicionais
+        expectativas = MotorContagensProjetivas.mapear_janela(sub_num, sub_pol, geometria)
+        resultado["regras_posicionais"] = expectativas
+        resultado["camadas"].append({
+            "camada": 3, "nome": "Regras Posicionais (Volume 12)",
+            "resultado": f"{len(expectativas)} regras ativas",
+            "detalhe": [e["tipo_regra"] for e in expectativas] if expectativas else "Nenhuma",
+            "impacto": "ALTO" if expectativas else "BAIXO"
+        })
 
-    sucesso_salvar = salvar_modelo_longo_prazo(motor.ia)
+        # Camada 4 - Contexto Avançado
+        modo_mercado = AnalisadorContextoAvancado.detectar_modo_mercado(sub_pol)
+        resultado["contexto_avancado"] = {"modo_mercado": modo_mercado}
+        resultado["camadas"].append({
+            "camada": 4, "nome": "Contexto Avançado",
+            "resultado": f"Modo: {modo_mercado}", "detalhe": "Detecção de regime de mercado", "impacto": "MÉDIO"
+        })
 
-    return {
-        "sucesso": True,
-        "registros_processados": len(dados_completos),
-        "janelas_analisadas": total_janelas,
-        "G0": stats.get("G0", 0),
-        "G1": stats.get("G1", 0),
-        "G2": stats.get("G2", 0),
-        "FALHA": stats.get("FALHA", 0),
-        "NO CALL": stats.get("NO CALL", 0),
-        "regras_com_boa_performance": regras_boas,
-        "assertividade_g0_g1_percent": round(taxa_g0_g1, 2),
-        "modelo_salvo_com_sucesso": sucesso_salvar,
-        "mensagem": "Treinamento profundo por janelas móveis concluído com sucesso."
-    }
+        # Camada 5 - IA com bônus de memória
+        contexto_para_ia = {
+            "geometria": geometria,
+            "regras_posicionais": expectativas,
+            "controlador_retardador": {},
+            "contexto_avancado": resultado["contexto_avancado"]
+        }
 
+        direcao_ia, conf_ia, raciocinio_ia = ia_modelo.predizer_proxima_casa(sub_num, sub_pol, contexto_para_ia)
 
-# ============================================================
-# MotorNoCall - NUNCA ALTERADO
-# ============================================================
-class MotorNoCall:
+        resultado["ia"] = {
+            "direcao": direcao_ia,
+            "confianca": conf_ia,
+            "raciocinio": raciocinio_ia
+        }
+        resultado["camadas"].append({
+            "camada": 5, "nome": "IA Probabilística",
+            "resultado": f"{direcao_ia} ({conf_ia}%)",
+            "detalhe": raciocinio_ia,
+            "impacto": "ALTO" if conf_ia >= 52 else "MÉDIO"
+        })
+
+        # Camada 6 - Contexto de Reversão
+        streak, xadrez_len, xadrez_quebrou, exaustao = MotorAnalise._calcular_contexto_reversao(sub_pol)
+        resultado["contexto_reversao"] = {
+            "streak": streak, "xadrez_len": xadrez_len,
+            "xadrez_quebrou": xadrez_quebrou, "exaustao": exaustao
+        }
+        resultado["camadas"].append({
+            "camada": 6, "nome": "Contexto de Reversão",
+            "resultado": f"Streak={streak}x | Xadrez={xadrez_len}",
+            "detalhe": f"Exaustão={exaustao}",
+            "impacto": "ALTO" if exaustao else "BAIXO"
+        })
+
+        # Camada 7 - Controlador vs Retardador
+        ctrl_ret = MotorAnalise._detectar_controlador_retardador(
+            sub_num, sub_pol, expectativas, geometria, modo_mercado
+        )
+        resultado["controlador_retardador"] = ctrl_ret
+        resultado["camadas"].append({
+            "camada": 7, "nome": "Controlador vs Retardador",
+            "resultado": ctrl_ret["dominancia"],
+            "detalhe": f"Controladores: {ctrl_ret['controladores']} | Retardadores: {ctrl_ret['retardadores']}",
+            "impacto": "ALTO"
+        })
+
+        return resultado
+
     @staticmethod
-    def checar_no_call(sub_num, sub_pol):
-        cenarios_duplas = [(7, 8), (8, 9), (9, 10), (10, 11)]
-        for idx1, idx2 in cenarios_duplas:
-            if sub_num[idx1] == sub_num[idx2]:
-                return True, "Volume 2 Cap 6: Trava das Duplas Ativa"
+    def _calcular_contexto_reversao(sub_pol):
+        streak = sum(1 for c in reversed(sub_pol) if c == sub_pol[-1])
+        xadrez_len = 0
+        for i in range(len(sub_pol)-1, 0, -1):
+            if sub_pol[i] != sub_pol[i-1]:
+                xadrez_len += 1
+            else:
+                break
+        xadrez_quebrou = (sub_pol[-1] == sub_pol[-2]) if len(sub_pol) >= 2 else False
+        exaustao = (streak >= 5) or (xadrez_len >= 5 and xadrez_quebrou)
+        return streak, xadrez_len, xadrez_quebrou, exaustao
 
-        posicoes_criticas_6 = [3, 4, 5, 8, 9, 10, 11]
-        for pos in posicoes_criticas_6:
-            if sub_num[pos] == 6:
-                return True, "Volume 2 Cap 4: Trava Número 6 (Posição de No Call Ativa)"
+    @staticmethod
+    def _detectar_controlador_retardador(sub_num, sub_pol, expectativas, geometria, modo_mercado):
+        controladores = []
+        retardadores = []
 
-        posicoes_criticas_2 = [8, 9, 10, 11]
-        for pos in posicoes_criticas_2:
-            if sub_num[pos] == 2:
-                return True, "Volume 2 Cap 3: Trava Número 2"
+        if geometria in ["CICLO_FECHADO_VPPV", "CICLO_FECHADO_PVVP"]:
+            controladores.append("Geometria forte")
+        if expectativas:
+            controladores.append("Regras posicionais ativas")
+        if modo_mercado == "CHUVA":
+            retardadores.append("Alta alternância (modo Chuva)")
 
-        posicoes_criticas_b = [3, 4, 5, 8, 9, 10, 11]
-        for pos in posicoes_criticas_b:
-            if sub_pol[pos] == "B":
-                return True, "Volume 2 Cap 5: Trava do Branco"
+        if len(controladores) > len(retardadores):
+            dominancia = "CONTROLADOR"
+        elif len(retardadores) > len(controladores):
+            dominancia = "RETARDADOR"
+        else:
+            dominancia = "NEUTRO"
 
-        return False, "Evento Neutro Operacional"
+        return {
+            "controladores": controladores,
+            "retardadores": retardadores,
+            "dominancia": dominancia
+        }
 
 
 # ============================================================
-# IAPreditivaV1
+# IAPreditivaV1 com Memória de Padrões Vencedores
 # ============================================================
 class IAPreditivaV1:
     def __init__(self, dados_longo_prazo, dados_recencia=None):
@@ -114,8 +168,7 @@ class IAPreditivaV1:
         self.dados_recencia = dados_recencia if dados_recencia else []
         self.modelo_transicao = defaultdict(list)
         self.modelo_numerico = defaultdict(list)
-        self.stats_regras = defaultdict(list)
-        
+
         self.unidade_analise = {}
         for n in range(15):
             self.unidade_analise[n] = {
@@ -127,6 +180,13 @@ class IAPreditivaV1:
                 "pos_numero_freq_v": 0.0, "pos_numero_freq_p": 0.0, "pos_numero_freq_b": 0.0,
                 "comportamento_pos_numero": "NEUTRO"
             }
+
+        # Memória de Padrões Vencedores
+        self.memoria_padroes_vencedores = []
+        self.historico_regras = defaultdict(lambda: {"acertos": 0, "total": 0})
+        self.controladores_fortes = defaultdict(int)
+        self.padroes_fortes = []
+
         self._treinar_modelo_profundo()
 
     def _treinar_modelo_profundo(self):
@@ -161,22 +221,69 @@ class IAPreditivaV1:
                 self.unidade_analise[n]["freq_p"] = round((self.unidade_analise[n]["P"] / total) * 100, 2)
                 self.unidade_analise[n]["freq_b"] = round((self.unidade_analise[n]["B"] / total) * 100, 2)
 
-        if len(dados) >= 12:
-            for i in range(len(dados) - 12):
-                sub_num = [d['numero'] for d in dados[i:i+12]]
-                sub_pol = [d['cor'] for d in dados[i:i+12]]
-                cor_futura = dados[i+12]['cor'] if (i+12) < len(dados) else None
-                if cor_futura:
-                    texto = "".join(sub_pol)
-                    for _ in range(multiplicador_peso):
-                        if "PVPV" in texto: self.modelo_transicao[("XADREZ", "PVPV")].append(cor_futura)
-                        if "VPVP" in texto: self.modelo_transicao[("XADREZ", "VPVP")].append(cor_futura)
-
-    def injetar_aprendizado_imediato(self, sub_dados, multiplicador_peso=4):
+    def injetar_aprendizado_imediato(self, sub_dados, multiplicador_peso=4, analise_contexto=None):
         self.dados_recencia.extend(sub_dados)
         self._processar_bloco_dados(sub_dados, multiplicador_peso, True)
 
-    def predizer_proxima_casa(self, sub_num, sub_pol):
+        if analise_contexto:
+            for regra in analise_contexto.get("regras_posicionais", []):
+                self.historico_regras[regra.get("tipo_regra", "DESCONHECIDO")]["total"] += 1
+
+            ctrl = analise_contexto.get("controlador_retardador", {})
+            if ctrl.get("dominancia") == "CONTROLADOR":
+                for item in ctrl.get("controladores", []):
+                    self.controladores_fortes[item] += 1
+
+            if analise_contexto.get("geometria") in ["CICLO_FECHADO_VPPV", "CICLO_FECHADO_PVVP"]:
+                self.padroes_fortes.append({
+                    "tipo": "GEOMETRIA_FORTE",
+                    "padrao": analise_contexto["geometria"],
+                    "peso": multiplicador_peso
+                })
+
+    def registrar_padrao_vencedor(self, analise_contexto, resultado):
+        if resultado not in ["G0", "G1"]:
+            return
+
+        padrao = {
+            "geometria": analise_contexto.get("geometria"),
+            "regras_ativas": [r.get("tipo_regra") for r in analise_contexto.get("regras_posicionais", [])],
+            "controlador_dominante": analise_contexto.get("controlador_retardador", {}).get("dominancia"),
+            "modo_mercado": analise_contexto.get("contexto_avancado", {}).get("modo_mercado"),
+            "resultado": resultado,
+            "peso": 1
+        }
+
+        if padrao not in self.memoria_padroes_vencedores:
+            self.memoria_padroes_vencedores.append(padrao)
+
+        if len(self.memoria_padroes_vencedores) > 50:
+            self.memoria_padroes_vencedores.pop(0)
+
+    def calcular_bonus_memoria(self, analise_contexto):
+        bonus = 0
+        geometria_atual = analise_contexto.get("geometria")
+        regras_atuais = [r.get("tipo_regra") for r in analise_contexto.get("regras_posicionais", [])]
+        controlador_atual = analise_contexto.get("controlador_retardador", {}).get("dominancia")
+
+        for padrao in self.memoria_padroes_vencedores:
+            match_score = 0
+
+            if padrao.get("geometria") == geometria_atual:
+                match_score += 8
+
+            regras_comuns = set(padrao.get("regras_ativas", [])) & set(regras_atuais)
+            match_score += len(regras_comuns) * 3
+
+            if padrao.get("controlador_dominante") == controlador_atual and controlador_atual == "CONTROLADOR":
+                match_score += 10
+
+            if match_score >= 12:
+                bonus += 4
+
+        return min(bonus, 22)
+
+    def predizer_proxima_casa(self, sub_num, sub_pol, analise_contexto=None):
         if len(sub_num) < 12:
             return "NEUTRO", 0.0, "Janela insuficiente"
 
@@ -214,7 +321,15 @@ class IAPreditivaV1:
         total_v = (trans.count('V') * p_trans) + (por_num.count('V') * p_num) + (geom.count('V') * p_geom) + v_bonus
         total_p = (trans.count('P') * p_trans) + (por_num.count('P') * p_num) + (geom.count('P') * p_geom) + p_bonus
 
-        if total_v + total_p == 0: 
+        # === BÔNUS DIRETO DA MEMÓRIA DE PADRÕES VENCEDORES ===
+        if analise_contexto:
+            bonus_memoria = self.calcular_bonus_memoria(analise_contexto)
+            if total_v > total_p:
+                total_v += bonus_memoria
+            else:
+                total_p += bonus_memoria
+
+        if total_v + total_p == 0:
             return "NEUTRO", 0.0, "Sem dados suficientes para previsão"
 
         prob_v = (total_v / (total_v + total_p)) * 100
@@ -226,6 +341,35 @@ class IAPreditivaV1:
         elif prob_p >= BARREIRA and prob_p > prob_v + 4:
             return "PRETO", round(prob_p, 1), f"Confluência estatística forte para Preto ({prob_p:.1f}%)"
         return "NEUTRO", round(max(prob_v, prob_p), 1), "Sem confluência estatística clara"
+
+
+# ============================================================
+# MotorNoCall
+# ============================================================
+class MotorNoCall:
+    @staticmethod
+    def checar_no_call(sub_num, sub_pol):
+        cenarios_duplas = [(7, 8), (8, 9), (9, 10), (10, 11)]
+        for idx1, idx2 in cenarios_duplas:
+            if sub_num[idx1] == sub_num[idx2]:
+                return True, "Volume 2 Cap 6: Trava das Duplas Ativa"
+
+        posicoes_criticas_6 = [3, 4, 5, 8, 9, 10, 11]
+        for pos in posicoes_criticas_6:
+            if sub_num[pos] == 6:
+                return True, "Volume 2 Cap 4: Trava Número 6 (Posição de No Call Ativa)"
+
+        posicoes_criticas_2 = [8, 9, 10, 11]
+        for pos in posicoes_criticas_2:
+            if sub_num[pos] == 2:
+                return True, "Volume 2 Cap 3: Trava Número 2"
+
+        posicoes_criticas_b = [3, 4, 5, 8, 9, 10, 11]
+        for pos in posicoes_criticas_b:
+            if sub_pol[pos] == "B":
+                return True, "Volume 2 Cap 5: Trava do Branco"
+
+        return False, "Evento Neutro Operacional"
 
 
 # ============================================================
@@ -319,57 +463,9 @@ class MotorContagensProjetivas:
 
 
 # ============================================================
-# Classes Auxiliares
+# AnalisadorContextoAvancado
 # ============================================================
-class SequenciaOperacional:
-    def __init__(self, lista_resultados):
-        self.cronologia = lista_resultados
-        self.numerica = [int(r['numero']) for r in self.cronologia]
-        self.polaridades = [str(r['cor']).upper() for r in self.cronologia]
-        self.total = len(self.numerica)
-
-class GerenciadorMemoriaViva:
-    @staticmethod
-    def injetar_rodadas_reais(sequencia_12, numeros_gales_reais, caminho_recencia="base_recencia_ativa.xlsx"):
-        novas_linhas = []
-        for num in sequencia_12:
-            cor = 'B' if num == 0 else ('V' if 1 <= num <= 7 else 'P')
-            novas_linhas.append({"numero": int(num), "cor": cor})
-        for num in numeros_gales_reais:
-            cor = 'B' if num == 0 else ('V' if 1 <= num <= 7 else 'P')
-            novas_linhas.append({"numero": int(num), "cor": cor})
-
-        df_novos = pd.DataFrame(novas_linhas)
-        df_novos_invertido = df_novos.iloc[::-1].reset_index(drop=True)
-        
-        if os.path.exists(caminho_recencia):
-            try:
-                df_atual = pd.read_excel(caminho_recencia)
-                df_consolidado = pd.concat([df_novos_invertido, df_atual], ignore_index=True)
-                df_consolidado.to_excel(caminho_recencia, index=False)
-            except:
-                df_novos_invertido.to_excel(caminho_recencia, index=False)
-        else:
-            df_novos_invertido.to_excel(caminho_recencia, index=False)
-
 class AnalisadorContextoAvancado:
-    @staticmethod
-    def calcular_numerologia_pos_numero(num_fechamento, sequencia_num, sequencia_pol):
-        contagem_v = contagem_p = contagem_b = 0
-        for i in range(len(sequencia_num) - 1):
-            if sequencia_num[i] == num_fechamento:
-                prox = sequencia_pol[i + 1]
-                if prox == "V": contagem_v += 1
-                elif prox == "P": contagem_p += 1
-                elif prox == "B": contagem_b += 1
-        total = contagem_v + contagem_p + contagem_b
-        if total < 3: return "NEUTRO", 0.0
-        pct_v = (contagem_v / total) * 100
-        pct_p = (contagem_p / total) * 100
-        if pct_v >= 60.0: return "VERMELHO", pct_v
-        if pct_p >= 60.0: return "PRETO", pct_p
-        return "NEUTRO", max(pct_v, pct_p)
-
     @staticmethod
     def mapear_padroes_geometria(sub_pol):
         texto = "".join(sub_pol)
@@ -381,30 +477,6 @@ class AnalisadorContextoAvancado:
         return "ESTÁVEL"
 
     @staticmethod
-    def detectar_chance_inversao(sub_pol):
-        texto = "".join(sub_pol)
-        if texto.endswith("VVVV"): return True, "INVERSÃO", "Exaustão de Vermelhos"
-        if texto.endswith("PPPP"): return True, "INVERSÃO", "Exaustão de Pretos"
-        return False, "NORMAL", "Fluxo Estável"
-
-    @staticmethod
-    def preditor_estatistico_branco(num_fechamento, sequencia_num, sequencia_pol):
-        if not sequencia_pol: return "BAIXA", 0
-        atraso = 0
-        for cor in reversed(sequencia_pol):
-            if cor == "B": break
-            atraso += 1
-        vezes_num = vezes_branco = 0
-        for i in range(len(sequencia_num) - 1):
-            if sequencia_num[i] == num_fechamento:
-                vezes_num += 1
-                if "B" in sequencia_pol[i+1:i+4]:
-                    vezes_branco += 1
-        taxa = (vezes_branco / vezes_num * 100) if vezes_num > 0 else 0
-        chance = "ALTA" if atraso >= 15 or taxa >= 18 else ("MÉDIA" if atraso >= 8 else "BAIXA")
-        return chance, atraso
-
-    @staticmethod
     def detectar_modo_mercado(sub_pol):
         texto = "".join(sub_pol)
         alternancias = sum(1 for i in range(len(texto)-1) if texto[i] != texto[i+1])
@@ -413,6 +485,9 @@ class AnalisadorContextoAvancado:
         return "NEUTRO"
 
 
+# ============================================================
+# LeitorXLS
+# ============================================================
 class LeitorXLS:
     def __init__(self, caminho_arquivo):
         self.caminho = caminho_arquivo
@@ -423,21 +498,13 @@ class LeitorXLS:
         try:
             df = pd.read_excel(self.caminho)
             df.columns = [str(col).strip().lower() for col in df.columns]
-
-            col_num = None
-            for c in df.columns:
-                if c in ['número', 'numero', 'num']:
-                    col_num = c
-                    break
+            col_num = next((c for c in df.columns if c in ['número', 'numero', 'num']), None)
             if col_num is None:
                 return None
-
             df = df.rename(columns={col_num: 'numero'})
             df = df.iloc[::-1].reset_index(drop=True)
-
             if len(df) < 5:
                 return None
-
             dados = []
             for _, row in df.iterrows():
                 try:
@@ -450,8 +517,7 @@ class LeitorXLS:
                 except:
                     continue
             return dados if len(dados) >= 5 else None
-        except Exception as e:
-            print(f"[LeitorXLS] Erro: {e}")
+        except:
             return None
 
 
@@ -486,35 +552,29 @@ class MotorV1Completo:
             sub_num = self.seq.numerica[idx:idx+12]
             sub_pol = self.seq.polaridades[idx:idx+12]
 
-            geometria = AnalisadorContextoAvancado.mapear_padroes_geometria(sub_pol)
-            status_inv = AnalisadorContextoAvancado.detectar_chance_inversao(sub_pol)
-            nc_ativo, motivo_nc = MotorNoCall.checar_no_call(sub_num, sub_pol)
-            expectativas = MotorContagensProjetivas.mapear_janela(sub_num, sub_pol, geometria)
-            num_fech = sub_num[-1]
-            inclinacao = AnalisadorContextoAvancado.calcular_numerologia_pos_numero(num_fech, self.seq.numerica, self.seq.polaridades)
-            direcao_ia, conf_ia, raciocinio_ia = self.ia.predizer_proxima_casa(sub_num, sub_pol)
-            modo_mercado = AnalisadorContextoAvancado.detectar_modo_mercado(sub_pol)
+            analise = MotorAnalise.analisar_janela(sub_num, sub_pol, self.ia)
 
-            streak = 0
-            for c in reversed(sub_pol):
-                if c == sub_pol[-1]: streak += 1
-                else: break
-
-            xadrez_len = 0
-            for i in range(len(sub_pol)-1, 0, -1):
-                if sub_pol[i] != sub_pol[i-1]:
-                    xadrez_len += 1
-                else:
-                    break
-            xadrez_quebrou = (sub_pol[-1] == sub_pol[-2]) if len(sub_pol) >= 2 else False
+            nc_ativo = analise["no_call"]["ativo"]
+            motivo_nc = analise["no_call"]["motivo"]
+            geometria = analise["geometria"]
+            expectativas = analise["regras_posicionais"]
+            direcao_ia = analise["ia"]["direcao"]
+            conf_ia = analise["ia"]["confianca"]
+            raciocinio_ia = analise["ia"]["raciocinio"]
+            streak = analise["contexto_reversao"]["streak"]
+            xadrez_len = analise["contexto_reversao"]["xadrez_len"]
+            xadrez_quebrou = analise["contexto_reversao"]["xadrez_quebrou"]
+            contexto_exaustao = analise["contexto_reversao"]["exaustao"]
+            modo_mercado = analise["contexto_avancado"].get("modo_mercado", "NEUTRO")
 
             sinal, justificativa, regra_id = JuizHierarquicoModificado.arbitrar_sinal(
-                nc_ativo, motivo_nc, expectativas, inclinacao, geometria, 
-                (direcao_ia, conf_ia, raciocinio_ia), status_inv, self.historico_regras,
+                nc_ativo, motivo_nc, expectativas, None, geometria,
+                (direcao_ia, conf_ia, raciocinio_ia), None, self.historico_regras,
                 modo_mercado=modo_mercado,
                 streak_atual=streak,
                 xadrez_len=xadrez_len,
-                xadrez_quebrou=xadrez_quebrou
+                xadrez_quebrou=xadrez_quebrou,
+                contexto_exaustao=contexto_exaustao
             )
 
             if sinal != "NO CALL" and streak >= 6:
@@ -541,6 +601,15 @@ class MotorV1Completo:
 
             stats[classificacao] = stats.get(classificacao, 0) + 1
 
+            if classificacao in ["G0", "G1"]:
+                contexto_analise = {
+                    "geometria": geometria,
+                    "regras_posicionais": expectativas,
+                    "controlador_retardador": analise.get("controlador_retardador", {}),
+                    "contexto_avancado": {"modo_mercado": modo_mercado}
+                }
+                self.ia.registrar_padrao_vencedor(contexto_analise, classificacao)
+
             if regra_id not in ["NENHUMA", "SISTEMA_TRAVADO"]:
                 self.historico_regras[regra_id]["total"] += 1
                 if classificacao in ["G0", "G1"]:
@@ -548,7 +617,13 @@ class MotorV1Completo:
 
             bloco = [{"numero": self.seq.numerica[k], "cor": self.seq.polaridades[k]} 
                      for k in range(idx, min(idx + 12 + salto, self.seq.total))]
-            self.ia.injetar_aprendizado_imediato(bloco, 4)
+            
+            contexto_injecao = {
+                "regras_posicionais": expectativas,
+                "controlador_retardador": analise.get("controlador_retardador", {}),
+                "geometria": geometria
+            }
+            self.ia.injetar_aprendizado_imediato(bloco, 4, contexto_injecao)
 
             memorias.append(f"Janela {len(memorias)+1}: {sub_num} -> {sinal} | {justificativa} | {classificacao}")
             idx += 12 + salto
@@ -580,7 +655,7 @@ class MotorV1Completo:
 
 
 # ============================================================
-# ProcessadorTipoB - Atualizado com "memoria" para compatibilidade
+# ProcessadorTipoB
 # ============================================================
 class ProcessadorTipoB:
     def __init__(self, sequencia_12_numeros, caminho_base_dados):
@@ -599,84 +674,34 @@ class ProcessadorTipoB:
                 return {"erro": "Base de dados não encontrada"}
             ia = IAPreditivaV1(base, None)
 
-        base_rec = None
         if os.path.exists("base_recencia_ativa.xlsx"):
             base_rec = LeitorXLS("base_recencia_ativa.xlsx").ler_e_validar()
             if base_rec:
-                ia.injetar_aprendizado_imediato(base_rec, multiplicador_peso=4)
+                ia.injetar_aprendizado_imediato(base_rec, 4)
 
-        raciocinio_trace = []
+        analise = MotorAnalise.analisar_janela(self.entrada, self.polaridades, ia)
 
-        # CAMADA 1
-        nc_ativo, motivo_nc = MotorNoCall.checar_no_call(self.entrada, self.polaridades)
-        raciocinio_trace.append({
-            "camada": 1, "nome": "Segurança (NO CALL)",
-            "resultado": f"Ativo={nc_ativo}", "detalhe": motivo_nc,
-            "impacto": "BLOQUEIO" if nc_ativo else "APROVADO"
-        })
+        nc_ativo = analise["no_call"]["ativo"]
+        motivo_nc = analise["no_call"]["motivo"]
+        geometria = analise["geometria"]
+        expectativas = analise["regras_posicionais"]
+        direcao_ia = analise["ia"]["direcao"]
+        conf_ia = analise["ia"]["confianca"]
+        raciocinio_ia = analise["ia"]["raciocinio"]
+        streak = analise["contexto_reversao"]["streak"]
+        xadrez_len = analise["contexto_reversao"]["xadrez_len"]
+        xadrez_quebrou = analise["contexto_reversao"]["xadrez_quebrou"]
+        contexto_exaustao = analise["contexto_reversao"]["exaustao"]
+        modo_mercado = analise["contexto_avancado"].get("modo_mercado", "NEUTRO")
 
-        # CAMADA 2
-        geometria = AnalisadorContextoAvancado.mapear_padroes_geometria(self.polaridades)
-        raciocinio_trace.append({
-            "camada": 2, "nome": "Geometria",
-            "resultado": geometria, "detalhe": "Padrão geométrico detectado",
-            "impacto": "FORTE" if geometria in ["CICLO_FECHADO_VPPV", "CICLO_FECHADO_PVVP"] else "NEUTRO"
-        })
+        raciocinio_trace = analise["camadas"]
 
-        # CAMADA 3
-        expectativas = MotorContagensProjetivas.mapear_janela(self.entrada, self.polaridades, geometria)
-        raciocinio_trace.append({
-            "camada": 3, "nome": "Regras Posicionais (Volume 12)",
-            "resultado": f"{len(expectativas)} regras ativas",
-            "detalhe": [e["tipo_regra"] for e in expectativas] if expectativas else "Nenhuma",
-            "impacto": "ALTO" if expectativas else "BAIXO"
-        })
-
-        # CAMADA 4
-        base_longa = LeitorXLS(self.caminho_base).ler_e_validar() or []
-        inclinacao = AnalisadorContextoAvancado.calcular_numerologia_pos_numero(
-            self.entrada[-1], [d['numero'] for d in base_longa], [d['cor'] for d in base_longa]
-        )
-        modo_mercado = AnalisadorContextoAvancado.detectar_modo_mercado(self.polaridades)
-        raciocinio_trace.append({
-            "camada": 4, "nome": "Contexto Avançado",
-            "resultado": f"Inclinação: {inclinacao[0]}",
-            "detalhe": f"Modo: {modo_mercado}", "impacto": "MÉDIO"
-        })
-
-        # CAMADA 5
-        direcao_ia, conf_ia, raciocinio_ia = ia.predizer_proxima_casa(self.entrada, self.polaridades)
-        raciocinio_trace.append({
-            "camada": 5, "nome": "IA Probabilística",
-            "resultado": f"{direcao_ia} ({conf_ia}%)",
-            "detalhe": raciocinio_ia,
-            "impacto": "ALTO" if conf_ia >= 52 else "MÉDIO"
-        })
-
-        # CAMADA 6
-        streak = sum(1 for c in reversed(self.polaridades) if c == self.polaridades[-1])
-        xadrez_len = 0
-        for i in range(len(self.polaridades)-1, 0, -1):
-            if self.polaridades[i] != self.polaridades[i-1]:
-                xadrez_len += 1
-            else:
-                break
-        xadrez_quebrou = (self.polaridades[-1] == self.polaridades[-2]) if len(self.polaridades) >= 2 else False
-        contexto_exaustao = (streak >= 5) or (xadrez_len >= 5 and xadrez_quebrou)
-
-        raciocinio_trace.append({
-            "camada": 6, "nome": "Contexto de Reversão",
-            "resultado": f"Streak={streak}x | Xadrez={xadrez_len}",
-            "detalhe": f"Exaustão={contexto_exaustao}",
-            "impacto": "ALTO" if contexto_exaustao else "BAIXO"
-        })
-
-        sintese = [f"[{item['nome']}] {item['resultado']} → {item['detalhe']}" 
-                   for item in raciocinio_trace if item["impacto"] in ["ALTO", "FORTE", "BLOQUEIO"]]
+        sintese = [f"[{c['nome']}] {c['resultado']} → {c['detalhe']}" 
+                   for c in raciocinio_trace if c["impacto"] in ["ALTO", "FORTE", "BLOQUEIO"]]
         raciocinio_final = " | ".join(sintese) if sintese else "Sem confluência forte."
 
         sinal, justificativa, regra_id = JuizHierarquicoModificado.arbitrar_sinal(
-            nc_ativo, motivo_nc, expectativas, inclinacao, geometria,
+            nc_ativo, motivo_nc, expectativas, None, geometria,
             (direcao_ia, conf_ia, raciocinio_ia), None,
             defaultdict(lambda: {"acertos": 1, "total": 1}),
             modo_mercado=modo_mercado, streak_atual=streak,
@@ -690,7 +715,6 @@ class ProcessadorTipoB:
                 justificativa = f"Veto de streak {streak}x (contra IA)"
                 regra_id = "VETO_STREAK"
 
-        # LOG JSON
         log_data = {
             "tipo": "TIPO_B",
             "sequencia": self.entrada,
@@ -699,11 +723,8 @@ class ProcessadorTipoB:
             "no_call": nc_ativo,
             "raciocinio_trace": raciocinio_trace,
             "raciocinio_final": raciocinio_final,
-            "decisao_final": {
-                "sinal": sinal,
-                "justificativa": justificativa,
-                "regra_id": regra_id
-            }
+            "controlador_retardador": analise["controlador_retardador"],
+            "decisao_final": {"sinal": sinal, "justificativa": justificativa, "regra_id": regra_id}
         }
         salvar_log_json(log_data)
 
@@ -715,11 +736,8 @@ class ProcessadorTipoB:
             "memoria": f"[PROCESSAMENTO TIPO B] Sequência: {self.entrada} → Sinal: {sinal} | {raciocinio_final}",
             "raciocinio_trace": raciocinio_trace,
             "raciocinio_final": raciocinio_final,
-            "decisao_final": {
-                "sinal": sinal,
-                "justificativa": justificativa,
-                "regra_id": regra_id
-            }
+            "controlador_retardador": analise["controlador_retardador"],
+            "decisao_final": {"sinal": sinal, "justificativa": justificativa, "regra_id": regra_id}
         }
 
 
@@ -800,6 +818,89 @@ class EngineMatematicoAvancado:
             "custo_total_operacao": round(custo_total, 2),
             "house_edge_estatico": "-6.67%"
         }
+
+
+# ============================================================
+# Funções Auxiliares
+# ============================================================
+def salvar_modelo_longo_prazo(ia, caminho="modelo_longo_prazo.pkl"):
+    try:
+        with open(caminho, "wb") as f:
+            pickle.dump(ia, f)
+        return True
+    except Exception as e:
+        print(f"Erro ao salvar modelo: {e}")
+        return False
+
+def carregar_modelo_longo_prazo(caminho="modelo_longo_prazo.pkl"):
+    if os.path.exists(caminho):
+        try:
+            with open(caminho, "rb") as f:
+                return pickle.load(f)
+        except:
+            return None
+    return None
+
+def reforcar_aprendizado_tipo_d(ia):
+    for padrao, qtd in ia.controladores_fortes.items():
+        if qtd >= 8:
+            ia.padroes_fortes.append({
+                "tipo": "CONTROLADOR_MUITO_FORTE",
+                "padrao": padrao,
+                "peso": qtd * 2
+            })
+
+    ia.padroes_fortes = sorted(ia.padroes_fortes, key=lambda x: x.get("peso", 0), reverse=True)[:30]
+
+
+def treinar_base_longo_prazo_com_janelas(dados_completos):
+    if not dados_completos or len(dados_completos) < 30:
+        return {
+            "sucesso": False,
+            "mensagem": "Base muito pequena para treinamento profundo (mínimo 30 registros)."
+        }
+
+    motor = MotorV1Completo(dados_completos)
+    motor.processar_auditoria()
+
+    reforcar_aprendizado_tipo_d(motor.ia)
+
+    motor.ia.memoria_padroes_vencedores = list({tuple(sorted(p.items())): p for p in motor.ia.memoria_padroes_vencedores}.values())
+
+    sucesso_salvar = salvar_modelo_longo_prazo(motor.ia)
+
+    stats = getattr(motor, 'stats', {"G0": 0, "G1": 0, "G2": 0, "FALHA": 0, "NO CALL": 0})
+    total_janelas = sum(stats.values()) if stats else 0
+
+    regras_boas = 0
+    for regra, dados in motor.historico_regras.items():
+        if dados["total"] >= 5 and (dados["acertos"] / dados["total"]) >= 0.55:
+            regras_boas += 1
+
+    taxa_g0_g1 = ((stats.get("G0", 0) + stats.get("G1", 0)) / total_janelas * 100) if total_janelas > 0 else 0
+
+    return {
+        "sucesso": True,
+        "registros_processados": len(dados_completos),
+        "janelas_analisadas": total_janelas,
+        "G0": stats.get("G0", 0),
+        "G1": stats.get("G1", 0),
+        "G2": stats.get("G2", 0),
+        "FALHA": stats.get("FALHA", 0),
+        "NO CALL": stats.get("NO CALL", 0),
+        "regras_com_boa_performance": regras_boas,
+        "assertividade_g0_g1_percent": round(taxa_g0_g1, 2),
+        "modelo_salvo_com_sucesso": sucesso_salvar,
+        "mensagem": "Treinamento profundo por janelas móveis concluído com sucesso."
+    }
+
+
+class SequenciaOperacional:
+    def __init__(self, lista_resultados):
+        self.cronologia = lista_resultados
+        self.numerica = [int(r['numero']) for r in self.cronologia]
+        self.polaridades = [str(r['cor']).upper() for r in self.cronologia]
+        self.total = len(self.numerica)
 
 
 # ============================================================
