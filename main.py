@@ -55,7 +55,7 @@ class MotorNoCall:
 
 
 # ============================================================
-# IAPreditivaV1 (versão limpa)
+# IAPreditivaV1 (mantida com melhorias sutis de retorno)
 # ============================================================
 class IAPreditivaV1:
     def __init__(self, dados_longo_prazo, dados_recencia=None):
@@ -127,7 +127,7 @@ class IAPreditivaV1:
 
     def predizer_proxima_casa(self, sub_num, sub_pol):
         if len(sub_num) < 12:
-            return "NEUTRO", 0.0
+            return "NEUTRO", 0.0, "Janela insuficiente"
 
         ultimo_num = sub_num[-1]
         ultimas_cores = (sub_pol[-2], sub_pol[-1])
@@ -163,21 +163,22 @@ class IAPreditivaV1:
         total_v = (trans.count('V') * p_trans) + (por_num.count('V') * p_num) + (geom.count('V') * p_geom) + v_bonus
         total_p = (trans.count('P') * p_trans) + (por_num.count('P') * p_num) + (geom.count('P') * p_geom) + p_bonus
 
-        if total_v + total_p == 0: return "NEUTRO", 0.0
+        if total_v + total_p == 0: 
+            return "NEUTRO", 0.0, "Sem dados suficientes para previsão"
 
         prob_v = (total_v / (total_v + total_p)) * 100
         prob_p = (total_p / (total_v + total_p)) * 100
 
         BARREIRA = 52.5
         if prob_v >= BARREIRA and prob_v > prob_p + 4:
-            return "VERMELHO", round(prob_v, 1)
+            return "VERMELHO", round(prob_v, 1), f"Confluência estatística forte para Vermelho ({prob_v:.1f}%)"
         elif prob_p >= BARREIRA and prob_p > prob_v + 4:
-            return "PRETO", round(prob_p, 1)
-        return "NEUTRO", round(max(prob_v, prob_p), 1)
+            return "PRETO", round(prob_p, 1), f"Confluência estatística forte para Preto ({prob_p:.1f}%)"
+        return "NEUTRO", round(max(prob_v, prob_p), 1), "Sem confluência estatística clara"
 
 
 # ============================================================
-# JuizHierarquicoModificado - Decisão por Confluência de Evidências
+# JuizHierarquicoModificado - Com raciocínio mais estruturado
 # ============================================================
 class JuizHierarquicoModificado:
     @staticmethod
@@ -185,41 +186,45 @@ class JuizHierarquicoModificado:
                        previsao_ia, status_inversao, historico_revalida_regras, 
                        modo_mercado="NEUTRO", 
                        streak_atual=0, xadrez_len=0, xadrez_quebrou=False,
-                       contexto_exaustao=False):
+                       contexto_exaustao=False,
+                       sintese_evidencias=None):
         
         if no_call_ativo:
             return "NO CALL", motivo_nc, "SISTEMA_TRAVADO"
 
+        # Prioridade 1: Geometria forte
         if geometria_mercado == "CICLO_FECHADO_VPPV": 
-            return "PRETO", "Geometria VPPV", "GEOMETRIA"
+            return "PRETO", "Geometria VPPV (Padrão forte)", "GEOMETRIA_FORTE"
         if geometria_mercado == "CICLO_FECHADO_PVVP": 
-            return "VERMELHO", "Geometria PVVP", "GEOMETRIA"
+            return "VERMELHO", "Geometria PVVP (Padrão forte)", "GEOMETRIA_FORTE"
 
-        direcao_ia, confianca_ia = previsao_ia
+        direcao_ia, confianca_ia, raciocinio_ia = previsao_ia
 
+        # Prioridade 2: Regras do manual com boa confluência
         if expectations:
             count_v = sum(1 for item in expectations if item["direcao"] == "VERMELHO")
             count_p = sum(1 for item in expectations if item["direcao"] == "PRETO")
 
             if count_v > count_p:
-                return "VERMELHO", "Regra do manual ativa (Volume 12 / Projeção)", "REGRA_MANUAL"
+                return "VERMELHO", "Regra do manual ativa com apoio", "REGRA_MANUAL"
             elif count_p > count_v:
-                return "PRETO", "Regra do manual ativa (Volume 12 / Projeção)", "REGRA_MANUAL"
+                return "PRETO", "Regra do manual ativa com apoio", "REGRA_MANUAL"
 
-        if direcao_ia != "NEUTRO" and confianca_ia >= 53:
-            return direcao_ia, f"IA Preditiva ({confianca_ia:.1f}%)", "IA_PREDITIVA"
+        # Prioridade 3: IA com confiança razoável + contexto favorável
+        if direcao_ia != "NEUTRO" and confianca_ia >= 52:
+            if contexto_exaustao or (streak_atual >= 5) or (xadrez_len >= 4 and xadrez_quebrou):
+                return direcao_ia, f"IA + Contexto de reversão ({raciocinio_ia})", "IA_CONTEXTO_REVERSAO"
+            return direcao_ia, f"IA Preditiva ({confianca_ia:.1f}%) - {raciocinio_ia}", "IA_PREDITIVA"
 
-        if contexto_exaustao or (streak_atual >= 6) or (xadrez_len >= 5 and xadrez_quebrou):
-            if direcao_ia != "NEUTRO":
-                return direcao_ia, "Contexto de exaustão/inversão + IA", "CONTEXTO_INVERSAO"
-            else:
-                return "NO CALL", "Contexto de possível inversão forte - aguardar", "CONTEXTO_INVERSAO"
+        # Prioridade 4: Contexto de exaustão forte
+        if contexto_exaustao and direcao_ia != "NEUTRO":
+            return direcao_ia, "Contexto de exaustão forte + IA", "CONTEXTO_EXAUSTAO"
 
-        return "NO CALL", "Sem confluência clara após múltiplas leituras", "SISTEMA_TRAVADO"
+        return "NO CALL", "Sem confluência suficiente após análise profunda", "SISTEMA_TRAVADO"
 
 
 # ============================================================
-# (Classes auxiliares mantidas)
+# (Classes auxiliares mantidas exatamente como estavam)
 # ============================================================
 
 class SequenciaOperacional:
@@ -417,7 +422,7 @@ class MotorV1Completo:
             expectativas = MotorContagensProjetivas.mapear_janela(sub_num, sub_pol, geometria)
             num_fech = sub_num[-1]
             inclinacao = AnalisadorContextoAvancado.calcular_numerologia_pos_numero(num_fech, self.seq.numerica, self.seq.polaridades)
-            direcao_ia, conf_ia = self.ia.predizer_proxima_casa(sub_num, sub_pol)
+            direcao_ia, conf_ia, raciocinio_ia = self.ia.predizer_proxima_casa(sub_num, sub_pol)
             modo_mercado = AnalisadorContextoAvancado.detectar_modo_mercado(sub_pol)
 
             streak = 0
@@ -435,7 +440,7 @@ class MotorV1Completo:
 
             sinal, justificativa, regra_id = JuizHierarquicoModificado.arbitrar_sinal(
                 nc_ativo, motivo_nc, expectativas, inclinacao, geometria, 
-                (direcao_ia, conf_ia), status_inv, self.historico_regras,
+                (direcao_ia, conf_ia, raciocinio_ia), status_inv, self.historico_regras,
                 modo_mercado=modo_mercado,
                 streak_atual=streak,
                 xadrez_len=xadrez_len,
@@ -505,7 +510,7 @@ class MotorV1Completo:
 
 
 # ============================================================
-# ProcessadorTipoB - COM RELEITURAS EXPLÍCITAS DA SEQUÊNCIA
+# ProcessadorTipoB - COM SÍNTESE DE RACIOCÍNIO (ESTILO GROK)
 # ============================================================
 class ProcessadorTipoB:
     def __init__(self, sequencia_12_numeros, caminho_base_dados):
@@ -531,23 +536,24 @@ class ProcessadorTipoB:
                 ia.injetar_aprendizado_imediato(base_rec, multiplicador_peso=4)
 
         # ============================================================
-        # RELEITURAS EXPLÍCITAS DA JANELA DE 12 NÚMEROS
+        # RELEITURAS + SÍNTESE DE EVIDÊNCIAS (ESTILO GROK)
         # ============================================================
         evidencias = []
+        observacoes = []
 
-        # Releitura 1: Segurança (NO CALL)
+        # Releitura 1
         nc_ativo, motivo_nc = MotorNoCall.checar_no_call(self.entrada, self.polaridades)
         evidencias.append({"releitura": 1, "tipo": "Segurança (NO CALL)", "resultado": {"ativo": nc_ativo, "motivo": motivo_nc}})
 
-        # Releitura 2: Geometria
+        # Releitura 2
         geometria = AnalisadorContextoAvancado.mapear_padroes_geometria(self.polaridades)
         evidencias.append({"releitura": 2, "tipo": "Geometria", "resultado": geometria})
 
-        # Releitura 3: Regras Projetivas
+        # Releitura 3
         expectativas = MotorContagensProjetivas.mapear_janela(self.entrada, self.polaridades, geometria)
         evidencias.append({"releitura": 3, "tipo": "Regras Projetivas (Volume 12)", "resultado": expectativas})
 
-        # Releitura 4: Contexto Avançado
+        # Releitura 4
         base_longa = LeitorXLS(self.caminho_base).ler_e_validar() or []
         inclinacao = AnalisadorContextoAvancado.calcular_numerologia_pos_numero(
             self.entrada[-1], [d['numero'] for d in base_longa], [d['cor'] for d in base_longa]
@@ -555,11 +561,11 @@ class ProcessadorTipoB:
         modo_mercado = AnalisadorContextoAvancado.detectar_modo_mercado(self.polaridades)
         evidencias.append({"releitura": 4, "tipo": "Contexto Avançado", "resultado": {"inclinacao": inclinacao, "modo_mercado": modo_mercado}})
 
-        # Releitura 5: IA Probabilística
-        direcao_ia, conf_ia = ia.predizer_proxima_casa(self.entrada, self.polaridades)
-        evidencias.append({"releitura": 5, "tipo": "IA Probabilística", "resultado": {"direcao": direcao_ia, "confianca": conf_ia}})
+        # Releitura 5
+        direcao_ia, conf_ia, raciocinio_ia = ia.predizer_proxima_casa(self.entrada, self.polaridades)
+        evidencias.append({"releitura": 5, "tipo": "IA Probabilística", "resultado": {"direcao": direcao_ia, "confianca": conf_ia, "raciocinio": raciocinio_ia}})
 
-        # Releitura 6: Análise Sequencial (Streak / Xadrez / Exaustão)
+        # Releitura 6
         streak = 0
         for c in reversed(self.polaridades):
             if c == self.polaridades[-1]: streak += 1
@@ -586,17 +592,35 @@ class ProcessadorTipoB:
         })
 
         # ============================================================
-        # DECISÃO FINAL (após todas as releituras)
+        # SÍNTESE DE RACIOCÍNIO (NOVO - ESTILO GROK)
+        # ============================================================
+        sintese = []
+        if nc_ativo:
+            sintese.append("Bloqueio por NO CALL ativo.")
+        if geometria in ["CICLO_FECHADO_VPPV", "CICLO_FECHADO_PVVP"]:
+            sintese.append(f"Padrão geométrico forte detectado: {geometria}.")
+        if expectativas:
+            sintese.append(f"Regras projetivas ativas ({len(expectativas)} evidências).")
+        if direcao_ia != "NEUTRO" and conf_ia >= 52:
+            sintese.append(f"IA com sinal {direcao_ia} e confiança {conf_ia}%.")
+        if contexto_exaustao:
+            sintese.append("Contexto de exaustão/streak longo favorece reversão.")
+
+        raciocinio_final = " | ".join(sintese) if sintese else "Análise sem confluência forte entre as camadas."
+
+        # ============================================================
+        # DECISÃO FINAL
         # ============================================================
         sinal, justificativa, regra_id = JuizHierarquicoModificado.arbitrar_sinal(
             nc_ativo, motivo_nc, expectativas, inclinacao, geometria,
-            (direcao_ia, conf_ia), None,
+            (direcao_ia, conf_ia, raciocinio_ia), None,
             defaultdict(lambda: {"acertos": 1, "total": 1}),
             modo_mercado=modo_mercado,
             streak_atual=streak,
             xadrez_len=xadrez_len,
             xadrez_quebrou=xadrez_quebrou,
-            contexto_exaustao=contexto_exaustao
+            contexto_exaustao=contexto_exaustao,
+            sintese_evidencias=raciocinio_final
         )
 
         if sinal != "NO CALL" and streak >= 6:
@@ -610,8 +634,9 @@ class ProcessadorTipoB:
             "justificativa": justificativa,
             "confianca_ia": round(conf_ia, 2),
             "no_call": nc_ativo,
-            "memoria": f"[PROCESSAMENTO TIPO B - RELEITURAS] Sequência: {self.entrada}",
+            "memoria": f"[PROCESSAMENTO TIPO B - RELEITURAS + SÍNTESE] Sequência: {self.entrada}",
             "releituras": evidencias,
+            "sintese_raciocinio": raciocinio_final,
             "decisao_final": {"sinal": sinal, "justificativa": justificativa, "regra_id": regra_id}
         }
 
