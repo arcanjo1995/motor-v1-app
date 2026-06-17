@@ -55,7 +55,7 @@ class MotorNoCall:
 
 
 # ============================================================
-# IAPreditivaV1 - Com detecção de Consequência Futura
+# IAPreditivaV1 - Análise Probabilística (sem bônus numéricos de streak/xadrez)
 # ============================================================
 class IAPreditivaV1:
     def __init__(self, dados_longo_prazo, dados_recencia=None):
@@ -145,6 +145,7 @@ class IAPreditivaV1:
         v_bonus = stats.get("freq_v", 0) * 3.5
         p_bonus = stats.get("freq_p", 0) * 3.5
 
+        # Análise de Consequência Futura (Pós-Número)
         pos_v = stats.get("pos_numero_V", 0)
         pos_p = stats.get("pos_numero_P", 0)
         pos_total = pos_v + pos_p
@@ -154,26 +155,6 @@ class IAPreditivaV1:
                 v_bonus += 14
             elif pos_p > pos_v * 1.25:
                 p_bonus += 14
-
-        streak = 0
-        for cor in reversed(sub_pol):
-            if cor == sub_pol[-1]: streak += 1
-            else: break
-
-        xadrez_len = 0
-        for i in range(len(sub_pol)-1, 0, -1):
-            if sub_pol[i] != sub_pol[i-1]: xadrez_len += 1
-            else: break
-
-        if streak >= 5:
-            if sub_pol[-1] == 'V': p_bonus += 18
-            else: v_bonus += 18
-
-        if xadrez_len >= 5:
-            expected = 'P' if sub_pol[-1] == 'V' else 'V'
-            if sub_pol[-1] != expected:
-                if sub_pol[-1] == 'V': v_bonus += 22
-                else: p_bonus += 22
 
         has_rec = len(self.dados_recencia) > 0
         p_trans = 0.22 if has_rec else 0.17
@@ -197,18 +178,20 @@ class IAPreditivaV1:
 
 
 # ============================================================
-# JuizHierarquicoModificado - Versão Equilibrada
+# JuizHierarquicoModificado - Decisão por Confluência de Evidências
 # ============================================================
 class JuizHierarquicoModificado:
     @staticmethod
     def arbitrar_sinal(no_call_ativo, motivo_nc, expectations, inclinacao_num, geometria_mercado, 
                        previsao_ia, status_inversao, historico_revalida_regras, 
-                       modo_mercado="NEUTRO", xadrez_quebrado=False,
-                       streak_atual=0, xadrez_len=0, xadrez_quebrou=False):
+                       modo_mercado="NEUTRO", 
+                       streak_atual=0, xadrez_len=0, xadrez_quebrou=False,
+                       contexto_exaustao=False):
         
         if no_call_ativo:
             return "NO CALL", motivo_nc, "SISTEMA_TRAVADO"
 
+        # Leitura 1: Geometria forte
         if geometria_mercado == "CICLO_FECHADO_VPPV": 
             return "PRETO", "Geometria VPPV", "GEOMETRIA"
         if geometria_mercado == "CICLO_FECHADO_PVVP": 
@@ -216,24 +199,28 @@ class JuizHierarquicoModificado:
 
         direcao_ia, confianca_ia = previsao_ia
 
-        if xadrez_len >= 5 and xadrez_quebrou and direcao_ia != "NEUTRO":
-            return direcao_ia, f"Xadrez {xadrez_len} quebrou → Reversão provável", "XADREZ_REVERSAO"
+        # Leitura 2: Regras do manual (Volume 12 / Projeções)
+        if expectations:
+            count_v = sum(1 for item in expectations if item["direcao"] == "VERMELHO")
+            count_p = sum(1 for item in expectations if item["direcao"] == "PRETO")
 
-        if streak_atual >= 5 and direcao_ia != "NEUTRO":
-            return direcao_ia, f"Reversão após streak {streak_atual}", "STREAK_REVERSAO"
+            if count_v > count_p:
+                return "VERMELHO", "Regra do manual ativa (Volume 12 / Projeção)", "REGRA_MANUAL"
+            elif count_p > count_v:
+                return "PRETO", "Regra do manual ativa (Volume 12 / Projeção)", "REGRA_MANUAL"
 
-        if xadrez_quebrado and direcao_ia != "NEUTRO" and confianca_ia >= 53:
-            return direcao_ia, f"Xadrez Quebrado + IA", "XADREZ_FORTE"
-
-        if expectations and direcao_ia != "NEUTRO":
-            for item in expectations:
-                if item["direcao"] == direcao_ia:
-                    return direcao_ia, f"IA + Regra de apoio", "CONFLUENCIA_LEVE"
-
-        if direcao_ia != "NEUTRO" and confianca_ia >= 52:
+        # Leitura 3: IA com boa confiança
+        if direcao_ia != "NEUTRO" and confianca_ia >= 53:
             return direcao_ia, f"IA Preditiva ({confianca_ia:.1f}%)", "IA_PREDITIVA"
 
-        return "NO CALL", "Sem confluência clara", "SISTEMA_TRAVADO"
+        # Leitura 4: Contexto de exaustão / inversão (usado como evidência)
+        if contexto_exaustao or (streak_atual >= 6) or (xadrez_len >= 5 and xadrez_quebrou):
+            if direcao_ia != "NEUTRO":
+                return direcao_ia, "Contexto de exaustão/inversão + IA", "CONTEXTO_INVERSAO"
+            else:
+                return "NO CALL", "Contexto de possível inversão forte - aguardar", "CONTEXTO_INVERSAO"
+
+        return "NO CALL", "Sem confluência clara após múltiplas leituras", "SISTEMA_TRAVADO"
 
 
 # ============================================================
@@ -542,7 +529,7 @@ class MotorV1Completo:
 
 
 # ============================================================
-# ProcessadorTipoB - LIGADO AO FLUXO QUE VOCÊ QUER
+# ProcessadorTipoB - MÚLTIPLAS LEITURAS DA JANELA DE 12 NÚMEROS
 # ============================================================
 class ProcessadorTipoB:
     def __init__(self, sequencia_12_numeros, caminho_base_dados):
@@ -555,7 +542,6 @@ class ProcessadorTipoB:
             return {"erro": "Necessário exatamente 12 números"}
         
         ia = carregar_modelo_longo_prazo()
-        
         if ia is None:
             base = LeitorXLS(self.caminho_base).ler_e_validar()
             if not base:
@@ -568,19 +554,30 @@ class ProcessadorTipoB:
             if base_rec:
                 ia.injetar_aprendizado_imediato(base_rec, multiplicador_peso=4)
 
+        # ============================================================
+        # LEITURAS MÚLTIPLAS DA MESMA JANELA DE 12 NÚMEROS
+        # ============================================================
+
+        # Leitura 1: Segurança (NO CALL)
         nc_ativo, motivo_nc = MotorNoCall.checar_no_call(self.entrada, self.polaridades)
-        expectativas = MotorContagensProjetivas.mapear_janela(self.entrada, self.polaridades, "ESTÁVEL")
-        
+
+        # Leitura 2: Padrões Geométricos
+        geometria = AnalisadorContextoAvancado.mapear_padroes_geometria(self.polaridades)
+
+        # Leitura 3: Regras Projetivas (Volume 2, 3 e 12)
+        expectativas = MotorContagensProjetivas.mapear_janela(self.entrada, self.polaridades, geometria)
+
+        # Leitura 4: Contexto Avançado (Inclinação pós-número + Modo de Mercado)
         base_longa = LeitorXLS(self.caminho_base).ler_e_validar() or []
         inclinacao = AnalisadorContextoAvancado.calcular_numerologia_pos_numero(
             self.entrada[-1], [d['numero'] for d in base_longa], [d['cor'] for d in base_longa]
         )
-        
-        direcao_ia, conf_ia = ia.predizer_proxima_casa(self.entrada, self.polaridades)
         modo_mercado = AnalisadorContextoAvancado.detectar_modo_mercado(self.polaridades)
-        geometria = AnalisadorContextoAvancado.mapear_padroes_geometria(self.polaridades)
-        status_inv = AnalisadorContextoAvancado.detectar_chance_inversao(self.polaridades)
 
+        # Leitura 5: IA Probabilística
+        direcao_ia, conf_ia = ia.predizer_proxima_casa(self.entrada, self.polaridades)
+
+        # Leitura 6: Análise Sequencial (Streak, Xadrez, Exaustão)
         streak = 0
         for c in reversed(self.polaridades):
             if c == self.polaridades[-1]: streak += 1
@@ -594,29 +591,37 @@ class ProcessadorTipoB:
 
         xadrez_quebrou = (self.polaridades[-1] == self.polaridades[-2]) if len(self.polaridades) >= 2 else False
 
+        # Evidência de exaustão (usada como contexto, não como bônus numérico)
+        contexto_exaustao = (streak >= 5) or (xadrez_len >= 5 and xadrez_quebrou)
+
+        # ============================================================
+        # ARBITRAGEM FINAL (após todas as leituras)
+        # ============================================================
         sinal, justificativa, regra_id = JuizHierarquicoModificado.arbitrar_sinal(
             nc_ativo, motivo_nc, expectativas, inclinacao, geometria,
-            (direcao_ia, conf_ia), status_inv,
+            (direcao_ia, conf_ia), None,
             defaultdict(lambda: {"acertos": 1, "total": 1}),
             modo_mercado=modo_mercado,
             streak_atual=streak,
             xadrez_len=xadrez_len,
-            xadrez_quebrou=xadrez_quebrou
+            xadrez_quebrou=xadrez_quebrou,
+            contexto_exaustao=contexto_exaustao
         )
 
-        if sinal != "NO CALL" and streak >= 6:
-            if direcao_ia != sinal:
-                sinal = "NO CALL"
-                justificativa = f"Veto de streak {streak}x (contra IA)"
-                regra_id = "VETO_STREAK"
-
         analise_completa = {
-            "no_call": {"ativo": nc_ativo, "motivo": motivo_nc},
-            "contexto": {"streak": streak, "xadrez_len": xadrez_len, "xadrez_quebrou": xadrez_quebrou, "modo_mercado": modo_mercado},
-            "padroes": {"expectativas": expectativas, "geometria": geometria, "inclinacao_pos_numero": inclinacao},
-            "ia": {"direcao": direcao_ia, "confianca": round(conf_ia, 2), "barreira_usada": 52.5},
-            "juiz": {"sinal_final": sinal, "justificativa": justificativa, "regra_id": regra_id},
-            "gestao_risco": self._gerar_gestao_risco(sinal, streak, xadrez_len, xadrez_quebrou, conf_ia)
+            "total_leituras": 6,
+            "leitura_1_seguranca": {"no_call": nc_ativo, "motivo": motivo_nc},
+            "leitura_2_geometria": geometria,
+            "leitura_3_regras_projetivas": expectativas,
+            "leitura_4_contexto_avancado": {"inclinacao_pos_numero": inclinacao, "modo_mercado": modo_mercado},
+            "leitura_5_ia_probabilistica": {"direcao": direcao_ia, "confianca": round(conf_ia, 2)},
+            "leitura_6_sequencial": {
+                "streak": streak, 
+                "xadrez_len": xadrez_len, 
+                "xadrez_quebrou": xadrez_quebrou,
+                "contexto_exaustao": contexto_exaustao
+            },
+            "decisao_final": {"sinal": sinal, "justificativa": justificativa, "regra_id": regra_id}
         }
 
         return {
@@ -624,7 +629,7 @@ class ProcessadorTipoB:
             "justificativa": justificativa,
             "confianca_ia": round(conf_ia, 2),
             "no_call": nc_ativo,
-            "memoria": f"[PROCESSAMENTO TIPO B] Sequência: {self.entrada}",
+            "memoria": f"[PROCESSAMENTO TIPO B - Múltiplas Leituras] Sequência: {self.entrada}",
             "analise_completa": analise_completa
         }
 
