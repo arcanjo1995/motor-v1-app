@@ -106,7 +106,7 @@ class MotorNoCall:
 
 
 # ============================================================
-# IAPreditivaV1 - Completo
+# IAPreditivaV1
 # ============================================================
 class IAPreditivaV1:
     def __init__(self, dados_longo_prazo, dados_recencia=None):
@@ -229,7 +229,7 @@ class IAPreditivaV1:
 
 
 # ============================================================
-# JuizHierarquicoModificado - Refatorado com Hierarquia Clara
+# JuizHierarquicoModificado
 # ============================================================
 class JuizHierarquicoModificado:
     @staticmethod
@@ -456,7 +456,7 @@ class LeitorXLS:
 
 
 # ============================================================
-# MotorV1Completo - Completo
+# MotorV1Completo
 # ============================================================
 class MotorV1Completo:
     def __init__(self, lista_dados_xls):
@@ -580,7 +580,7 @@ class MotorV1Completo:
 
 
 # ============================================================
-# ProcessadorTipoB - Com rastreabilidade + Log JSON
+# ProcessadorTipoB - Atualizado com "memoria" para compatibilidade
 # ============================================================
 class ProcessadorTipoB:
     def __init__(self, sequencia_12_numeros, caminho_base_dados):
@@ -690,9 +690,7 @@ class ProcessadorTipoB:
                 justificativa = f"Veto de streak {streak}x (contra IA)"
                 regra_id = "VETO_STREAK"
 
-        # ============================================================
-        # LOG JSON (NOVO)
-        # ============================================================
+        # LOG JSON
         log_data = {
             "tipo": "TIPO_B",
             "sequencia": self.entrada,
@@ -714,14 +712,19 @@ class ProcessadorTipoB:
             "justificativa": justificativa,
             "confianca_ia": round(conf_ia, 2),
             "no_call": nc_ativo,
+            "memoria": f"[PROCESSAMENTO TIPO B] Sequência: {self.entrada} → Sinal: {sinal} | {raciocinio_final}",
             "raciocinio_trace": raciocinio_trace,
             "raciocinio_final": raciocinio_final,
-            "decisao_final": {"sinal": sinal, "justificativa": justificativa, "regra_id": regra_id}
+            "decisao_final": {
+                "sinal": sinal,
+                "justificativa": justificativa,
+                "regra_id": regra_id
+            }
         }
 
 
 # ============================================================
-# EngineMatematicoAvancado - Completo
+# EngineMatematicoAvancado
 # ============================================================
 class EngineMatematicoAvancado:
     
