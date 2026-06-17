@@ -25,23 +25,44 @@ def carregar_modelo_longo_prazo(caminho="modelo_longo_prazo.pkl"):
     return None
 
 # ============================================================
-# NOVA FUNÇÃO: Treinamento Profundo com Janelas Móveis
+# FUNÇÃO PRINCIPAL: Treinamento com Relatório de Longo Prazo
 # ============================================================
 def treinar_base_longo_prazo_com_janelas(dados_completos):
-    """
-    Treina a IA usando o processamento completo de janelas móveis
-    (igual ao Tipo D). Isso faz a IA aprender com G0/G1/G2/FALHA
-    das janelas históricas, não só com estatística.
-    """
-    if not dados_completos or len(dados_completos) < 20:
-        print("[AVISO] Base muito pequena para treinamento por janelas.")
-        return IAPreditivaV1(dados_completos, None)
+    if not dados_completos or len(dados_completos) < 30:
+        return {
+            "sucesso": False,
+            "mensagem": "Base muito pequena para treinamento profundo (mínimo 30 registros)."
+        }
 
-    print(f"[INFO] Iniciando treinamento profundo com {len(dados_completos)} registros...")
     motor = MotorV1Completo(dados_completos)
-    motor.processar_auditoria()  # Roda todas as janelas móveis + injeta aprendizado real
-    print("[INFO] Treinamento por janelas móveis concluído.")
-    return motor.ia
+    motor.processar_auditoria()
+
+    stats = getattr(motor, 'stats', {"G0": 0, "G1": 0, "G2": 0, "FALHA": 0, "NO CALL": 0})
+    total_janelas = sum(stats.values()) if stats else 0
+
+    regras_boas = 0
+    for regra, dados in motor.historico_regras.items():
+        if dados["total"] >= 5 and (dados["acertos"] / dados["total"]) >= 0.55:
+            regras_boas += 1
+
+    taxa_g0_g1 = ((stats.get("G0", 0) + stats.get("G1", 0)) / total_janelas * 100) if total_janelas > 0 else 0
+
+    sucesso_salvar = salvar_modelo_longo_prazo(motor.ia)
+
+    return {
+        "sucesso": True,
+        "registros_processados": len(dados_completos),
+        "janelas_analisadas": total_janelas,
+        "G0": stats.get("G0", 0),
+        "G1": stats.get("G1", 0),
+        "G2": stats.get("G2", 0),
+        "FALHA": stats.get("FALHA", 0),
+        "NO CALL": stats.get("NO CALL", 0),
+        "regras_com_boa_performance": regras_boas,
+        "assertividade_g0_g1_percent": round(taxa_g0_g1, 2),
+        "modelo_salvo_com_sucesso": sucesso_salvar,
+        "mensagem": "Treinamento profundo por janelas móveis concluído com sucesso."
+    }
 
 
 # ============================================================
@@ -74,7 +95,7 @@ class MotorNoCall:
 
 
 # ============================================================
-# IAPreditivaV1 (mantida igual)
+# IAPreditivaV1
 # ============================================================
 class IAPreditivaV1:
     def __init__(self, dados_longo_prazo, dados_recencia=None):
@@ -197,8 +218,7 @@ class IAPreditivaV1:
 
 
 # ============================================================
-# JuizHierarquicoModificado + MotorContagensProjetivas + Classes Auxiliares
-# (mantidos exatamente iguais)
+# JuizHierarquicoModificado
 # ============================================================
 class JuizHierarquicoModificado:
     @staticmethod
@@ -243,6 +263,9 @@ class JuizHierarquicoModificado:
         return "NO CALL", "Sem confluência suficiente após análise profunda", "SISTEMA_TRAVADO"
 
 
+# ============================================================
+# MotorContagensProjetivas
+# ============================================================
 class MotorContagensProjetivas:
     @staticmethod
     def mapear_janela(sub_num, sub_pol, geometry_mercado):
@@ -288,6 +311,9 @@ class MotorContagensProjetivas:
         return lista_bruta
 
 
+# ============================================================
+# Classes Auxiliares
+# ============================================================
 class SequenciaOperacional:
     def __init__(self, lista_resultados):
         self.cronologia = lista_resultados
@@ -380,9 +406,6 @@ class AnalisadorContextoAvancado:
         return "NEUTRO"
 
 
-# ============================================================
-# LeitorXLS (mantido)
-# ============================================================
 class LeitorXLS:
     def __init__(self, caminho_arquivo):
         self.caminho = caminho_arquivo
@@ -426,7 +449,7 @@ class LeitorXLS:
 
 
 # ============================================================
-# MotorV1Completo (mantido)
+# MotorV1Completo (com self.stats)
 # ============================================================
 class MotorV1Completo:
     def __init__(self, lista_dados_xls):
@@ -445,6 +468,7 @@ class MotorV1Completo:
         dados_consolidados = self.dados_curto + (base_recencia or [])
         self.ia = IAPreditivaV1(self.dados_longo, dados_consolidados)
         self.historico_regras = defaultdict(lambda: {"acertos": 1, "total": 1})
+        self.stats = {"G0": 0, "G1": 0, "G2": 0, "FALHA": 0, "NO CALL": 0}
 
     def processar_auditoria(self):
         idx = 0
@@ -522,6 +546,7 @@ class MotorV1Completo:
             memorias.append(f"Janela {len(memorias)+1}: {sub_num} -> {sinal} | {justificativa} | {classificacao}")
             idx += 12 + salto
 
+        self.stats = stats
         total_com_sinal = stats.get("G0",0) + stats.get("G1",0) + stats.get("G2",0) + stats.get("FALHA",0)
         denom = total_com_sinal if total_com_sinal > 0 else 1
 
@@ -548,7 +573,7 @@ class MotorV1Completo:
 
 
 # ============================================================
-# ProcessadorTipoB + EngineMatematicoAvancado (mantidos)
+# ProcessadorTipoB
 # ============================================================
 class ProcessadorTipoB:
     def __init__(self, sequencia_12_numeros, caminho_base_dados):
