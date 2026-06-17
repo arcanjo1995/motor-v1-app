@@ -55,7 +55,7 @@ class MotorNoCall:
 
 
 # ============================================================
-# IAPreditivaV1 (versão limpa - sem bônus numéricos de streak/xadrez)
+# IAPreditivaV1 (versão limpa)
 # ============================================================
 class IAPreditivaV1:
     def __init__(self, dados_longo_prazo, dados_recencia=None):
@@ -219,7 +219,7 @@ class JuizHierarquicoModificado:
 
 
 # ============================================================
-# (Todas as outras classes mantidas exatamente como você enviou)
+# (Classes auxiliares mantidas)
 # ============================================================
 
 class SequenciaOperacional:
@@ -228,7 +228,6 @@ class SequenciaOperacional:
         self.numerica = [int(r['numero']) for r in self.cronologia]
         self.polaridades = [str(r['cor']).upper() for r in self.cronologia]
         self.total = len(self.numerica)
-
 
 class GerenciadorMemoriaViva:
     @staticmethod
@@ -253,7 +252,6 @@ class GerenciadorMemoriaViva:
                 df_novos_invertido.to_excel(caminho_recencia, index=False)
         else:
             df_novos_invertido.to_excel(caminho_recencia, index=False)
-
 
 class MotorContagensProjetivas:
     @staticmethod
@@ -290,7 +288,6 @@ class MotorContagensProjetivas:
         elif sub_num[10] == 5 and sub_num[11] == 10: lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V12_ACOPLAMENTO_5_10", "origem": "Volume 12"})
 
         return lista_bruta
-
 
 class AnalisadorContextoAvancado:
     @staticmethod
@@ -341,7 +338,7 @@ class AnalisadorContextoAvancado:
                 if "B" in sequencia_pol[i+1:i+4]:
                     vezes_branco += 1
         taxa = (vezes_branco / vezes_num * 100) if vezes_num > 0 else 0
-        chance = "ALHA" if atraso >= 15 or taxa >= 18 else ("MÉDIA" if atraso >= 8 else "BAIXA")
+        chance = "ALTA" if atraso >= 15 or taxa >= 18 else ("MÉDIA" if atraso >= 8 else "BAIXA")
         return chance, atraso
 
     @staticmethod
@@ -351,7 +348,6 @@ class AnalisadorContextoAvancado:
         if alternancias >= 7: return "CHUVA"
         elif alternancias <= 3: return "RECUPERACAO"
         return "NEUTRO"
-
 
 class LeitorXLS:
     def __init__(self, caminho_arquivo):
@@ -387,7 +383,6 @@ class LeitorXLS:
             return dados if dados else None
         except:
             return None
-
 
 class MotorV1Completo:
     def __init__(self, lista_dados_xls):
@@ -510,7 +505,7 @@ class MotorV1Completo:
 
 
 # ============================================================
-# ProcessadorTipoB - AGORA ALINHADO COM TIPO D
+# ProcessadorTipoB - COM RELEITURAS EXPLÍCITAS DA SEQUÊNCIA
 # ============================================================
 class ProcessadorTipoB:
     def __init__(self, sequencia_12_numeros, caminho_base_dados):
@@ -536,21 +531,35 @@ class ProcessadorTipoB:
                 ia.injetar_aprendizado_imediato(base_rec, multiplicador_peso=4)
 
         # ============================================================
-        # Mesmos cálculos que o Tipo D faz para a janela de 12
+        # RELEITURAS EXPLÍCITAS DA JANELA DE 12 NÚMEROS
         # ============================================================
-        nc_ativo, motivo_nc = MotorNoCall.checar_no_call(self.entrada, self.polaridades)
-        geometria = AnalisadorContextoAvancado.mapear_padroes_geometria(self.polaridades)
-        expectativas = MotorContagensProjetivas.mapear_janela(self.entrada, self.polaridades, geometria)
+        evidencias = []
 
+        # Releitura 1: Segurança (NO CALL)
+        nc_ativo, motivo_nc = MotorNoCall.checar_no_call(self.entrada, self.polaridades)
+        evidencias.append({"releitura": 1, "tipo": "Segurança (NO CALL)", "resultado": {"ativo": nc_ativo, "motivo": motivo_nc}})
+
+        # Releitura 2: Geometria
+        geometria = AnalisadorContextoAvancado.mapear_padroes_geometria(self.polaridades)
+        evidencias.append({"releitura": 2, "tipo": "Geometria", "resultado": geometria})
+
+        # Releitura 3: Regras Projetivas
+        expectativas = MotorContagensProjetivas.mapear_janela(self.entrada, self.polaridades, geometria)
+        evidencias.append({"releitura": 3, "tipo": "Regras Projetivas (Volume 12)", "resultado": expectativas})
+
+        # Releitura 4: Contexto Avançado
         base_longa = LeitorXLS(self.caminho_base).ler_e_validar() or []
         inclinacao = AnalisadorContextoAvancado.calcular_numerologia_pos_numero(
             self.entrada[-1], [d['numero'] for d in base_longa], [d['cor'] for d in base_longa]
         )
         modo_mercado = AnalisadorContextoAvancado.detectar_modo_mercado(self.polaridades)
-        status_inv = AnalisadorContextoAvancado.detectar_chance_inversao(self.polaridades)   # ← Agora calculado corretamente
+        evidencias.append({"releitura": 4, "tipo": "Contexto Avançado", "resultado": {"inclinacao": inclinacao, "modo_mercado": modo_mercado}})
 
+        # Releitura 5: IA Probabilística
         direcao_ia, conf_ia = ia.predizer_proxima_casa(self.entrada, self.polaridades)
+        evidencias.append({"releitura": 5, "tipo": "IA Probabilística", "resultado": {"direcao": direcao_ia, "confianca": conf_ia}})
 
+        # Releitura 6: Análise Sequencial (Streak / Xadrez / Exaustão)
         streak = 0
         for c in reversed(self.polaridades):
             if c == self.polaridades[-1]: streak += 1
@@ -565,12 +574,23 @@ class ProcessadorTipoB:
         xadrez_quebrou = (self.polaridades[-1] == self.polaridades[-2]) if len(self.polaridades) >= 2 else False
         contexto_exaustao = (streak >= 5) or (xadrez_len >= 5 and xadrez_quebrou)
 
+        evidencias.append({
+            "releitura": 6, 
+            "tipo": "Análise Sequencial (Streak/Xadrez/Exaustão)", 
+            "resultado": {
+                "streak": streak, 
+                "xadrez_len": xadrez_len, 
+                "xadrez_quebrou": xadrez_quebrou,
+                "contexto_exaustao": contexto_exaustao
+            }
+        })
+
         # ============================================================
-        # Chama o Juiz com os MESMOS parâmetros do Tipo D
+        # DECISÃO FINAL (após todas as releituras)
         # ============================================================
         sinal, justificativa, regra_id = JuizHierarquicoModificado.arbitrar_sinal(
             nc_ativo, motivo_nc, expectativas, inclinacao, geometria,
-            (direcao_ia, conf_ia), status_inv,                    # ← status_inv real
+            (direcao_ia, conf_ia), None,
             defaultdict(lambda: {"acertos": 1, "total": 1}),
             modo_mercado=modo_mercado,
             streak_atual=streak,
@@ -585,29 +605,14 @@ class ProcessadorTipoB:
                 justificativa = f"Veto de streak {streak}x (contra IA)"
                 regra_id = "VETO_STREAK"
 
-        analise_completa = {
-            "total_leituras": 6,
-            "leitura_1_seguranca": {"no_call": nc_ativo, "motivo": motivo_nc},
-            "leitura_2_geometria": geometria,
-            "leitura_3_regras_projetivas": expectativas,
-            "leitura_4_contexto_avancado": {"inclinacao_pos_numero": inclinacao, "modo_mercado": modo_mercado},
-            "leitura_5_ia_probabilistica": {"direcao": direcao_ia, "confianca": round(conf_ia, 2)},
-            "leitura_6_sequencial": {
-                "streak": streak, 
-                "xadrez_len": xadrez_len, 
-                "xadrez_quebrou": xadrez_quebrou,
-                "contexto_exaustao": contexto_exaustao
-            },
-            "decisao_final": {"sinal": sinal, "justificativa": justificativa, "regra_id": regra_id}
-        }
-
         return {
             "sinal": sinal,
             "justificativa": justificativa,
             "confianca_ia": round(conf_ia, 2),
             "no_call": nc_ativo,
-            "memoria": f"[PROCESSAMENTO TIPO B - Múltiplas Leituras] Sequência: {self.entrada}",
-            "analise_completa": analise_completa
+            "memoria": f"[PROCESSAMENTO TIPO B - RELEITURAS] Sequência: {self.entrada}",
+            "releituras": evidencias,
+            "decisao_final": {"sinal": sinal, "justificativa": justificativa, "regra_id": regra_id}
         }
 
 
