@@ -55,7 +55,7 @@ class MotorNoCall:
 
 
 # ============================================================
-# IAPreditivaV1 (mantida com melhorias sutis de retorno)
+# IAPreditivaV1 (mantida)
 # ============================================================
 class IAPreditivaV1:
     def __init__(self, dados_longo_prazo, dados_recencia=None):
@@ -178,7 +178,7 @@ class IAPreditivaV1:
 
 
 # ============================================================
-# JuizHierarquicoModificado - Com raciocínio mais estruturado
+# JuizHierarquicoModificado - COM FILTRO DE CONTEXTO NA GEOMETRIA
 # ============================================================
 class JuizHierarquicoModificado:
     @staticmethod
@@ -192,11 +192,17 @@ class JuizHierarquicoModificado:
         if no_call_ativo:
             return "NO CALL", motivo_nc, "SISTEMA_TRAVADO"
 
-        # Prioridade 1: Geometria forte
-        if geometria_mercado == "CICLO_FECHADO_VPPV": 
-            return "PRETO", "Geometria VPPV (Padrão forte)", "GEOMETRIA_FORTE"
-        if geometria_mercado == "CICLO_FECHADO_PVVP": 
-            return "VERMELHO", "Geometria PVVP (Padrão forte)", "GEOMETRIA_FORTE"
+        # ============================================================
+        # MELHORIA 1: FILTRO DE CONTEXTO NA GEOMETRIA FORTE
+        # ============================================================
+        if geometria_mercado in ["CICLO_FECHADO_VPPV", "CICLO_FECHADO_PVVP"]:
+            if streak_atual >= 4 or xadrez_len >= 4:
+                return "NO CALL", f"Geometria forte, mas contexto de alta alternância/streak ({streak_atual}x) - aguardar confirmação", "GEOMETRIA_CONTEXTO"
+            
+            if geometria_mercado == "CICLO_FECHADO_VPPV": 
+                return "PRETO", "Geometria VPPV (Padrão forte)", "GEOMETRIA_FORTE"
+            if geometria_mercado == "CICLO_FECHADO_PVVP": 
+                return "VERMELHO", "Geometria PVVP (Padrão forte)", "GEOMETRIA_FORTE"
 
         direcao_ia, confianca_ia, raciocinio_ia = previsao_ia
 
@@ -224,7 +230,58 @@ class JuizHierarquicoModificado:
 
 
 # ============================================================
-# (Classes auxiliares mantidas exatamente como estavam)
+# MotorContagensProjetivas - COM FILTRO DE BRANCOS RECENTES
+# ============================================================
+class MotorContagensProjetivas:
+    @staticmethod
+    def mapear_janela(sub_num, sub_pol, geometry_mercado):
+        lista_bruta = []
+        REGRAS_PROJECAO = {1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7}
+
+        for i in range(12):
+            num_atual = sub_num[i]
+            if num_atual in REGRAS_PROJECAO:
+                passo = REGRAS_PROJECAO[num_atual]
+                alvo_idx = i + passo
+                if alvo_idx == 11:
+                    if i < 10 and 0 in sub_num[i:11]: continue
+                    lista_bruta.append({
+                        "direcao": "VERMELHO", 
+                        "tipo_regra": f"V3_ATIVADOR_{num_atual}", 
+                        "origem": f"Volume 3: Ativador {num_atual}"
+                    })
+
+        par_fechamento = (sub_num[10], sub_num[11])
+        continuidade_preta_validas = [(8,9), (9,10), (10,11), (11,12), (12,13), (13,14), (14,13), (13,12), (12,11), (11,10)]
+        continuidade_vermelha_validas = [(1,2), (2,3), (3,4), (4,5), (5,6), (6,7), (7,6), (6,5), (5,4), (4,3)]
+
+        if par_fechamento in continuidade_preta_validas:
+            lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V2_CONTINUIDADE_PRETA", "origem": "Volume 2"})
+        elif par_fechamento in continuidade_vermelha_validas:
+            lista_bruta.append({"direcao": "VERMELHO", "tipo_regra": "V2_CONTINUIDADE_VERMELHA", "origem": "Volume 2"})
+
+        # ============================================================
+        # MELHORIA 2: FILTRO DE BRANCOS RECENTES (Posições 8~11)
+        # ============================================================
+        tem_branco_recente = any(p == "B" for p in sub_pol[7:11])  # índices 7 a 10 = posições 8 a 11
+
+        if not tem_branco_recente:
+            if sub_num[5] == 2:
+                lista_bruta.append({"direcao": "VERMELHO", "tipo_regra": "V12_POSICIONAL_2", "origem": "Volume 12"})
+            if sub_num[5] == 3:
+                lista_bruta.append({"direcao": "VERMELHO", "tipo_regra": "V12_POSICIONAL_3", "origem": "Volume 12"})
+            if sub_num[11] == 4 and sub_pol[10] == "P":
+                lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V12_RETENCAO_4", "origem": "Volume 12"})
+            if sub_num[11] == 10:
+                lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V12_RESIDUO_10", "origem": "Volume 12"})
+            elif sub_num[10] == 5 and sub_num[11] == 10:
+                lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V12_ACOPLAMENTO_5_10", "origem": "Volume 12"})
+
+        return lista_bruta
+
+
+# ============================================================
+# (Classes auxiliares mantidas)
 # ============================================================
 
 class SequenciaOperacional:
@@ -257,42 +314,6 @@ class GerenciadorMemoriaViva:
                 df_novos_invertido.to_excel(caminho_recencia, index=False)
         else:
             df_novos_invertido.to_excel(caminho_recencia, index=False)
-
-class MotorContagensProjetivas:
-    @staticmethod
-    def mapear_janela(sub_num, sub_pol, geometry_mercado):
-        lista_bruta = []
-        REGRAS_PROJECAO = {1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7}
-
-        for i in range(12):
-            num_atual = sub_num[i]
-            if num_atual in REGRAS_PROJECAO:
-                passo = REGRAS_PROJECAO[num_atual]
-                alvo_idx = i + passo
-                if alvo_idx == 11:
-                    if i < 10 and 0 in sub_num[i:11]: continue
-                    lista_bruta.append({
-                        "direcao": "VERMELHO", 
-                        "tipo_regra": f"V3_ATIVADOR_{num_atual}", 
-                        "origem": f"Volume 3: Ativador {num_atual}"
-                    })
-
-        par_fechamento = (sub_num[10], sub_num[11])
-        continuidade_preta_validas = [(8,9), (9,10), (10,11), (11,12), (12,13), (13,14), (14,13), (13,12), (12,11), (11,10)]
-        continuidade_vermelha_validas = [(1,2), (2,3), (3,4), (4,5), (5,6), (6,7), (7,6), (6,5), (5,4), (4,3)]
-
-        if par_fechamento in continuidade_preta_validas:
-            lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V2_CONTINUIDADE_PRETA", "origem": "Volume 2"})
-        elif par_fechamento in continuidade_vermelha_validas:
-            lista_bruta.append({"direcao": "VERMELHO", "tipo_regra": "V2_CONTINUIDADE_VERMELHA", "origem": "Volume 2"})
-
-        if sub_num[5] == 2: lista_bruta.append({"direcao": "VERMELHO", "tipo_regra": "V12_POSICIONAL_2", "origem": "Volume 12"})
-        if sub_num[5] == 3: lista_bruta.append({"direcao": "VERMELHO", "tipo_regra": "V12_POSICIONAL_3", "origem": "Volume 12"})
-        if sub_num[11] == 4 and sub_pol[10] == "P": lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V12_RETENCAO_4", "origem": "Volume 12"})
-        if sub_num[11] == 10: lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V12_RESIDUO_10", "origem": "Volume 12"})
-        elif sub_num[10] == 5 and sub_num[11] == 10: lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V12_ACOPLAMENTO_5_10", "origem": "Volume 12"})
-
-        return lista_bruta
 
 class AnalisadorContextoAvancado:
     @staticmethod
@@ -510,7 +531,7 @@ class MotorV1Completo:
 
 
 # ============================================================
-# ProcessadorTipoB - COM SÍNTESE DE RACIOCÍNIO (ESTILO GROK)
+# ProcessadorTipoB - COM SÍNTESE DE RACIOCÍNIO
 # ============================================================
 class ProcessadorTipoB:
     def __init__(self, sequencia_12_numeros, caminho_base_dados):
@@ -535,25 +556,17 @@ class ProcessadorTipoB:
             if base_rec:
                 ia.injetar_aprendizado_imediato(base_rec, multiplicador_peso=4)
 
-        # ============================================================
-        # RELEITURAS + SÍNTESE DE EVIDÊNCIAS (ESTILO GROK)
-        # ============================================================
         evidencias = []
-        observacoes = []
 
-        # Releitura 1
         nc_ativo, motivo_nc = MotorNoCall.checar_no_call(self.entrada, self.polaridades)
         evidencias.append({"releitura": 1, "tipo": "Segurança (NO CALL)", "resultado": {"ativo": nc_ativo, "motivo": motivo_nc}})
 
-        # Releitura 2
         geometria = AnalisadorContextoAvancado.mapear_padroes_geometria(self.polaridades)
         evidencias.append({"releitura": 2, "tipo": "Geometria", "resultado": geometria})
 
-        # Releitura 3
         expectativas = MotorContagensProjetivas.mapear_janela(self.entrada, self.polaridades, geometria)
         evidencias.append({"releitura": 3, "tipo": "Regras Projetivas (Volume 12)", "resultado": expectativas})
 
-        # Releitura 4
         base_longa = LeitorXLS(self.caminho_base).ler_e_validar() or []
         inclinacao = AnalisadorContextoAvancado.calcular_numerologia_pos_numero(
             self.entrada[-1], [d['numero'] for d in base_longa], [d['cor'] for d in base_longa]
@@ -561,11 +574,9 @@ class ProcessadorTipoB:
         modo_mercado = AnalisadorContextoAvancado.detectar_modo_mercado(self.polaridades)
         evidencias.append({"releitura": 4, "tipo": "Contexto Avançado", "resultado": {"inclinacao": inclinacao, "modo_mercado": modo_mercado}})
 
-        # Releitura 5
         direcao_ia, conf_ia, raciocinio_ia = ia.predizer_proxima_casa(self.entrada, self.polaridades)
         evidencias.append({"releitura": 5, "tipo": "IA Probabilística", "resultado": {"direcao": direcao_ia, "confianca": conf_ia, "raciocinio": raciocinio_ia}})
 
-        # Releitura 6
         streak = 0
         for c in reversed(self.polaridades):
             if c == self.polaridades[-1]: streak += 1
@@ -591,9 +602,6 @@ class ProcessadorTipoB:
             }
         })
 
-        # ============================================================
-        # SÍNTESE DE RACIOCÍNIO (NOVO - ESTILO GROK)
-        # ============================================================
         sintese = []
         if nc_ativo:
             sintese.append("Bloqueio por NO CALL ativo.")
@@ -608,9 +616,6 @@ class ProcessadorTipoB:
 
         raciocinio_final = " | ".join(sintese) if sintese else "Análise sem confluência forte entre as camadas."
 
-        # ============================================================
-        # DECISÃO FINAL
-        # ============================================================
         sinal, justificativa, regra_id = JuizHierarquicoModificado.arbitrar_sinal(
             nc_ativo, motivo_nc, expectativas, inclinacao, geometria,
             (direcao_ia, conf_ia, raciocinio_ia), None,
