@@ -22,7 +22,7 @@ NOME_BASE_DEFINITIVA = "resultados_blaze.xlsx"
 NOME_RECENCIA_ATIVA = "base_recencia_ativa.xlsx"
 
 # =========================================================================
-# ABA TIPO B
+# ABA TIPO B - ATUALIZADA COM RACIOCÍNIO DETALHADO
 # =========================================================================
 with aba_tipo_b:
     st.header("🎯 Processamento Operacional Tipo B")
@@ -35,8 +35,8 @@ with aba_tipo_b:
     
     if "sinal_pendente" not in st.session_state: st.session_state.sinal_pendente = None
     if "justificativa_pendente" not in st.session_state: st.session_state.justificativa_pendente = None
-    if "log_completo" not in st.session_state: st.session_state.log_completo = ""
     if "sequencia_em_uso" not in st.session_state: st.session_state.sequencia_em_uso = []
+    if "ultimo_resultado" not in st.session_state: st.session_state.ultimo_resultado = None
 
     if st.button("🚀 Executar Releituras e Gerar Sinal"):
         if not entrada_numeros:
@@ -55,7 +55,7 @@ with aba_tipo_b:
                     if "erro" in resultado_dict:
                         st.error(resultado_dict["erro"])
                     else:
-                        st.session_state.log_completo = resultado_dict["memoria"]
+                        st.session_state.ultimo_resultado = resultado_dict
                         st.session_state.sinal_pendente = resultado_dict["sinal"]
                         st.session_state.justificativa_pendente = resultado_dict["justificativa"]
                         st.session_state.sequencia_em_uso = lista_numeros
@@ -63,89 +63,78 @@ with aba_tipo_b:
             except Exception as e:
                 st.error(f"Erro Crítico no processamento da sequência: {e}")
 
-    if st.session_state.sinal_pendente:
+    # ====================== EXIBIÇÃO MELHORADA ======================
+    if st.session_state.ultimo_resultado:
+        resultado = st.session_state.ultimo_resultado
         st.write("---")
-        
-        col_veredicto, col_injecao = st.columns(2)
-        sinal = st.session_state.sinal_pendente
-        
-        with col_veredicto:
-            st.subheader("📊 Veredito e Alimentação Real")
-            if sinal == "NO CALL":
-                st.warning(f"**EXPECTATIVA:** {sinal}")
-                st.caption(f"Motivo: {st.session_state.justificativa_pendente}")
-                if st.button("🔄 Limpar Painel"): st.session_state.sinal_pendente = None
-            else:
-                st.info(f"**EXPECTATIVA ATIVA:** Operar no {sinal}")
-                st.caption(f"Origem: {st.session_state.justificativa_pendente}")
-                
-        with col_injecao:
-            st.subheader("🎛️ Painel de Injeção de Dados Reais")
-            if sinal == "NO CALL":
-                st.info("Painel suspenso: Nenhuma ação de injeção manual é necessária para cenários de NO CALL.")
-            else:
-                tipo_resultado = st.radio("Selecione o resultado real da operação:", ["G0", "G1", "G2", "FALHA"], horizontal=True)
-                
-                numeros_reais = []
-                if tipo_resultado == "G0":
-                    n1 = st.number_input("Digite o número que saiu na 1ª rodada (G0):", min_value=0, max_value=14, step=1, key="n1")
-                    numeros_reais = [n1]
-                elif tipo_resultado == "G1":
-                    n1 = st.number_input("Número que saiu na 1ª rodada (Erro):", min_value=0, max_value=14, step=1, key="n1")
-                    n2 = st.number_input("Número que saiu na 2ª rodada (G1 - Acerto):", min_value=0, max_value=14, step=1, key="n2")
-                    numeros_reais = [n1, n2]
-                elif tipo_resultado == "G2":
-                    n1 = st.number_input("Número que saiu na 1ª rodada (Erro):", min_value=0, max_value=14, step=1, key="n1")
-                    n2 = st.number_input("Número que saiu na 2ª rodada (Erro):", min_value=0, max_value=14, step=1, key="n2")
-                    n3 = st.number_input("Número que saiu na 3ª rodada (G2 - Acerto):", min_value=0, max_value=14, step=1, key="n3")
-                    numeros_reais = [n1, n2, n3]
-                elif tipo_resultado == "FALHA":
-                    n1 = st.number_input("Número que saiu na 1ª rodada (Erro):", min_value=0, max_value=14, step=1, key="n1")
-                    n2 = st.number_input("Número que saiu na 2ª rodada (Erro):", min_value=0, max_value=14, step=1, key="n2")
-                    n3 = st.number_input("Número que saiu na 3ª rodada (Erro):", min_value=0, max_value=14, step=1, key="n3")
-                    numeros_reais = [n1, n2, n3]
-                
-                if st.button("💾 Gravar Números Reais e Evoluir IA"):
-                    GerenciadorMemoriaViva.injetar_rodadas_reais(st.session_state.sequencia_em_uso, numeros_reais, NOME_RECENCIA_ATIVA)
-                    st.success(f"Sucesso! Dados injetados com 100% de exatidão na IA.")
-                    st.session_state.sinal_pendente = None
 
-        st.write("---")
-        st.subheader("📝 Rascunho Analítico Interno")
-        st.text_area("Memória de Cálculo (15 Releituras)", value=st.session_state.log_completo, height=340)
+        # Sinal Principal
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            if resultado["sinal"] == "NO CALL":
+                st.error(f"**NO CALL**")
+                st.caption(resultado["justificativa"])
+            else:
+                st.success(f"**SINAL: {resultado['sinal']}**")
+                st.caption(resultado["justificativa"])
 
+        with col2:
+            st.metric("Confiança da IA", f"{resultado['confianca_ia']}%")
+
+        # Resumo do Raciocínio
+        st.subheader("🧠 Resumo do Raciocínio")
+        st.info(resultado.get("raciocinio_final", "Sem resumo disponível"))
+
+        # Rastreamento Detalhado (Expander)
+        with st.expander("🔍 Ver Rastreamento Completo por Camada (6 Camadas)", expanded=False):
+            for camada in resultado.get("raciocinio_trace", []):
+                impacto = camada.get("impacto", "")
+                if impacto in ["ALTO", "FORTE", "BLOQUEIO"]:
+                    st.success(f"**Camada {camada['camada']} - {camada['nome']}**")
+                else:
+                    st.write(f"**Camada {camada['camada']} - {camada['nome']}**")
+                
+                st.write(f"- Resultado: `{camada.get('resultado')}`")
+                st.write(f"- Detalhe: {camada.get('detalhe')}")
+                st.write(f"- Impacto: **{impacto}**")
+                st.divider()
+
+        # Painel de Injeção de Dados Reais (mantido)
         st.write("---")
-        st.subheader("📈 Volume 21: Inteligência Observacional e Métricas de Cobertura")
-        with st.expander("Visualizar Diagnóstico do Algoritmo e Split-Stake", expanded=True):
-            analise_raridade = EngineMatematicoAvancado.calcular_raridade_sequencia([('B' if n == 0 else ('V' if 1 <= n <= 7 else 'P')) for n in st.session_state.sequencia_em_uso])
-            analise_surfe = EngineMatematicoAvancado.calcular_vies_surfe(NOME_BASE_DEFINITIVA, janela=100)
-            gestao_financeira = EngineMatematicoAvancado.simular_split_stake_cobertura(stake_principal=10.0)
+        st.subheader("🎛️ Painel de Injeção de Dados Reais")
+        
+        if resultado["sinal"] != "NO CALL":
+            tipo_resultado = st.radio("Selecione o resultado real da operação:", ["G0", "G1", "G2", "FALHA"], horizontal=True, key="tipo_resultado")
             
-            met1, met2, met3 = st.columns(3)
-            with met1:
-                st.metric(label="Raridade de Tendência (Binomial)", value=f"{analise_raridade['probabilidade']}%")
-                st.caption(f"Saturação: {analise_raridade['streak']}x {analise_raridade['cor_sequencia']}")
-            with met2:
-                st.metric(label="Desvio Macro Vermelho", value=f"{analise_surfe['desvio_v']}%", delta=f"{analise_surfe['desvio_v']}% vs Teórico")
-            with met3:
-                st.metric(label="Desvio Macro Preto", value=f"{analise_surfe['desvio_p']}%", delta=f"{analise_surfe['desvio_p']}% vs Teórico")
-                
-            st.code(
-                f"[DIAGNÓSTICO ESTRUTURAL DO MERCADO]:\n"
-                f"- Comportamento de Curto Prazo: {analise_raridade['status']}\n"
-                f"- Análise Macro (Últimos 100 Giros): {analise_surfe['vies']}\n"
-                f"  Frequências Verificadas -> V: {analise_surfe['frequencia_v']}% | P: {analise_surfe['frequencia_p']}% | B: {analise_surfe['frequencia_b']}%\n\n"
-                f"[GESTÃO MATEMÁTICA DE STAKE (Simulação para Base R$10)]:\n"
-                f"- House Edge Fixo do Sistema: {gestao_financeira['house_edge_estatico']}\n"
-                f"- Aposta na Cor Principal: R$ {gestao_financeira['stake_cor']:.2f}\n"
-                f"- Cobertura Cirúrgica no Branco (1/7): R$ {gestao_financeira['cobertura_b_ideal_1_7']:.2f}\n"
-                f"- Custo Total Consolidado da Operação: R$ {gestao_financeira['custo_total_operacao']:.2f}\n"
-                f"- Lucro Líquido Realizado caso Sorteado Branco (0): R$ {gestao_financeira['lucro_liquido_se_der_branco']:.2f}",
-                language="text"
-            )
+            numeros_reais = []
+            if tipo_resultado == "G0":
+                n1 = st.number_input("Número que saiu na 1ª rodada (G0):", min_value=0, max_value=14, step=1, key="n1")
+                numeros_reais = [n1]
+            elif tipo_resultado == "G1":
+                n1 = st.number_input("Número que saiu na 1ª rodada (Erro):", min_value=0, max_value=14, step=1, key="n1")
+                n2 = st.number_input("Número que saiu na 2ª rodada (G1):", min_value=0, max_value=14, step=1, key="n2")
+                numeros_reais = [n1, n2]
+            elif tipo_resultado == "G2":
+                n1 = st.number_input("Número que saiu na 1ª rodada (Erro):", min_value=0, max_value=14, step=1, key="n1")
+                n2 = st.number_input("Número que saiu na 2ª rodada (Erro):", min_value=0, max_value=14, step=1, key="n2")
+                n3 = st.number_input("Número que saiu na 3ª rodada (G2):", min_value=0, max_value=14, step=1, key="n3")
+                numeros_reais = [n1, n2, n3]
+            elif tipo_resultado == "FALHA":
+                n1 = st.number_input("Número que saiu na 1ª rodada (Erro):", min_value=0, max_value=14, step=1, key="n1")
+                n2 = st.number_input("Número que saiu na 2ª rodada (Erro):", min_value=0, max_value=14, step=1, key="n2")
+                n3 = st.number_input("Número que saiu na 3ª rodada (Erro):", min_value=0, max_value=14, step=1, key="n3")
+                numeros_reais = [n1, n2, n3]
+            
+            if st.button("💾 Gravar Números Reais e Evoluir IA"):
+                GerenciadorMemoriaViva.injetar_rodadas_reais(st.session_state.sequencia_em_uso, numeros_reais, NOME_RECENCIA_ATIVA)
+                st.success("Sucesso! Dados injetados com 100% de exatidão na IA.")
+                st.session_state.ultimo_resultado = None
+                st.session_state.sinal_pendente = None
+        else:
+            st.info("Painel de injeção suspenso para NO CALL.")
 
 # =========================================================================
-# ABA TIPO D
+# ABA TIPO D (mantida igual)
 # =========================================================================
 with aba_tipo_d:
     st.header("📊 Auditoria Cronológica Tipo D")
@@ -182,9 +171,6 @@ with aba_tipo_d:
                 st.error("IMPOSSÍVEL CALCULAR - Estrutura fora do padrão do Volume 8.")
             if os.path.exists(caminho_temp): os.remove(caminho_temp)
 
-        # ============================================================
-        # BLOCO COM RELATÓRIO (CORRIGIDO)
-        # ============================================================
         if salvar_como_base:
             with open(caminho_temp, "wb") as f: f.write(arquivo_upload.getbuffer())
             try:
