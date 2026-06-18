@@ -5,12 +5,13 @@ from main import (
     MotorV1Completo, 
     ProcessadorTipoB, 
     EngineMatematicoAvancado,
-    treinar_base_longo_prazo_com_janelas
+    treinar_base_longo_prazo_com_janelas,
+    integrar_recencia_no_modelo
 )
 
 st.set_page_config(page_title="MOTOR V1 - Painel Operacional", page_icon="🛡️", layout="wide")
 st.title("🛡️ Sistema de Auditoria Analítica - MOTOR V1")
-st.caption("Versão Medidor de Evolução da IA — Em conformidade com o Volume 22")
+st.caption("Versão com Integração de Recência (Longo Prazo + Comportamento Atual)")
 
 aba_tipo_b, aba_tipo_d = st.tabs([
     "🎯 TIPO B — Sequência Operacional (Sinal Real)", 
@@ -103,6 +104,9 @@ with aba_tipo_d:
         with col_btn1: rodar_auditoria = st.button("🔍 Iniciar Auditoria de Recência")
         with col_btn2: salvar_como_base = st.button("💾 Definir como Nova Base de Longo Prazo")
 
+        # ============================================================
+        # BOTÃO: INICIAR AUDITORIA DE RECÊNCIA (AGORA INTEGRA NO MODELO)
+        # ============================================================
         if rodar_auditoria:
             with open(caminho_temp, "wb") as f: f.write(arquivo_upload.getbuffer())
             if os.path.exists(NOME_RECENCIA_ATIVA): os.remove(NOME_RECENCIA_ATIVA)
@@ -110,10 +114,16 @@ with aba_tipo_d:
 
             leitor = LeitorXLS(caminho_temp)
             dados = leitor.ler_e_validar()
+            
             if dados:
+                # === INTEGRA A RECÊNCIA NO MODELO DE LONGO PRAZO ===
+                integrar_recencia_no_modelo(dados, multiplicador=5)
+                
+                # Depois roda a auditoria para mostrar o relatório
                 motor = MotorV1Completo(dados)
                 output_d = motor.processar_auditoria()
-                st.success("Auditoria Realizada!")
+                
+                st.success("✅ Auditoria de Recência realizada e integrada ao modelo com sucesso!")
                 
                 memoria_d = output_d.split("[RESULTADO FINAL TIPO D]")[0]
                 resultado_d = "[RESULTADO FINAL TIPO D]" + output_d.split("[RESULTADO FINAL TIPO D]")[1]
@@ -125,8 +135,12 @@ with aba_tipo_d:
                 st.code(resultado_d, language="text")
             else:
                 st.error("IMPOSSÍVEL CALCULAR - Estrutura fora do padrão do Volume 8.")
+            
             if os.path.exists(caminho_temp): os.remove(caminho_temp)
 
+        # ============================================================
+        # BOTÃO: DEFINIR COMO NOVA BASE DE LONGO PRAZO
+        # ============================================================
         if salvar_como_base:
             with open(caminho_temp, "wb") as f: f.write(arquivo_upload.getbuffer())
             try:
