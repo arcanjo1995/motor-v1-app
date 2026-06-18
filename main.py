@@ -153,7 +153,7 @@ class MotorAnalise:
 
 
 # ============================================================
-# IAPreditivaV1 (com Memória de Padrões Vencedores)
+# IAPreditivaV1
 # ============================================================
 class IAPreditivaV1:
     def __init__(self, dados_longo_prazo, dados_recencia=None):
@@ -335,7 +335,7 @@ class IAPreditivaV1:
 
 
 # ============================================================
-# MotorNoCall (COMPLETO)
+# MotorNoCall
 # ============================================================
 class MotorNoCall:
     @staticmethod
@@ -364,7 +364,7 @@ class MotorNoCall:
 
 
 # ============================================================
-# JuizHierarquicoModificado (COMPLETO)
+# JuizHierarquicoModificado
 # ============================================================
 class JuizHierarquicoModificado:
     @staticmethod
@@ -406,7 +406,7 @@ class JuizHierarquicoModificado:
 
 
 # ============================================================
-# MotorContagensProjetivas (COMPLETO)
+# MotorContagensProjetivas
 # ============================================================
 class MotorContagensProjetivas:
     @staticmethod
@@ -454,7 +454,7 @@ class MotorContagensProjetivas:
 
 
 # ============================================================
-# AnalisadorContextoAvancado (COMPLETO)
+# AnalisadorContextoAvancado
 # ============================================================
 class AnalisadorContextoAvancado:
     @staticmethod
@@ -477,7 +477,7 @@ class AnalisadorContextoAvancado:
 
 
 # ============================================================
-# LeitorXLS (COMPLETO)
+# LeitorXLS
 # ============================================================
 class LeitorXLS:
     def __init__(self, caminho_arquivo):
@@ -524,7 +524,7 @@ class SequenciaOperacional:
 
 
 # ============================================================
-# MotorV1Completo (COMPLETO)
+# MotorV1Completo (CORRIGIDO)
 # ============================================================
 class MotorV1Completo:
     def __init__(self, lista_dados_xls):
@@ -556,34 +556,41 @@ class MotorV1Completo:
 
             analise = MotorAnalise.analisar_janela(sub_num, sub_pol, self.ia)
 
-            nc_ativo = analise["no_call"]["ativo"]
-            motivo_nc = analise["no_call"]["motivo"]
-            geometria = analise["geometria"]
-            expectativas = analise["regras_posicionais"]
-            direcao_ia = analise["ia"]["direcao"]
-            conf_ia = analise["ia"]["confianca"]
-            raciocinio_ia = analise["ia"]["raciocinio"]
-            streak = analise["contexto_reversao"]["streak"]
-            xadrez_len = analise["contexto_reversao"]["xadrez_len"]
-            xadrez_quebrou = analise["contexto_reversao"]["xadrez_quebrou"]
-            contexto_exaustao = analise["contexto_reversao"]["exaustao"]
-            modo_mercado = analise["contexto_avancado"].get("modo_mercado", "NEUTRO")
+            if analise["no_call"]["ativo"]:
+                sinal = "NO CALL"
+                justificativa = analise["no_call"]["motivo"]
+                regra_id = "SISTEMA_TRAVADO"
+                direcao_ia = "NEUTRO"
+                conf_ia = 0.0
+                raciocinio_ia = analise["no_call"]["motivo"]
+                expectativas = []
+                geometria = analise.get("geometria", "ESTÁVEL")
+                streak = 0
+                xadrez_len = 0
+                xadrez_quebrou = False
+                contexto_exaustao = False
+                modo_mercado = "NEUTRO"
+            else:
+                geometria = analise["geometria"]
+                expectativas = analise["regras_posicionais"]
+                direcao_ia = analise["ia"]["direcao"]
+                conf_ia = analise["ia"]["confianca"]
+                raciocinio_ia = analise["ia"]["raciocinio"]
+                streak = analise["contexto_reversao"]["streak"]
+                xadrez_len = analise["contexto_reversao"]["xadrez_len"]
+                xadrez_quebrou = analise["contexto_reversao"]["xadrez_quebrou"]
+                contexto_exaustao = analise["contexto_reversao"]["exaustao"]
+                modo_mercado = analise["contexto_avancado"].get("modo_mercado", "NEUTRO")
 
-            sinal, justificativa, regra_id = JuizHierarquicoModificado.arbitrar_sinal(
-                nc_ativo, motivo_nc, expectativas, None, geometria,
-                (direcao_ia, conf_ia, raciocinio_ia), None, self.historico_regras,
-                modo_mercado=modo_mercado,
-                streak_atual=streak,
-                xadrez_len=xadrez_len,
-                xadrez_quebrou=xadrez_quebrou,
-                contexto_exaustao=contexto_exaustao
-            )
-
-            if sinal != "NO CALL" and streak >= 6:
-                if direcao_ia != sinal:
-                    sinal = "NO CALL"
-                    justificativa = f"Veto de streak {streak}x (contra IA)"
-                    regra_id = "VETO_STREAK"
+                sinal, justificativa, regra_id = JuizHierarquicoModificado.arbitrar_sinal(
+                    False, "", expectativas, None, geometria,
+                    (direcao_ia, conf_ia, raciocinio_ia), None, self.historico_regras,
+                    modo_mercado=modo_mercado,
+                    streak_atual=streak,
+                    xadrez_len=xadrez_len,
+                    xadrez_quebrou=xadrez_quebrou,
+                    contexto_exaustao=contexto_exaustao
+                )
 
             correcoes = self.seq.polaridades[idx+12 : idx+15]
             classificacao = "FALHA"
@@ -657,7 +664,7 @@ class MotorV1Completo:
 
 
 # ============================================================
-# ProcessadorTipoB (COMPLETO)
+# ProcessadorTipoB
 # ============================================================
 class ProcessadorTipoB:
     def __init__(self, sequencia_12_numeros, caminho_base_dados):
@@ -687,9 +694,9 @@ class ProcessadorTipoB:
         motivo_nc = analise["no_call"]["motivo"]
         geometria = analise["geometria"]
         expectativas = analise["regras_posicionais"]
-        direcao_ia = analise["ia"]["direcao"]
-        conf_ia = analise["ia"]["confianca"]
-        raciocinio_ia = analise["ia"]["raciocinio"]
+        direcao_ia = analise["ia"]["direcao"] if not nc_ativo else "NEUTRO"
+        conf_ia = analise["ia"]["confianca"] if not nc_ativo else 0.0
+        raciocinio_ia = analise["ia"]["raciocinio"] if not nc_ativo else motivo_nc
         streak = analise["contexto_reversao"]["streak"]
         xadrez_len = analise["contexto_reversao"]["xadrez_len"]
         xadrez_quebrou = analise["contexto_reversao"]["xadrez_quebrou"]
@@ -744,7 +751,7 @@ class ProcessadorTipoB:
 
 
 # ============================================================
-# EngineMatematicoAvancado (COMPLETO)
+# EngineMatematicoAvancado
 # ============================================================
 class EngineMatematicoAvancado:
     
