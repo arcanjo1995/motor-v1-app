@@ -56,12 +56,6 @@ def adicionar_a_base_longo_prazo(novos_dados):
     if os.path.exists(NOME_BASE_DEFINITIVA):
         try:
             base_existente = LeitorXLS(NOME_BASE_DEFINITIVA).ler_e_validar() or []
-            if len(base_existente) < 1000:
-                print(f"[AVISO] Base lida retornou poucos registros ({len(base_existente)}). Abortando para segurança.")
-                return {
-                    "sucesso": False,
-                    "mensagem": f"Leitura da base retornou apenas {len(base_existente)} registros. Operação cancelada para evitar perda de dados."
-                }
             print(f"[INFO] Base existente lida com sucesso: {len(base_existente)} registros")
         except Exception as e:
             print(f"[ERRO] Falha ao ler a base existente: {e}")
@@ -611,32 +605,23 @@ class MotorContagensProjetivas:
         tem_branco_recente = any(p == "B" for p in sub_pol[7:11])
 
         if not tem_branco_recente:
-            # Regra do 2 (posição 5)
             if sub_num[5] == 2:
                 lista_bruta.append({"direcao": "VERMELHO", "tipo_regra": "V12_POSICIONAL_2", "origem": "Volume 12"})
-
-            # Regra do 3 (posição 5)
             if sub_num[5] == 3:
                 lista_bruta.append({"direcao": "VERMELHO", "tipo_regra": "V12_POSICIONAL_3", "origem": "Volume 12"})
 
-            # ==================== REGRA DO 4 (MELHORADA) ====================
-            # Cenário 1 e 2: 4 na posição 11 após preto
             if sub_num[11] == 4 and sub_pol[10] == "P":
                 lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V12_RETENCAO_4", "origem": "Volume 12"})
 
-            # Cenário 3: 4 seguido de dois pretos (continuidade preta estrutural)
             if sub_num[11] == 4 and sub_pol[9] == "P" and sub_pol[10] == "P":
                 lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V12_CONTINUIDADE_4", "origem": "Volume 12"})
 
-            # ==================== REGRA 5-10 (MELHORADA) ====================
             if sub_num[10] == 5 and sub_num[11] == 10:
                 lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V12_ACOPLAMENTO_5_10", "origem": "Volume 12"})
 
-                # Cenário 2: 5-10 seguido de preto (continuação preta forte)
                 if len(sub_pol) > 11 and sub_pol[11] == "P":
                     lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V12_CONTINUACAO_5_10", "origem": "Volume 12"})
 
-            # Regra do 10 (posição 11)
             if sub_num[11] == 10:
                 lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V12_RESIDUO_10", "origem": "Volume 12"})
 
