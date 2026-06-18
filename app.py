@@ -11,7 +11,7 @@ from main import (
 
 st.set_page_config(page_title="MOTOR V1 - Painel Operacional", page_icon="🛡️", layout="wide")
 st.title("🛡️ Sistema de Auditoria Analítica - MOTOR V1")
-st.caption("Versão com Acumulação de Base de Longo Prazo (Append)")
+st.caption("Versão com Motor Central e Acumulação de Base de Longo Prazo")
 
 aba_tipo_b, aba_tipo_d = st.tabs([
     "🎯 TIPO B — Sequência Operacional (Sinal Real)", 
@@ -22,14 +22,49 @@ NOME_BASE_DEFINITIVA = "resultados_blaze.xlsx"
 NOME_RECENCIA_ATIVA = "base_recencia_ativa.xlsx"
 
 # =========================================================================
-# ABA TIPO B (mantido igual)
+# ABA TIPO B - RESTAURADA E FUNCIONAL
 # =========================================================================
 with aba_tipo_b:
-    # ... (código da aba Tipo B permanece o mesmo)
-    pass
+    st.header("🎯 Processamento Operacional Tipo B")
+    st.info("Insira exatamente 12 números separados por vírgula para gerar o sinal operativo.")
+    
+    entrada_numeros = st.text_input(
+        "Sequência dos 12 números da rodada:", 
+        placeholder="Exemplo: 2,11,14,4,9,12,12,7,3,9,5,12"
+    )
+    
+    if st.button("🚀 Executar Releituras e Gerar Sinal"):
+        if not entrada_numeros:
+            st.error("Erro: Campo de entrada vazio.")
+        else:
+            try:
+                lista_numeros = [int(x.strip()) for x in entrada_numeros.split(",")]
+                
+                if len(lista_numeros) != 12:
+                    st.error("Erro: É necessário exatamente 12 números.")
+                else:
+                    processador = ProcessadorTipoB(lista_numeros, NOME_BASE_DEFINITIVA)
+                    resultado = processador.executar_sinal_real()
+                    
+                    if "erro" in resultado:
+                        st.error(resultado["erro"])
+                    else:
+                        st.success(f"**SINAL GERADO:** {resultado['sinal']}")
+                        st.write(f"**Justificativa:** {resultado['justificativa']}")
+                        st.write(f"**Confiança da IA:** {resultado['confianca_ia']}%")
+                        
+                        if resultado.get("raciocinio_final"):
+                            st.write("**Raciocínio Final:**")
+                            st.code(resultado["raciocinio_final"])
+                        
+                        if resultado.get("motivo_real"):
+                            st.caption(f"Motivo real da decisão: {resultado['motivo_real']}")
+                            
+            except Exception as e:
+                st.error(f"Erro ao processar: {e}")
 
 # =========================================================================
-# ABA TIPO D - COM RELATÓRIO COMPLETO
+# ABA TIPO D - MANTIDA COM RELATÓRIOS
 # =========================================================================
 with aba_tipo_d:
     st.header("📊 Auditoria Cronológica Tipo D")
@@ -39,7 +74,6 @@ with aba_tipo_d:
     if arquivo_upload is not None:
         caminho_temp = "temp_recencia.xlsx"
 
-        # Mostra quantos registros já existem na base
         registros_atuais = 0
         if os.path.exists(NOME_BASE_DEFINITIVA):
             try:
@@ -62,9 +96,7 @@ with aba_tipo_d:
         with col3:
             adicionar_base = st.button("➕ Adicionar à Base de Longo Prazo")
 
-        # ============================================================
         # 1. INICIAR AUDITORIA DE RECÊNCIA
-        # ============================================================
         if rodar_auditoria:
             with open(caminho_temp, "wb") as f: f.write(arquivo_upload.getbuffer())
             if os.path.exists(NOME_RECENCIA_ATIVA): os.remove(NOME_RECENCIA_ATIVA)
@@ -93,9 +125,7 @@ with aba_tipo_d:
             
             if os.path.exists(caminho_temp): os.remove(caminho_temp)
 
-        # ============================================================
-        # 2. SUBSTITUIR BASE DE LONGO PRAZO (com relatório completo)
-        # ============================================================
+        # 2. SUBSTITUIR BASE DE LONGO PRAZO
         if salvar_como_base:
             with open(caminho_temp, "wb") as f: f.write(arquivo_upload.getbuffer())
             try:
@@ -109,7 +139,6 @@ with aba_tipo_d:
                     if relatorio.get("sucesso"):
                         st.success("✅ Base de Longo Prazo substituída e treinada com sucesso!")
                         
-                        # === RELATÓRIO COMPLETO RESTAURADO ===
                         st.subheader("📊 Relatório de Treinamento da Base Longa")
                         col1, col2, col3 = st.columns(3)
                         with col1:
@@ -134,9 +163,7 @@ with aba_tipo_d:
                 st.error(f"Erro ao salvar e treinar base: {e}")
             if os.path.exists(caminho_temp): os.remove(caminho_temp)
 
-        # ============================================================
-        # 3. ADICIONAR À BASE DE LONGO PRAZO (com relatório)
-        # ============================================================
+        # 3. ADICIONAR À BASE DE LONGO PRAZO
         if adicionar_base:
             with open(caminho_temp, "wb") as f: f.write(arquivo_upload.getbuffer())
             try:
@@ -147,7 +174,6 @@ with aba_tipo_d:
                     if relatorio.get("sucesso"):
                         st.success("✅ Dados adicionados e base treinada com sucesso!")
                         
-                        # === RELATÓRIO COMPLETO TAMBÉM NO BOTÃO DE ADICIONAR ===
                         st.subheader("📊 Relatório de Treinamento Após Adição")
                         col1, col2, col3 = st.columns(3)
                         with col1:
