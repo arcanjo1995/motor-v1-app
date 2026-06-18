@@ -873,7 +873,20 @@ def treinar_base_longo_prazo_com_janelas(dados_completos):
 
     reforcar_aprendizado_tipo_d(motor.ia)
 
-    motor.ia.memoria_padroes_vencedores = list({tuple(sorted(p.items())): p for p in motor.ia.memoria_padroes_vencedores}.values())
+    # === CORREÇÃO: Deduplicação segura ===
+    seen = set()
+    unique_patterns = []
+    for p in motor.ia.memoria_padroes_vencedores:
+        try:
+            # Converte para string JSON (suporta listas)
+            key = json.dumps(p, sort_keys=True)
+            if key not in seen:
+                seen.add(key)
+                unique_patterns.append(p)
+        except:
+            unique_patterns.append(p)  # fallback seguro
+
+    motor.ia.memoria_padroes_vencedores = unique_patterns
 
     sucesso_salvar = salvar_modelo_longo_prazo(motor.ia)
 
@@ -901,7 +914,6 @@ def treinar_base_longo_prazo_com_janelas(dados_completos):
         "modelo_salvo_com_sucesso": sucesso_salvar,
         "mensagem": "Treinamento profundo por janelas móveis concluído com sucesso."
     }
-
 
 # ============================================================
 # FIM DO CÓDIGO
