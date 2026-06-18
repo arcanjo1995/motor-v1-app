@@ -153,7 +153,7 @@ class MotorAnalise:
 
 
 # ============================================================
-# IAPreditivaV1
+# IAPreditivaV1 - COM CÁLCULOS DINÂMICOS A PARTIR DOS DADOS DO XLS
 # ============================================================
 class IAPreditivaV1:
     def __init__(self, dados_longo_prazo, dados_recencia=None):
@@ -212,6 +212,52 @@ class IAPreditivaV1:
                 self.unidade_analise[n]["freq_v"] = round((self.unidade_analise[n]["V"] / total) * 100, 2)
                 self.unidade_analise[n]["freq_p"] = round((self.unidade_analise[n]["P"] / total) * 100, 2)
                 self.unidade_analise[n]["freq_b"] = round((self.unidade_analise[n]["B"] / total) * 100, 2)
+
+    # ============================================================
+    # NOVOS MÉTODOS: CÁLCULOS DINÂMICOS A PARTIR DOS DADOS REAIS
+    # ============================================================
+    def calcular_probabilidade_streak_empirica(self, cor, k):
+        """Calcula a probabilidade real de k rodadas seguidas da mesma cor a partir dos dados carregados."""
+        if not self.dados_longo and not self.dados_recencia:
+            return 0.0
+
+        todos_dados = (self.dados_longo or []) + (self.dados_recencia or [])
+        if len(todos_dados) < k + 1:
+            return 0.0
+
+        total_janelas = len(todos_dados) - k
+        ocorrencias = 0
+
+        for i in range(total_janelas):
+            janela = [d['cor'] for d in todos_dados[i:i+k]]
+            if all(c == cor for c in janela):
+                ocorrencias += 1
+
+        return round((ocorrencias / total_janelas) * 100, 2) if total_janelas > 0 else 0.0
+
+    def calcular_probabilidade_xadrez_empirica(self, k):
+        """Calcula a probabilidade real de k rodadas alternadas (Xadrez) a partir dos dados."""
+        if not self.dados_longo and not self.dados_recencia:
+            return 0.0
+
+        todos_dados = (self.dados_longo or []) + (self.dados_recencia or [])
+        if len(todos_dados) < k + 1:
+            return 0.0
+
+        total_janelas = len(todos_dados) - k
+        ocorrencias = 0
+
+        for i in range(total_janelas):
+            janela = [d['cor'] for d in todos_dados[i:i+k]]
+            eh_xadrez = True
+            for j in range(1, len(janela)):
+                if janela[j] == janela[j-1]:
+                    eh_xadrez = False
+                    break
+            if eh_xadrez:
+                ocorrencias += 1
+
+        return round((ocorrencias / total_janelas) * 100, 2) if total_janelas > 0 else 0.0
 
     def injetar_aprendizado_imediato(self, sub_dados, multiplicador_peso=4, analise_contexto=None):
         self.dados_recencia.extend(sub_dados)
@@ -304,6 +350,30 @@ class IAPreditivaV1:
                 v_bonus += 14
             elif pos_p > pos_v * 1.25:
                 p_bonus += 14
+
+        # ============================================================
+        # BÔNUS DINÂMICOS BASEADOS NOS DADOS REAIS DO XLS (em vez de valores fixos)
+        # ============================================================
+        if analise_contexto:
+            # Calcula probabilidade empírica de streak e Xadrez a partir dos dados
+            prob_streak_v = self.calcular_probabilidade_streak_empirica('V', 5)
+            prob_streak_p = self.calcular_probabilidade_streak_empirica('P', 5)
+            prob_xadrez_5 = self.calcular_probabilidade_xadrez_empirica(5)
+
+            # Bônus dinâmico para inversão após streak longo (baseado no que realmente acontece nos dados)
+            if prob_streak_v > 2.0 or prob_streak_p > 2.0:  # só dá bônus se o padrão for realmente raro nos dados
+                if sub_pol[-1] == 'V':
+                    p_bonus += 18
+                else:
+                    v_bonus += 18
+
+            # Bônus dinâmico para Xadrez longo quebrando
+            if prob_xadrez_5 < 3.0:  # Xadrez de 5+ é raro nos dados
+                if analise_contexto.get("contexto_reversao", {}).get("xadrez_quebrou"):
+                    if sub_pol[-1] == 'V':
+                        v_bonus += 22
+                    else:
+                        p_bonus += 22
 
         has_rec = len(self.dados_recencia) > 0
         p_trans = 0.22 if has_rec else 0.17
