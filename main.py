@@ -47,31 +47,58 @@ def integrar_recencia_no_modelo(dados_recencia, multiplicador=5):
     salvar_modelo_longo_prazo(ia)
     return ia
 
+# ============================================================
+# FUNÇÃO ADICIONAR BASE - VERSÃO DEFENSIVA (PROTEGE CONTRA PERDA DE DADOS)
+# ============================================================
 def adicionar_a_base_longo_prazo(novos_dados):
     """
-    Adiciona novos dados à base de longo prazo existente (sem apagar o que já existe).
-    Depois treina o modelo com todos os dados combinados.
+    Versão segura e defensiva.
+    Só atualiza o arquivo se conseguir ler a base antiga com sucesso.
+    Se der qualquer erro na leitura, NÃO sobrescreve nada.
     """
+    if not novos_dados:
+        return {"sucesso": False, "mensagem": "Nenhum dado novo foi fornecido."}
+
     base_existente = []
+
+    # === PASSO CRÍTICO: Tentar ler a base existente de forma segura ===
     if os.path.exists(NOME_BASE_DEFINITIVA):
         try:
             base_existente = LeitorXLS(NOME_BASE_DEFINITIVA).ler_e_validar() or []
-        except:
-            base_existente = []
+            
+            # Proteção extra: se a base lida estiver muito pequena comparada ao esperado, aborta
+            if len(base_existente) < 1000:
+                print(f"[AVISO] Base lida retornou poucos registros ({len(base_existente)}). Abortando para segurança.")
+                return {
+                    "sucesso": False,
+                    "mensagem": f"Leitura da base retornou apenas {len(base_existente)} registros. Operação cancelada para evitar perda de dados."
+                }
+            
+            print(f"[INFO] Base existente lida com sucesso: {len(base_existente)} registros")
 
+        except Exception as e:
+            print(f"[ERRO] Falha ao ler a base existente: {e}")
+            return {
+                "sucesso": False,
+                "mensagem": "Não foi possível ler a base antiga com segurança. Nada foi alterado."
+            }
+
+    # Combina os dados
     dados_combinados = base_existente + novos_dados
-    print(f"[INFO] Base anterior: {len(base_existente)} registros | Novos: {len(novos_dados)} | Total: {len(dados_combinados)}")
+    print(f"[INFO] Base anterior: {len(base_existente)} | Novos: {len(novos_dados)} | Total final: {len(dados_combinados)}")
 
     # Salva o arquivo combinado
     try:
         df = pd.DataFrame([{"numero": d["numero"], "cor": d["cor"]} for d in dados_combinados])
         df.to_excel(NOME_BASE_DEFINITIVA, index=False)
+        print(f"[SUCESSO] Base salva com {len(dados_combinados)} registros")
     except Exception as e:
-        print(f"Erro ao salvar arquivo combinado: {e}")
-        return {"sucesso": False, "mensagem": "Erro ao salvar arquivo"}
+        print(f"[ERRO] Falha ao salvar o arquivo: {e}")
+        return {"sucesso": False, "mensagem": f"Erro ao salvar o arquivo: {e}"}
 
     # Treina o modelo com todos os dados
     return treinar_base_longo_prazo_com_janelas(dados_combinados)
+
 
 def reforcar_aprendizado_tipo_d(ia):
     for padrao, qtd in ia.controladores_fortes.items():
