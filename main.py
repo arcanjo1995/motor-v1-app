@@ -493,7 +493,7 @@ class IAPreditivaV1:
 
 
 # ============================================================
-# MotorNoCall
+# MotorNoCall - ATUALIZADO COM NOVAS POSIÇÕES (6 e 7)
 # ============================================================
 class MotorNoCall:
     @staticmethod
@@ -503,20 +503,23 @@ class MotorNoCall:
             if sub_num[idx1] == sub_num[idx2]:
                 return True, "Volume 2 Cap 6: Trava das Duplas Ativa"
 
-        posicoes_criticas_6 = [3, 4, 5, 8, 9, 10, 11]
+        # NÚMERO 6 - Atualizado com posições 6 e 7
+        posicoes_criticas_6 = [3, 4, 5, 6, 7, 8, 9, 10, 11]
         for pos in posicoes_criticas_6:
             if sub_num[pos] == 6:
                 return True, "Volume 2 Cap 4: Trava Número 6 (Posição de No Call Ativa)"
 
+        # NÚMERO 2 (mantido)
         posicoes_criticas_2 = [8, 9, 10, 11]
         for pos in posicoes_criticas_2:
             if sub_num[pos] == 2:
                 return True, "Volume 2 Cap 3: Trava Número 2"
 
-        posicoes_criticas_b = [3, 4, 5, 8, 9, 10, 11]
+        # BRANCO - Atualizado com posições 6 e 7
+        posicoes_criticas_b = [3, 4, 5, 6, 7, 8, 9, 10, 11]
         for pos in posicoes_criticas_b:
             if sub_pol[pos] == "B":
-                return True, "Volume 2 Cap 5: Trava do Branco"
+                return True, "Volume 2 Cap 5: Trava do Branco (Posição Crítica)"
 
         return False, "Evento Neutro Operacional"
 
