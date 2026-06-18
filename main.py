@@ -5,6 +5,8 @@ import pickle
 import json
 from datetime import datetime
 
+NOME_BASE_DEFINITIVA = "resultados_blaze.xlsx"
+
 # ============================================================
 # Função de Log JSON
 # ============================================================
@@ -16,7 +18,7 @@ def salvar_log_json(dados, nome_arquivo="logs/sinais_tipo_b.jsonl"):
 
 
 # ============================================================
-# Funções de Persistência e Integração de Recência
+# Funções de Persistência e Integração
 # ============================================================
 def salvar_modelo_longo_prazo(ia, caminho="modelo_longo_prazo.pkl"):
     try:
@@ -37,47 +39,52 @@ def carregar_modelo_longo_prazo(caminho="modelo_longo_prazo.pkl"):
     return None
 
 def integrar_recencia_no_modelo(dados_recencia, multiplicador=5):
-    """
-    Integra os dados de recência no modelo de longo prazo existente.
-    NÃO sobrescreve o conhecimento anterior — apenas adiciona peso à recência.
-    """
     ia = carregar_modelo_longo_prazo()
-    
     if ia is None:
-        print("[AVISO] Nenhum modelo de longo prazo encontrado. Criando novo com recência.")
         ia = IAPreditivaV1([], dados_recencia)
     else:
-        print(f"[INFO] Integrando {len(dados_recencia)} registros de recência no modelo existente (multiplicador={multiplicador})...")
         ia.injetar_aprendizado_imediato(dados_recencia, multiplicador_peso=multiplicador)
-    
-    sucesso = salvar_modelo_longo_prazo(ia)
-    
-    if sucesso:
-        print("[OK] Modelo atualizado com recência e salvo com sucesso.")
-    
+    salvar_modelo_longo_prazo(ia)
     return ia
+
+def adicionar_a_base_longo_prazo(novos_dados):
+    """
+    Adiciona novos dados à base de longo prazo existente (sem apagar o que já existe).
+    Depois treina o modelo com todos os dados combinados.
+    """
+    base_existente = []
+    if os.path.exists(NOME_BASE_DEFINITIVA):
+        try:
+            base_existente = LeitorXLS(NOME_BASE_DEFINITIVA).ler_e_validar() or []
+        except:
+            base_existente = []
+
+    dados_combinados = base_existente + novos_dados
+    print(f"[INFO] Base anterior: {len(base_existente)} registros | Novos: {len(novos_dados)} | Total: {len(dados_combinados)}")
+
+    # Salva o arquivo combinado
+    try:
+        df = pd.DataFrame([{"numero": d["numero"], "cor": d["cor"]} for d in dados_combinados])
+        df.to_excel(NOME_BASE_DEFINITIVA, index=False)
+    except Exception as e:
+        print(f"Erro ao salvar arquivo combinado: {e}")
+        return {"sucesso": False, "mensagem": "Erro ao salvar arquivo"}
+
+    # Treina o modelo com todos os dados
+    return treinar_base_longo_prazo_com_janelas(dados_combinados)
 
 def reforcar_aprendizado_tipo_d(ia):
     for padrao, qtd in ia.controladores_fortes.items():
         if qtd >= 8:
-            ia.padroes_fortes.append({
-                "tipo": "CONTROLADOR_MUITO_FORTE",
-                "padrao": padrao,
-                "peso": qtd * 2
-            })
+            ia.padroes_fortes.append({"tipo": "CONTROLADOR_MUITO_FORTE", "padrao": padrao, "peso": qtd * 2})
     ia.padroes_fortes = sorted(ia.padroes_fortes, key=lambda x: x.get("peso", 0), reverse=True)[:30]
-
 
 def treinar_base_longo_prazo_com_janelas(dados_completos):
     if not dados_completos or len(dados_completos) < 30:
-        return {
-            "sucesso": False,
-            "mensagem": "Base muito pequena para treinamento profundo (mínimo 30 registros)."
-        }
+        return {"sucesso": False, "mensagem": "Base muito pequena para treinamento profundo (mínimo 30 registros)."}
 
     motor = MotorV1Completo(dados_completos)
     motor.processar_auditoria()
-
     reforcar_aprendizado_tipo_d(motor.ia)
 
     seen = set()
@@ -92,7 +99,6 @@ def treinar_base_longo_prazo_com_janelas(dados_completos):
             unique_patterns.append(p)
 
     motor.ia.memoria_padroes_vencedores = unique_patterns
-
     sucesso_salvar = salvar_modelo_longo_prazo(motor.ia)
 
     stats = getattr(motor, 'stats', {"G0": 0, "G1": 0, "G2": 0, "FALHA": 0, "NO CALL": 0})
@@ -122,7 +128,7 @@ def treinar_base_longo_prazo_com_janelas(dados_completos):
 
 
 # ============================================================
-# MotorAnalise (Núcleo Compartilhado) - SEU CÓDIGO ORIGINAL
+# MotorAnalise (Núcleo Compartilhado)
 # ============================================================
 class MotorAnalise:
     @staticmethod
@@ -259,7 +265,7 @@ class MotorAnalise:
 
 
 # ============================================================
-# IAPreditivaV1 - SEU CÓDIGO ORIGINAL (COM CÁLCULOS DINÂMICOS)
+# IAPreditivaV1
 # ============================================================
 class IAPreditivaV1:
     def __init__(self, dados_longo_prazo, dados_recencia=None):
@@ -487,8 +493,7 @@ class IAPreditivaV1:
 
 
 # ============================================================
-# MotorNoCall + Juiz + MotorContagensProjetivas + AnalisadorContextoAvancado
-# (SEU CÓDIGO ORIGINAL - mantido exatamente)
+# MotorNoCall
 # ============================================================
 class MotorNoCall:
     @staticmethod
@@ -516,6 +521,9 @@ class MotorNoCall:
         return False, "Evento Neutro Operacional"
 
 
+# ============================================================
+# JuizHierarquicoModificado
+# ============================================================
 class JuizHierarquicoModificado:
     @staticmethod
     def arbitrar_sinal(no_call_ativo, motivo_nc, expectations, inclinacao_num, geometria_mercado, 
@@ -558,6 +566,9 @@ class JuizHierarquicoModificado:
         return direcao_ia, f"IA (baixa confiança) {confianca_ia:.1f}%", "IA_FALLBACK"
 
 
+# ============================================================
+# MotorContagensProjetivas
+# ============================================================
 class MotorContagensProjetivas:
     @staticmethod
     def mapear_janela(sub_num, sub_pol, geometry_mercado):
@@ -603,6 +614,9 @@ class MotorContagensProjetivas:
         return lista_bruta
 
 
+# ============================================================
+# AnalisadorContextoAvancado
+# ============================================================
 class AnalisadorContextoAvancado:
     @staticmethod
     def mapear_padroes_geometria(sub_pol):
@@ -624,8 +638,7 @@ class AnalisadorContextoAvancado:
 
 
 # ============================================================
-# LeitorXLS + SequenciaOperacional + MotorV1Completo + ProcessadorTipoB + Engine
-# (SEU CÓDIGO ORIGINAL - mantido)
+# LeitorXLS + SequenciaOperacional
 # ============================================================
 class LeitorXLS:
     def __init__(self, caminho_arquivo):
@@ -668,6 +681,9 @@ class SequenciaOperacional:
         self.total = len(self.numerica)
 
 
+# ============================================================
+# MotorV1Completo
+# ============================================================
 class MotorV1Completo:
     def __init__(self, lista_dados_xls):
         self.seq = SequenciaOperacional(lista_dados_xls)
@@ -805,6 +821,9 @@ class MotorV1Completo:
         return output
 
 
+# ============================================================
+# ProcessadorTipoB
+# ============================================================
 class ProcessadorTipoB:
     def __init__(self, sequencia_12_numeros, caminho_base_dados):
         self.entrada = sequencia_12_numeros
@@ -900,6 +919,9 @@ class ProcessadorTipoB:
         }
 
 
+# ============================================================
+# EngineMatematicoAvancado
+# ============================================================
 class EngineMatematicoAvancado:
     @staticmethod
     def calcular_raridade_sequencia(sub_pol):
