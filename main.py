@@ -578,7 +578,7 @@ class JuizHierarquicoModificado:
 
 
 # ============================================================
-# MotorContagensProjetivas
+# MotorContagensProjetivas - ATUALIZADO COM REGRAS MAIS COMPLETAS
 # ============================================================
 class MotorContagensProjetivas:
     @staticmethod
@@ -611,16 +611,34 @@ class MotorContagensProjetivas:
         tem_branco_recente = any(p == "B" for p in sub_pol[7:11])
 
         if not tem_branco_recente:
+            # Regra do 2 (posição 5)
             if sub_num[5] == 2:
                 lista_bruta.append({"direcao": "VERMELHO", "tipo_regra": "V12_POSICIONAL_2", "origem": "Volume 12"})
+
+            # Regra do 3 (posição 5)
             if sub_num[5] == 3:
                 lista_bruta.append({"direcao": "VERMELHO", "tipo_regra": "V12_POSICIONAL_3", "origem": "Volume 12"})
+
+            # ==================== REGRA DO 4 (MELHORADA) ====================
+            # Cenário 1 e 2: 4 na posição 11 após preto
             if sub_num[11] == 4 and sub_pol[10] == "P":
                 lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V12_RETENCAO_4", "origem": "Volume 12"})
+
+            # Cenário 3: 4 seguido de dois pretos (continuidade preta estrutural)
+            if sub_num[11] == 4 and sub_pol[9] == "P" and sub_pol[10] == "P":
+                lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V12_CONTINUIDADE_4", "origem": "Volume 12"})
+
+            # ==================== REGRA 5-10 (MELHORADA) ====================
+            if sub_num[10] == 5 and sub_num[11] == 10:
+                lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V12_ACOPLAMENTO_5_10", "origem": "Volume 12"})
+
+                # Cenário 2: 5-10 seguido de preto (continuação preta forte)
+                if len(sub_pol) > 11 and sub_pol[11] == "P":
+                    lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V12_CONTINUACAO_5_10", "origem": "Volume 12"})
+
+            # Regra do 10 (posição 11)
             if sub_num[11] == 10:
                 lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V12_RESIDUO_10", "origem": "Volume 12"})
-            elif sub_num[10] == 5 and sub_num[11] == 10:
-                lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V12_ACOPLAMENTO_5_10", "origem": "Volume 12"})
 
         return lista_bruta
 
@@ -693,7 +711,7 @@ class SequenciaOperacional:
 
 
 # ============================================================
-# MotorV1Completo (agora pode receber IA existente)
+# MotorV1Completo
 # ============================================================
 class MotorV1Completo:
     def __init__(self, lista_dados_xls, ia_existente=None):
