@@ -364,7 +364,7 @@ class MotorNoCall:
 
 
 # ============================================================
-# JuizHierarquicoModificado
+# JuizHierarquicoModificado - VERSÃO RESTRITA (NO CALL só via MotorNoCall)
 # ============================================================
 class JuizHierarquicoModificado:
     @staticmethod
@@ -374,11 +374,13 @@ class JuizHierarquicoModificado:
                        streak_atual=0, xadrez_len=0, xadrez_quebrou=False,
                        contexto_exaustao=False, sintese_evidencias=None):
         
+        # === ÚNICA FORMA DE NO CALL ===
         if no_call_ativo:
             return "NO CALL", motivo_nc, "SISTEMA_TRAVADO"
 
         direcao_ia, confianca_ia, raciocinio_ia = previsao_ia
 
+        # 1. Regras posicionais fortes (prioridade alta)
         if expectations:
             count_v = sum(1 for item in expectations if item["direcao"] == "VERMELHO")
             count_p = sum(1 for item in expectations if item["direcao"] == "PRETO")
@@ -388,21 +390,29 @@ class JuizHierarquicoModificado:
             elif count_p > count_v:
                 return "PRETO", "Regra posicional forte ativa", "REGRA_POSICIONAL"
 
-        if geometria_mercado in ["CICLO_FECHADO_VPPV", "CICLO_FECHADO_PVVP"]:
-            if streak_atual >= 4 or xadrez_len >= 4:
-                return "NO CALL", f"Geometria forte, mas contexto de alta alternância/streak ({streak_atual}x)", "GEOMETRIA_CONTEXTO"
-            
-            if geometria_mercado == "CICLO_FECHADO_VPPV": 
-                return "PRETO", "Geometria VPPV (Padrão forte)", "GEOMETRIA_FORTE"
-            if geometria_mercado == "CICLO_FECHADO_PVVP": 
-                return "VERMELHO", "Geometria PVVP (Padrão forte)", "GEOMETRIA_FORTE"
+        # 2. Geometria forte (sem veto de streak/xadrez)
+        if geometria_mercado == "CICLO_FECHADO_VPPV":
+            return "PRETO", "Geometria VPPV (Padrão forte)", "GEOMETRIA_FORTE"
+        if geometria_mercado == "CICLO_FECHADO_PVVP":
+            return "VERMELHO", "Geometria PVVP (Padrão forte)", "GEOMETRIA_FORTE"
 
-        if direcao_ia != "NEUTRO" and confianca_ia >= 52:
-            if contexto_exaustao or (streak_atual >= 5) or (xadrez_len >= 4 and xadrez_quebrou):
-                return direcao_ia, f"IA + Contexto de reversão forte", "IA_REVERSAO"
+        # 3. IA (mesmo com confiança baixa)
+        if direcao_ia != "NEUTRO":
             return direcao_ia, f"IA Preditiva ({confianca_ia:.1f}%)", "IA_PREDITIVA"
 
-        return "NO CALL", "Sem confluência suficiente após análise estruturada", "SISTEMA_TRAVADO"
+        # 4. Fallback final (nunca mais NO CALL aqui)
+        if direcao_ia == "NEUTRO":
+            if expectations:
+                count_v = sum(1 for item in expectations if item["direcao"] == "VERMELHO")
+                count_p = sum(1 for item in expectations if item["direcao"] == "PRETO")
+                if count_v >= count_p:
+                    return "VERMELHO", "Fallback por regras", "FALLBACK_REGRA"
+                else:
+                    return "PRETO", "Fallback por regras", "FALLBACK_REGRA"
+
+            return "VERMELHO", "Fallback padrão do sistema", "FALLBACK_PADRAO"
+
+        return direcao_ia, f"IA (baixa confiança) {confianca_ia:.1f}%", "IA_FALLBACK"
 
 
 # ============================================================
@@ -705,7 +715,6 @@ class ProcessadorTipoB:
 
         raciocinio_trace = analise["camadas"]
 
-        # === NOVO: Diagnóstico claro do motivo do NO CALL ===
         if nc_ativo:
             motivo_real = f"NO CALL pelo MotorNoCall: {motivo_nc}"
         elif not expectativas:
@@ -885,7 +894,6 @@ def treinar_base_longo_prazo_com_janelas(dados_completos):
 
     reforcar_aprendizado_tipo_d(motor.ia)
 
-    # === CORREÇÃO: Deduplicação segura ===
     seen = set()
     unique_patterns = []
     for p in motor.ia.memoria_padroes_vencedores:
