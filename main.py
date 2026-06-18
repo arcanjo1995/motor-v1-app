@@ -664,7 +664,7 @@ class MotorV1Completo:
 
 
 # ============================================================
-# ProcessadorTipoB
+# ProcessadorTipoB (ATUALIZADO COM DIAGNÓSTICO)
 # ============================================================
 class ProcessadorTipoB:
     def __init__(self, sequencia_12_numeros, caminho_base_dados):
@@ -705,6 +705,16 @@ class ProcessadorTipoB:
 
         raciocinio_trace = analise["camadas"]
 
+        # === NOVO: Diagnóstico claro do motivo do NO CALL ===
+        if nc_ativo:
+            motivo_real = f"NO CALL pelo MotorNoCall: {motivo_nc}"
+        elif not expectativas:
+            motivo_real = "Sem regras posicionais ativas"
+        else:
+            count_v = sum(1 for item in expectativas if item["direcao"] == "VERMELHO")
+            count_p = sum(1 for item in expectativas if item["direcao"] == "PRETO")
+            motivo_real = f"Regras posicionais: V={count_v} | P={count_p}"
+
         sintese = [f"[{c['nome']}] {c['resultado']} → {c['detalhe']}" 
                    for c in raciocinio_trace if c["impacto"] in ["ALTO", "FORTE", "BLOQUEIO"]]
         raciocinio_final = " | ".join(sintese) if sintese else "Sem confluência forte."
@@ -730,6 +740,7 @@ class ProcessadorTipoB:
             "sinal": sinal,
             "confianca": conf_ia,
             "no_call": nc_ativo,
+            "motivo_real": motivo_real,
             "raciocinio_trace": raciocinio_trace,
             "raciocinio_final": raciocinio_final,
             "controlador_retardador": analise["controlador_retardador"],
@@ -742,6 +753,7 @@ class ProcessadorTipoB:
             "justificativa": justificativa,
             "confianca_ia": round(conf_ia, 2),
             "no_call": nc_ativo,
+            "motivo_real": motivo_real,
             "memoria": f"[PROCESSAMENTO TIPO B] Sequência: {self.entrada} → Sinal: {sinal} | {raciocinio_final}",
             "raciocinio_trace": raciocinio_trace,
             "raciocinio_final": raciocinio_final,
@@ -878,13 +890,12 @@ def treinar_base_longo_prazo_com_janelas(dados_completos):
     unique_patterns = []
     for p in motor.ia.memoria_padroes_vencedores:
         try:
-            # Converte para string JSON (suporta listas)
             key = json.dumps(p, sort_keys=True)
             if key not in seen:
                 seen.add(key)
                 unique_patterns.append(p)
         except:
-            unique_patterns.append(p)  # fallback seguro
+            unique_patterns.append(p)
 
     motor.ia.memoria_padroes_vencedores = unique_patterns
 
@@ -914,6 +925,7 @@ def treinar_base_longo_prazo_com_janelas(dados_completos):
         "modelo_salvo_com_sucesso": sucesso_salvar,
         "mensagem": "Treinamento profundo por janelas móveis concluído com sucesso."
     }
+
 
 # ============================================================
 # FIM DO CÓDIGO
