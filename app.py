@@ -4,7 +4,6 @@ from main import (
     LeitorXLS, 
     MotorV1Completo, 
     ProcessadorTipoB, 
-    GerenciadorMemoriaViva, 
     EngineMatematicoAvancado,
     treinar_base_longo_prazo_com_janelas
 )
@@ -22,7 +21,7 @@ NOME_BASE_DEFINITIVA = "resultados_blaze.xlsx"
 NOME_RECENCIA_ATIVA = "base_recencia_ativa.xlsx"
 
 # =========================================================================
-# ABA TIPO B - ATUALIZADA COM RACIOCÍNIO DETALHADO
+# ABA TIPO B
 # =========================================================================
 with aba_tipo_b:
     st.header("🎯 Processamento Operacional Tipo B")
@@ -33,10 +32,8 @@ with aba_tipo_b:
         placeholder="Exemplo: 2,11,14,4,9,12,12,7,3,9,5,12"
     )
     
-    if "sinal_pendente" not in st.session_state: st.session_state.sinal_pendente = None
-    if "justificativa_pendente" not in st.session_state: st.session_state.justificativa_pendente = None
-    if "sequencia_em_uso" not in st.session_state: st.session_state.sequencia_em_uso = []
-    if "ultimo_resultado" not in st.session_state: st.session_state.ultimo_resultado = None
+    if "ultimo_resultado" not in st.session_state:
+        st.session_state.ultimo_resultado = None
 
     if st.button("🚀 Executar Releituras e Gerar Sinal"):
         if not entrada_numeros:
@@ -45,9 +42,9 @@ with aba_tipo_b:
             try:
                 lista_numeros = [int(x.strip()) for x in entrada_numeros.split(",") if x.strip() != ""]
                 if len(lista_numeros) != 12:
-                    st.error(f"Erro Regulamentar: Contém {len(lista_numeros)} números. O manual exige exatamente 12.")
+                    st.error(f"Erro: São necessários exatamente 12 números.")
                 elif not os.path.exists(NOME_BASE_DEFINITIVA):
-                    st.error(f"Erro: O arquivo de longo prazo '{NOME_BASE_DEFINITIVA}' não foi localizado no servidor.")
+                    st.error(f"Erro: O arquivo '{NOME_BASE_DEFINITIVA}' não foi encontrado.")
                 else:
                     processador = ProcessadorTipoB(lista_numeros, NOME_BASE_DEFINITIVA)
                     resultado_dict = processador.executar_sinal_real()
@@ -56,19 +53,15 @@ with aba_tipo_b:
                         st.error(resultado_dict["erro"])
                     else:
                         st.session_state.ultimo_resultado = resultado_dict
-                        st.session_state.sinal_pendente = resultado_dict["sinal"]
-                        st.session_state.justificativa_pendente = resultado_dict["justificativa"]
-                        st.session_state.sequencia_em_uso = lista_numeros
-                        st.success("Cálculo de Previsibilidade Concluído!")
+                        st.success("Sinal gerado com sucesso!")
             except Exception as e:
-                st.error(f"Erro Crítico no processamento da sequência: {e}")
+                st.error(f"Erro Crítico: {e}")
 
-    # ====================== EXIBIÇÃO MELHORADA ======================
+    # Exibição do resultado
     if st.session_state.ultimo_resultado:
         resultado = st.session_state.ultimo_resultado
         st.write("---")
 
-        # Sinal Principal
         col1, col2 = st.columns([1, 2])
         with col1:
             if resultado["sinal"] == "NO CALL":
@@ -85,8 +78,8 @@ with aba_tipo_b:
         st.subheader("🧠 Resumo do Raciocínio")
         st.info(resultado.get("raciocinio_final", "Sem resumo disponível"))
 
-        # Rastreamento Detalhado (Expander)
-        with st.expander("🔍 Ver Rastreamento Completo por Camada (6 Camadas)", expanded=False):
+        # Rastreamento por camada
+        with st.expander("🔍 Ver Rastreamento Completo por Camada", expanded=False):
             for camada in resultado.get("raciocinio_trace", []):
                 impacto = camada.get("impacto", "")
                 if impacto in ["ALTO", "FORTE", "BLOQUEIO"]:
@@ -99,46 +92,12 @@ with aba_tipo_b:
                 st.write(f"- Impacto: **{impacto}**")
                 st.divider()
 
-        # Painel de Injeção de Dados Reais (mantido)
-        st.write("---")
-        st.subheader("🎛️ Painel de Injeção de Dados Reais")
-        
-        if resultado["sinal"] != "NO CALL":
-            tipo_resultado = st.radio("Selecione o resultado real da operação:", ["G0", "G1", "G2", "FALHA"], horizontal=True, key="tipo_resultado")
-            
-            numeros_reais = []
-            if tipo_resultado == "G0":
-                n1 = st.number_input("Número que saiu na 1ª rodada (G0):", min_value=0, max_value=14, step=1, key="n1")
-                numeros_reais = [n1]
-            elif tipo_resultado == "G1":
-                n1 = st.number_input("Número que saiu na 1ª rodada (Erro):", min_value=0, max_value=14, step=1, key="n1")
-                n2 = st.number_input("Número que saiu na 2ª rodada (G1):", min_value=0, max_value=14, step=1, key="n2")
-                numeros_reais = [n1, n2]
-            elif tipo_resultado == "G2":
-                n1 = st.number_input("Número que saiu na 1ª rodada (Erro):", min_value=0, max_value=14, step=1, key="n1")
-                n2 = st.number_input("Número que saiu na 2ª rodada (Erro):", min_value=0, max_value=14, step=1, key="n2")
-                n3 = st.number_input("Número que saiu na 3ª rodada (G2):", min_value=0, max_value=14, step=1, key="n3")
-                numeros_reais = [n1, n2, n3]
-            elif tipo_resultado == "FALHA":
-                n1 = st.number_input("Número que saiu na 1ª rodada (Erro):", min_value=0, max_value=14, step=1, key="n1")
-                n2 = st.number_input("Número que saiu na 2ª rodada (Erro):", min_value=0, max_value=14, step=1, key="n2")
-                n3 = st.number_input("Número que saiu na 3ª rodada (Erro):", min_value=0, max_value=14, step=1, key="n3")
-                numeros_reais = [n1, n2, n3]
-            
-            if st.button("💾 Gravar Números Reais e Evoluir IA"):
-                GerenciadorMemoriaViva.injetar_rodadas_reais(st.session_state.sequencia_em_uso, numeros_reais, NOME_RECENCIA_ATIVA)
-                st.success("Sucesso! Dados injetados com 100% de exatidão na IA.")
-                st.session_state.ultimo_resultado = None
-                st.session_state.sinal_pendente = None
-        else:
-            st.info("Painel de injeção suspenso para NO CALL.")
-
 # =========================================================================
-# ABA TIPO D (mantida igual)
+# ABA TIPO D
 # =========================================================================
 with aba_tipo_d:
     st.header("📊 Auditoria Cronológica Tipo D")
-    st.info("Faça o upload do seu Excel recente para auditar a saúde e recência do mercado.")
+    st.info("Faça o upload do seu Excel para auditar a saúde do mercado.")
     arquivo_upload = st.file_uploader("Arraste o seu arquivo .xlsx aqui", type=["xlsx"])
     
     if arquivo_upload is not None:
