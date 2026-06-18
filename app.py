@@ -3,15 +3,15 @@ import os
 from main import (
     LeitorXLS, 
     MotorV1Completo, 
-    ProcessadorTipoB, 
-    EngineMatematicoAvancado,
+    ProcessadorTipoB,
     treinar_base_longo_prazo_com_janelas,
-    integrar_recencia_no_modelo
+    integrar_recencia_no_modelo,
+    adicionar_a_base_longo_prazo
 )
 
 st.set_page_config(page_title="MOTOR V1 - Painel Operacional", page_icon="🛡️", layout="wide")
 st.title("🛡️ Sistema de Auditoria Analítica - MOTOR V1")
-st.caption("Versão com Integração de Recência (Longo Prazo + Comportamento Atual)")
+st.caption("Versão com Acumulação de Base de Longo Prazo (Append)")
 
 aba_tipo_b, aba_tipo_d = st.tabs([
     "🎯 TIPO B — Sequência Operacional (Sinal Real)", 
@@ -91,21 +91,43 @@ with aba_tipo_b:
                 st.divider()
 
 # =========================================================================
-# ABA TIPO D
+# ABA TIPO D - COM CONTAGEM DE REGISTROS NA BASE
 # =========================================================================
 with aba_tipo_d:
     st.header("📊 Auditoria Cronológica Tipo D")
-    st.info("Faça o upload do seu Excel para auditar a saúde do mercado.")
+    st.info("Faça o upload do seu Excel para auditar ou atualizar a base de longo prazo.")
     arquivo_upload = st.file_uploader("Arraste o seu arquivo .xlsx aqui", type=["xlsx"])
     
     if arquivo_upload is not None:
         caminho_temp = "temp_recencia.xlsx"
-        col_btn1, col_btn2 = st.columns(2)
-        with col_btn1: rodar_auditoria = st.button("🔍 Iniciar Auditoria de Recência")
-        with col_btn2: salvar_como_base = st.button("💾 Definir como Nova Base de Longo Prazo")
 
         # ============================================================
-        # BOTÃO: INICIAR AUDITORIA DE RECÊNCIA (AGORA INTEGRA NO MODELO)
+        # MOSTRA QUANTOS REGISTROS JÁ EXISTEM NA BASE DE LONGO PRAZO
+        # ============================================================
+        registros_atuais = 0
+        if os.path.exists(NOME_BASE_DEFINITIVA):
+            try:
+                dados_existentes = LeitorXLS(NOME_BASE_DEFINITIVA).ler_e_validar()
+                if dados_existentes:
+                    registros_atuais = len(dados_existentes)
+            except:
+                registros_atuais = 0
+
+        if registros_atuais > 0:
+            st.info(f"📁 **Base de Longo Prazo atual tem {registros_atuais} registros.**")
+        else:
+            st.warning("📁 Ainda não existe uma Base de Longo Prazo salva.")
+
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            rodar_auditoria = st.button("🔍 Iniciar Auditoria de Recência")
+        with col2:
+            salvar_como_base = st.button("💾 Substituir Base de Longo Prazo")
+        with col3:
+            adicionar_base = st.button("➕ Adicionar à Base de Longo Prazo")
+
+        # ============================================================
+        # 1. INICIAR AUDITORIA DE RECÊNCIA
         # ============================================================
         if rodar_auditoria:
             with open(caminho_temp, "wb") as f: f.write(arquivo_upload.getbuffer())
@@ -116,14 +138,11 @@ with aba_tipo_d:
             dados = leitor.ler_e_validar()
             
             if dados:
-                # === INTEGRA A RECÊNCIA NO MODELO DE LONGO PRAZO ===
                 integrar_recencia_no_modelo(dados, multiplicador=5)
-                
-                # Depois roda a auditoria para mostrar o relatório
                 motor = MotorV1Completo(dados)
                 output_d = motor.processar_auditoria()
                 
-                st.success("✅ Auditoria de Recência realizada e integrada ao modelo com sucesso!")
+                st.success("✅ Auditoria de Recência realizada e integrada ao modelo!")
                 
                 memoria_d = output_d.split("[RESULTADO FINAL TIPO D]")[0]
                 resultado_d = "[RESULTADO FINAL TIPO D]" + output_d.split("[RESULTADO FINAL TIPO D]")[1]
@@ -139,7 +158,7 @@ with aba_tipo_d:
             if os.path.exists(caminho_temp): os.remove(caminho_temp)
 
         # ============================================================
-        # BOTÃO: DEFINIR COMO NOVA BASE DE LONGO PRAZO
+        # 2. SUBSTITUIR BASE DE LONGO PRAZO
         # ============================================================
         if salvar_como_base:
             with open(caminho_temp, "wb") as f: f.write(arquivo_upload.getbuffer())
@@ -150,30 +169,33 @@ with aba_tipo_d:
                 dados = LeitorXLS(NOME_BASE_DEFINITIVA).ler_e_validar()
                 if dados:
                     relatorio = treinar_base_longo_prazo_com_janelas(dados)
-                    
                     if relatorio.get("sucesso"):
-                        st.success("✅ Base de Longo Prazo treinada com sucesso!")
-                        
-                        st.subheader("📊 Relatório de Treinamento da Base Longa")
-                        col1, col2, col3 = st.columns(3)
-                        with col1:
-                            st.metric("Registros Processados", relatorio["registros_processados"])
-                            st.metric("Janelas Analisadas", relatorio["janelas_analisadas"])
-                        with col2:
-                            st.metric("G0", relatorio["G0"])
-                            st.metric("G1", relatorio["G1"])
-                            st.metric("G2", relatorio["G2"])
-                        with col3:
-                            st.metric("Falhas", relatorio["FALHA"])
-                            st.metric("NO CALL", relatorio["NO CALL"])
-                            st.metric("Regras Boas", relatorio["regras_com_boa_performance"])
-
-                        st.info(f"Assertividade G0 + G1: **{relatorio['assertividade_g0_g1_percent']}%**")
-                        st.caption(relatorio["mensagem"])
+                        st.success("✅ Base de Longo Prazo substituída e treinada com sucesso!")
+                        st.info(f"Registros processados: {relatorio.get('registros_processados', 0)}")
                     else:
                         st.warning(relatorio.get("mensagem"))
                 else:
                     st.error("Não foi possível ler os dados do arquivo.")
             except Exception as e:
                 st.error(f"Erro ao salvar e treinar base: {e}")
+            if os.path.exists(caminho_temp): os.remove(caminho_temp)
+
+        # ============================================================
+        # 3. ADICIONAR À BASE DE LONGO PRAZO (APPEND)
+        # ============================================================
+        if adicionar_base:
+            with open(caminho_temp, "wb") as f: f.write(arquivo_upload.getbuffer())
+            try:
+                dados_novos = LeitorXLS(caminho_temp).ler_e_validar()
+                if dados_novos:
+                    relatorio = adicionar_a_base_longo_prazo(dados_novos)
+                    if relatorio.get("sucesso"):
+                        st.success("✅ Dados adicionados à base de longo prazo com sucesso!")
+                        st.info(f"Total de registros na base agora: {relatorio.get('registros_processados', 0)}")
+                    else:
+                        st.warning(relatorio.get("mensagem"))
+                else:
+                    st.error("Não foi possível ler os dados do arquivo.")
+            except Exception as e:
+                st.error(f"Erro ao adicionar dados à base: {e}")
             if os.path.exists(caminho_temp): os.remove(caminho_temp)
