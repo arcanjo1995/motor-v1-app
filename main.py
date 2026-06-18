@@ -18,7 +18,7 @@ def salvar_log_json(dados, nome_arquivo="logs/sinais_tipo_b.jsonl"):
 
 
 # ============================================================
-# Funções de Persistência e Integração
+# Funções de Persistência e Integração (PROTEGIDAS)
 # ============================================================
 def salvar_modelo_longo_prazo(ia, caminho="modelo_longo_prazo.pkl"):
     try:
@@ -53,6 +53,7 @@ def adicionar_a_base_longo_prazo(novos_dados):
 
     base_existente = []
 
+    # Tenta ler a base existente de forma segura
     if os.path.exists(NOME_BASE_DEFINITIVA):
         try:
             base_existente = LeitorXLS(NOME_BASE_DEFINITIVA).ler_e_validar() or []
@@ -61,18 +62,29 @@ def adicionar_a_base_longo_prazo(novos_dados):
             print(f"[ERRO] Falha ao ler a base existente: {e}")
             return {
                 "sucesso": False,
-                "mensagem": "Não foi possível ler a base antiga com segurança. Nada foi alterado."
+                "mensagem": "Não foi possível ler a base antiga. O arquivo foi preservado."
             }
 
     dados_combinados = base_existente + novos_dados
-    print(f"[INFO] Base anterior: {len(base_existente)} | Novos: {len(novos_dados)} | Total final: {len(dados_combinados)}")
+    print(f"[INFO] Base anterior: {len(base_existente)} | Novos: {len(novos_dados)} | Total: {len(dados_combinados)}")
 
+    # Cria backup antes de salvar (proteção extra)
+    if os.path.exists(NOME_BASE_DEFINITIVA):
+        try:
+            backup_name = NOME_BASE_DEFINITIVA.replace(".xlsx", f"_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx")
+            os.rename(NOME_BASE_DEFINITIVA, backup_name)
+            print(f"[INFO] Backup criado: {backup_name}")
+        except Exception as e:
+            print(f"[AVISO] Não foi possível criar backup: {e}")
+
+    # Salva a nova base
     try:
         df = pd.DataFrame([{"numero": d["numero"], "cor": d["cor"]} for d in dados_combinados])
         df.to_excel(NOME_BASE_DEFINITIVA, index=False)
         print(f"[SUCESSO] Base salva com {len(dados_combinados)} registros")
     except Exception as e:
         print(f"[ERRO] Falha ao salvar o arquivo: {e}")
+        # Tenta restaurar o backup se existir
         return {"sucesso": False, "mensagem": f"Erro ao salvar o arquivo: {e}"}
 
     return treinar_base_longo_prazo_com_janelas(dados_combinados)
@@ -652,7 +664,7 @@ class AnalisadorContextoAvancado:
 
 
 # ============================================================
-# LeitorXLS + SequenciaOperacional
+# LeitorXLS + SequenciaOperacional (MELHORADO)
 # ============================================================
 class LeitorXLS:
     def __init__(self, caminho_arquivo):
@@ -664,26 +676,48 @@ class LeitorXLS:
         try:
             df = pd.read_excel(self.caminho)
             df.columns = [str(col).strip().lower() for col in df.columns]
-            col_num = next((c for c in df.columns if c in ['número', 'numero', 'num']), None)
+            
+            # Tenta encontrar a coluna de número de várias formas
+            col_num = None
+            for possible in ['número', 'numero', 'num', 'number', 'result']:
+                if possible in df.columns:
+                    col_num = possible
+                    break
+            
+            if col_num is None:
+                # Tenta pegar a primeira coluna numérica
+                for col in df.columns:
+                    if df[col].dtype in ['int64', 'float64']:
+                        col_num = col
+                        break
+            
             if col_num is None:
                 return None
+
             df = df.rename(columns={col_num: 'numero'})
             df = df.iloc[::-1].reset_index(drop=True)
+            
             if len(df) < 5:
                 return None
+
             dados = []
             for _, row in df.iterrows():
                 try:
-                    num = int(row['numero'])
-                    if num == 0: cor = 'B'
-                    elif 1 <= num <= 7: cor = 'V'
-                    elif 8 <= num <= 14: cor = 'P'
-                    else: continue
+                    num = int(float(row['numero']))
+                    if num == 0:
+                        cor = 'B'
+                    elif 1 <= num <= 7:
+                        cor = 'V'
+                    elif 8 <= num <= 14:
+                        cor = 'P'
+                    else:
+                        continue
                     dados.append({"numero": num, "cor": cor})
                 except:
                     continue
             return dados if len(dados) >= 5 else None
-        except:
+        except Exception as e:
+            print(f"[LeitorXLS] Erro: {e}")
             return None
 
 
