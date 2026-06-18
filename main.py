@@ -47,35 +47,22 @@ def integrar_recencia_no_modelo(dados_recencia, multiplicador=5):
     salvar_modelo_longo_prazo(ia)
     return ia
 
-# ============================================================
-# FUNÇÃO ADICIONAR BASE - VERSÃO DEFENSIVA (PROTEGE CONTRA PERDA DE DADOS)
-# ============================================================
 def adicionar_a_base_longo_prazo(novos_dados):
-    """
-    Versão segura e defensiva.
-    Só atualiza o arquivo se conseguir ler a base antiga com sucesso.
-    Se der qualquer erro na leitura, NÃO sobrescreve nada.
-    """
     if not novos_dados:
         return {"sucesso": False, "mensagem": "Nenhum dado novo foi fornecido."}
 
     base_existente = []
 
-    # === PASSO CRÍTICO: Tentar ler a base existente de forma segura ===
     if os.path.exists(NOME_BASE_DEFINITIVA):
         try:
             base_existente = LeitorXLS(NOME_BASE_DEFINITIVA).ler_e_validar() or []
-            
-            # Proteção extra: se a base lida estiver muito pequena comparada ao esperado, aborta
             if len(base_existente) < 1000:
                 print(f"[AVISO] Base lida retornou poucos registros ({len(base_existente)}). Abortando para segurança.")
                 return {
                     "sucesso": False,
                     "mensagem": f"Leitura da base retornou apenas {len(base_existente)} registros. Operação cancelada para evitar perda de dados."
                 }
-            
             print(f"[INFO] Base existente lida com sucesso: {len(base_existente)} registros")
-
         except Exception as e:
             print(f"[ERRO] Falha ao ler a base existente: {e}")
             return {
@@ -83,11 +70,9 @@ def adicionar_a_base_longo_prazo(novos_dados):
                 "mensagem": "Não foi possível ler a base antiga com segurança. Nada foi alterado."
             }
 
-    # Combina os dados
     dados_combinados = base_existente + novos_dados
     print(f"[INFO] Base anterior: {len(base_existente)} | Novos: {len(novos_dados)} | Total final: {len(dados_combinados)}")
 
-    # Salva o arquivo combinado
     try:
         df = pd.DataFrame([{"numero": d["numero"], "cor": d["cor"]} for d in dados_combinados])
         df.to_excel(NOME_BASE_DEFINITIVA, index=False)
@@ -96,7 +81,6 @@ def adicionar_a_base_longo_prazo(novos_dados):
         print(f"[ERRO] Falha ao salvar o arquivo: {e}")
         return {"sucesso": False, "mensagem": f"Erro ao salvar o arquivo: {e}"}
 
-    # Treina o modelo com todos os dados
     return treinar_base_longo_prazo_com_janelas(dados_combinados)
 
 
@@ -292,7 +276,7 @@ class MotorAnalise:
 
 
 # ============================================================
-# IAPreditivaV1
+# IAPreditivaV1 (MOTOR CENTRAL ÚNICO)
 # ============================================================
 class IAPreditivaV1:
     def __init__(self, dados_longo_prazo, dados_recencia=None):
@@ -520,7 +504,7 @@ class IAPreditivaV1:
 
 
 # ============================================================
-# MotorNoCall - ATUALIZADO COM NOVAS POSIÇÕES (6 e 7)
+# MotorNoCall
 # ============================================================
 class MotorNoCall:
     @staticmethod
@@ -530,19 +514,16 @@ class MotorNoCall:
             if sub_num[idx1] == sub_num[idx2]:
                 return True, "Volume 2 Cap 6: Trava das Duplas Ativa"
 
-        # NÚMERO 6 - Atualizado com posições 6 e 7
         posicoes_criticas_6 = [3, 4, 5, 6, 7, 8, 9, 10, 11]
         for pos in posicoes_criticas_6:
             if sub_num[pos] == 6:
                 return True, "Volume 2 Cap 4: Trava Número 6 (Posição de No Call Ativa)"
 
-        # NÚMERO 2 (mantido)
         posicoes_criticas_2 = [8, 9, 10, 11]
         for pos in posicoes_criticas_2:
             if sub_num[pos] == 2:
                 return True, "Volume 2 Cap 3: Trava Número 2"
 
-        # BRANCO - Atualizado com posições 6 e 7
         posicoes_criticas_b = [3, 4, 5, 6, 7, 8, 9, 10, 11]
         for pos in posicoes_criticas_b:
             if sub_pol[pos] == "B":
@@ -712,24 +693,27 @@ class SequenciaOperacional:
 
 
 # ============================================================
-# MotorV1Completo
+# MotorV1Completo (agora pode receber IA existente)
 # ============================================================
 class MotorV1Completo:
-    def __init__(self, lista_dados_xls):
+    def __init__(self, lista_dados_xls, ia_existente=None):
         self.seq = SequenciaOperacional(lista_dados_xls)
         corte = max(0, len(lista_dados_xls) - 150)
         self.dados_longo = lista_dados_xls[:corte]
         self.dados_curto = lista_dados_xls[corte:]
-        
-        base_recencia = None
-        if os.path.exists("base_recencia_ativa.xlsx"):
-            try:
-                base_recencia = LeitorXLS("base_recencia_ativa.xlsx").ler_e_validar()
-            except:
-                pass
-        
-        dados_consolidados = self.dados_curto + (base_recencia or [])
-        self.ia = IAPreditivaV1(self.dados_longo, dados_consolidados)
+
+        if ia_existente is not None:
+            self.ia = ia_existente
+        else:
+            base_recencia = None
+            if os.path.exists("base_recencia_ativa.xlsx"):
+                try:
+                    base_recencia = LeitorXLS("base_recencia_ativa.xlsx").ler_e_validar()
+                except:
+                    pass
+            dados_consolidados = self.dados_curto + (base_recencia or [])
+            self.ia = IAPreditivaV1(self.dados_longo, dados_consolidados)
+
         self.historico_regras = defaultdict(lambda: {"acertos": 1, "total": 1})
         self.stats = {"G0": 0, "G1": 0, "G2": 0, "FALHA": 0, "NO CALL": 0}
 
