@@ -57,7 +57,6 @@ with aba_tipo_b:
             except Exception as e:
                 st.error(f"Erro Crítico: {e}")
 
-    # Exibição do resultado
     if st.session_state.ultimo_resultado:
         resultado = st.session_state.ultimo_resultado
         st.write("---")
@@ -74,11 +73,9 @@ with aba_tipo_b:
         with col2:
             st.metric("Confiança da IA", f"{resultado['confianca_ia']}%")
 
-        # Resumo do Raciocínio
         st.subheader("🧠 Resumo do Raciocínio")
         st.info(resultado.get("raciocinio_final", "Sem resumo disponível"))
 
-        # Rastreamento por camada
         with st.expander("🔍 Ver Rastreamento Completo por Camada", expanded=False):
             for camada in resultado.get("raciocinio_trace", []):
                 impacto = camada.get("impacto", "")
