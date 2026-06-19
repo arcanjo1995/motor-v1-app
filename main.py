@@ -673,7 +673,7 @@ class MotorContagensProjetivas:
 
 
 # ============================================================
-# AnalisadorContextoAvancado (INALTERADO)
+# AnalisadorContextoAvancado (CORRIGIDO - Typo fix)
 # ============================================================
 class AnalisadorContextoAvancado:
     @staticmethod
@@ -689,9 +689,9 @@ class AnalisadorContextoAvancado:
     @staticmethod
     def detectar_modo_mercado(sub_pol):
         texto = "".join(sub_pol)
-        alternancias = sum(1 for i in range(len(texto)-1) if texto[i] != texto[i+1])
-        if alternancas >= 7: return "CHUVA"
-        elif alternancas <= 3: return "RECUPERACAO"
+        alternancias = sum(1 for i in range(len(texto)-1) if texto[i] != texto[i+1])   # ← CORRIGIDO
+        if alternancias >= 7: return "CHUVA"
+        elif alternancias <= 3: return "RECUPERACAO"
         return "NEUTRO"
 
 
