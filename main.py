@@ -589,7 +589,7 @@ class JuizHierarquicoModificado:
 
 
 # ============================================================
-# MotorContagensProjetivas (INALTERADO)
+# MotorContagensProjetivas (APRIMORADO COM ASSUNÇÃO E ESPELHO INVERSO)
 # ============================================================
 class MotorContagensProjetivas:
     @staticmethod
@@ -644,6 +644,30 @@ class MotorContagensProjetivas:
 
             if sub_num[11] == 10:
                 lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V12_RESIDUO_10", "origem": "Volume 12"})
+
+        # ============================================================
+        # NOVO: Detecção de Assunção de Contagens e Espelho Inverso
+        # ============================================================
+        # Assunção: quando o último número continua ou assume uma expectativa anterior
+        if sub_num[11] in [3, 4, 5] and sub_pol[10] == sub_pol[11]:
+            direcao_assuncao = "VERMELHO" if sub_pol[11] == "V" else "PRETO"
+            lista_bruta.append({
+                "direcao": direcao_assuncao,
+                "tipo_regra": "ASSUNCAO_CONTAGEM_FINAL",
+                "origem": "Assunção de contagem no fechamento"
+            })
+
+        # Espelho Inverso no final da janela (últimas 5-7 posições)
+        if len(sub_pol) >= 7:
+            final = "".join(sub_pol[-7:])
+            # Padrões de espelho inverso comuns
+            if "VPPVPV" in final or "PVVPVP" in final or "VPVPVV" in final or "PVPVPP" in final:
+                # Detecta tendência de inversão forte
+                lista_bruta.append({
+                    "direcao": "PRETO" if sub_pol[-1] == "V" else "VERMELHO",
+                    "tipo_regra": "ESPELHO_INVERSO_FINAL",
+                    "origem": "Padrão de espelho inverso no fechamento"
+                })
 
         return lista_bruta
 
@@ -889,7 +913,7 @@ class MotorV1Completo:
 
 
 # ============================================================
-# ProcessadorTipoB (CORRIGIDO - variável expectations → expectativas)
+# ProcessadorTipoB (CORRIGIDO)
 # ============================================================
 class ProcessadorTipoB:
     def __init__(self, sequencia_12_numeros, caminho_base_dados):
