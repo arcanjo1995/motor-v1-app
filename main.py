@@ -544,7 +544,7 @@ class MotorNoCall:
 
 
 # ============================================================
-# JuizHierarquicoModificado (INALTERADO)
+# JuizHierarquicoModificado (MELHORADO - considera conflito)
 # ============================================================
 class JuizHierarquicoModificado:
     @staticmethod
@@ -559,9 +559,19 @@ class JuizHierarquicoModificado:
 
         direcao_ia, confianca_ia, raciocinio_ia = previsao_ia
 
+        # Verifica se existe conflito forte (regras para as duas cores)
+        tem_vermelho = any(item["direcao"] == "VERMELHO" for item in expectations)
+        tem_preto = any(item["direcao"] == "PRETO" for item in expectations)
+        conflito_final = tem_vermelho and tem_preto
+
         if expectations:
             count_v = sum(1 for item in expectations if item["direcao"] == "VERMELHO")
             count_p = sum(1 for item in expectations if item["direcao"] == "PRETO")
+
+            # Se existe conflito forte no final + regras de assunção/espelho, fica mais cauteloso
+            if conflito_final and any("ASSUNCAO" in e.get("tipo_regra", "") or "ESPELHO" in e.get("tipo_regra", "") for e in expectations):
+                return "NO CALL", "Conflito forte no fechamento (Assunção + Espelho Inverso)", "CONFLITO_FINAL"
+
             if count_v > count_p:
                 return "VERMELHO", "Regra posicional forte ativa", "REGRA_POSICIONAL"
             elif count_p > count_v:
@@ -589,7 +599,7 @@ class JuizHierarquicoModificado:
 
 
 # ============================================================
-# MotorContagensProjetivas (APRIMORADO COM ASSUNÇÃO E ESPELHO INVERSO)
+# MotorContagensProjetivas (VERSÃO MÁXIMA DE ANÁLISE)
 # ============================================================
 class MotorContagensProjetivas:
     @staticmethod
@@ -597,6 +607,7 @@ class MotorContagensProjetivas:
         lista_bruta = []
         REGRAS_PROJECAO = {1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7}
 
+        # Contagens Projetivas tradicionais
         for i in range(12):
             num_atual = sub_num[i]
             if num_atual in REGRAS_PROJECAO:
@@ -613,6 +624,7 @@ class MotorContagensProjetivas:
                         "origem": f"Volume 3: Contagem {num_atual} (fechada)"
                     })
 
+        # Continuidade no fechamento
         par_fechamento = (sub_num[10], sub_num[11])
         continuidade_preta_validas = [(8,9), (9,10), (10,11), (11,12), (12,13), (13,14), (14,13), (13,12), (12,11), (11,10)]
         continuidade_vermelha_validas = [(1,2), (2,3), (3,4), (4,5), (5,6), (6,7), (7,6), (6,5), (5,4), (4,3)]
@@ -646,27 +658,45 @@ class MotorContagensProjetivas:
                 lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V12_RESIDUO_10", "origem": "Volume 12"})
 
         # ============================================================
-        # NOVO: Detecção de Assunção de Contagens e Espelho Inverso
+        # ANÁLISE AVANÇADA DE FECHAMENTO (MÁXIMA PROFUNDIDADE)
         # ============================================================
-        # Assunção: quando o último número continua ou assume uma expectativa anterior
+
+        # 1. Assunção de Contagem no Final
         if sub_num[11] in [3, 4, 5] and sub_pol[10] == sub_pol[11]:
-            direcao_assuncao = "VERMELHO" if sub_pol[11] == "V" else "PRETO"
+            direcao = "VERMELHO" if sub_pol[11] == "V" else "PRETO"
             lista_bruta.append({
-                "direcao": direcao_assuncao,
+                "direcao": direcao,
                 "tipo_regra": "ASSUNCAO_CONTAGEM_FINAL",
-                "origem": "Assunção de contagem no fechamento"
+                "origem": "Assunção de contagem no fechamento da janela"
             })
 
-        # Espelho Inverso no final da janela (últimas 5-7 posições)
-        if len(sub_pol) >= 7:
-            final = "".join(sub_pol[-7:])
-            # Padrões de espelho inverso comuns
-            if "VPPVPV" in final or "PVVPVP" in final or "VPVPVV" in final or "PVPVPP" in final:
-                # Detecta tendência de inversão forte
+        # 2. Detecção de Espelho Inverso (mais sensível)
+        if len(sub_pol) >= 6:
+            final = "".join(sub_pol[-6:])
+            padroes_inversao = ["VPVPV", "PVPVP", "VPPVP", "PVVPV", "VPVPP", "PVPPV"]
+
+            for padrao in padroes_inversao:
+                if padrao in final:
+                    direcao_inversao = "PRETO" if sub_pol[-1] == "V" else "VERMELHO"
+                    lista_bruta.append({
+                        "direcao": direcao_inversao,
+                        "tipo_regra": "ESPELHO_INVERSO_FINAL",
+                        "origem": f"Padrão de inversão detectado ({padrao})"
+                    })
+                    break
+
+        # 3. Conflito no Fechamento (últimas 4 posições)
+        if len(sub_pol) >= 4:
+            ultimas_cores = sub_pol[-4:]
+            tem_v = "V" in ultimas_cores
+            tem_p = "P" in ultimas_cores
+
+            if tem_v and tem_p:
+                # Existe alternância forte no final
                 lista_bruta.append({
-                    "direcao": "PRETO" if sub_pol[-1] == "V" else "VERMELHO",
-                    "tipo_regra": "ESPELHO_INVERSO_FINAL",
-                    "origem": "Padrão de espelho inverso no fechamento"
+                    "direcao": "NEUTRO",
+                    "tipo_regra": "CONFLITO_FINAL",
+                    "origem": "Conflito de cores no fechamento da janela"
                 })
 
         return lista_bruta
@@ -760,7 +790,7 @@ class SequenciaOperacional:
 
 
 # ============================================================
-# MotorV1Completo (COM PROTEÇÃO CONTRA MODELOS ANTIGOS)
+# MotorV1Completo (INALTERADO)
 # ============================================================
 class MotorV1Completo:
     def __init__(self, lista_dados_xls, ia_existente=None):
@@ -913,7 +943,7 @@ class MotorV1Completo:
 
 
 # ============================================================
-# ProcessadorTipoB (CORRIGIDO)
+# ProcessadorTipoB (INALTERADO)
 # ============================================================
 class ProcessadorTipoB:
     def __init__(self, sequencia_12_numeros, caminho_base_dados):
