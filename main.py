@@ -56,31 +56,23 @@ def adicionar_a_base_longo_prazo(novos_dados):
     if os.path.exists(NOME_BASE_DEFINITIVA):
         try:
             base_existente = LeitorXLS(NOME_BASE_DEFINITIVA).ler_e_validar() or []
-            print(f"[INFO] Base existente lida com sucesso: {len(base_existente)} registros")
         except Exception as e:
             print(f"[ERRO] Falha ao ler a base existente: {e}")
-            return {
-                "sucesso": False,
-                "mensagem": "Não foi possível ler a base antiga. O arquivo foi preservado."
-            }
+            return {"sucesso": False, "mensagem": "Não foi possível ler a base antiga."}
 
     dados_combinados = base_existente + novos_dados
-    print(f"[INFO] Base anterior: {len(base_existente)} | Novos: {len(novos_dados)} | Total: {len(dados_combinados)}")
 
     if os.path.exists(NOME_BASE_DEFINITIVA):
         try:
             backup_name = NOME_BASE_DEFINITIVA.replace(".xlsx", f"_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx")
             os.rename(NOME_BASE_DEFINITIVA, backup_name)
-            print(f"[INFO] Backup criado: {backup_name}")
-        except Exception as e:
-            print(f"[AVISO] Não foi possível criar backup: {e}")
+        except:
+            pass
 
     try:
         df = pd.DataFrame([{"numero": d["numero"], "cor": d["cor"]} for d in dados_combinados])
         df.to_excel(NOME_BASE_DEFINITIVA, index=False)
-        print(f"[SUCESSO] Base salva com {len(dados_combinados)} registros")
     except Exception as e:
-        print(f"[ERRO] Falha ao salvar o arquivo: {e}")
         return {"sucesso": False, "mensagem": f"Erro ao salvar o arquivo: {e}"}
 
     return treinar_base_longo_prazo_com_janelas(dados_combinados)
@@ -94,7 +86,7 @@ def reforcar_aprendizado_tipo_d(ia):
 
 def treinar_base_longo_prazo_com_janelas(dados_completos):
     if not dados_completos or len(dados_completos) < 30:
-        return {"sucesso": False, "mensagem": "Base muito pequena para treinamento profundo (mínimo 30 registros)."}
+        return {"sucesso": False, "mensagem": "Base muito pequena para treinamento profundo."}
 
     motor = MotorV1Completo(dados_completos)
     motor.processar_auditoria()
@@ -136,12 +128,12 @@ def treinar_base_longo_prazo_com_janelas(dados_completos):
         "regras_com_boa_performance": regras_boas,
         "assertividade_g0_g1_percent": round(taxa_g0_g1, 2),
         "modelo_salvo_com_sucesso": sucesso_salvar,
-        "mensagem": "Treinamento profundo por janelas móveis concluído com sucesso."
+        "mensagem": "Treinamento profundo concluído com sucesso."
     }
 
 
 # ============================================================
-# MotorAnalise (Núcleo Compartilhado)
+# MotorAnalise (INALTERADO)
 # ============================================================
 class MotorAnalise:
     @staticmethod
@@ -278,7 +270,7 @@ class MotorAnalise:
 
 
 # ============================================================
-# IAPreditivaV1 - COM NUMEROLOGIA COMPORTAMENTAL COMPLETA
+# IAPreditivaV1 (COM NUMEROLOGIA COMPORTAMENTAL)
 # ============================================================
 class IAPreditivaV1:
     def __init__(self, dados_longo_prazo, dados_recencia=None):
@@ -290,17 +282,13 @@ class IAPreditivaV1:
         self.unidade_analise = {}
         for n in range(15):
             self.unidade_analise[n] = {
-                "ocorrencias": 0,
-                "V": 0, "P": 0, "B": 0,
+                "ocorrencias": 0, "V": 0, "P": 0, "B": 0,
                 "freq_v": 0.0, "freq_p": 0.0, "freq_b": 0.0,
-                "estabilidade": "NEUTRO",
-                "saturacao": "NORMAL",
-                "enfraquecimento": "ESTÁVEL",
-                "comportamento_dominante": "NEUTRO",
+                "estabilidade": "NEUTRO", "saturacao": "NORMAL",
+                "enfraquecimento": "ESTÁVEL", "comportamento_dominante": "NEUTRO",
                 "pos_numero_V": 0, "pos_numero_P": 0, "pos_numero_B": 0,
                 "pos_numero_freq_v": 0.0, "pos_numero_freq_p": 0.0, "pos_numero_freq_b": 0.0,
-                "comportamento_pos_numero": "NEUTRO",
-                "retencao_media": 0,
+                "comportamento_pos_numero": "NEUTRO", "retencao_media": 0,
                 "ultimas_cores": []
             }
 
@@ -336,12 +324,10 @@ class IAPreditivaV1:
                 self.unidade_analise[num][cor_post] += multiplicador_peso
                 self.unidade_analise[num][f"pos_numero_{cor_post}"] += multiplicador_peso
 
-                # Atualiza histórico recente para cálculo de estabilidade
                 self.unidade_analise[num]["ultimas_cores"].append(cor_post)
                 if len(self.unidade_analise[num]["ultimas_cores"]) > 10:
                     self.unidade_analise[num]["ultimas_cores"].pop(0)
 
-        # Recalcula métricas comportamentais para todos os números
         for n in range(15):
             total = self.unidade_analise[n]["ocorrencias"]
             if total > 0:
@@ -349,10 +335,7 @@ class IAPreditivaV1:
                 self.unidade_analise[n]["freq_p"] = round((self.unidade_analise[n]["P"] / total) * 100, 2)
                 self.unidade_analise[n]["freq_b"] = round((self.unidade_analise[n]["B"] / total) * 100, 2)
 
-                # === NOVO: Comportamento Dominante ===
                 self.unidade_analise[n]["comportamento_dominante"] = self._calcular_comportamento_dominante(n)
-
-                # === NOVO: Estabilidade e Enfraquecimento ===
                 self.unidade_analise[n]["estabilidade"] = self._calcular_estabilidade(n)
                 self.unidade_analise[n]["enfraquecimento"] = self._calcular_enfraquecimento(n)
                 self.unidade_analise[n]["saturacao"] = self._calcular_saturacao(n)
@@ -360,40 +343,76 @@ class IAPreditivaV1:
     def _calcular_comportamento_dominante(self, num):
         freq_v = self.unidade_analise[num]["freq_v"]
         freq_p = self.unidade_analise[num]["freq_p"]
-        if freq_v > freq_p + 8:
-            return "VERMELHO"
-        elif freq_p > freq_v + 8:
-            return "PRETO"
+        if freq_v > freq_p + 8: return "VERMELHO"
+        elif freq_p > freq_v + 8: return "PRETO"
         return "NEUTRO"
 
     def _calcular_estabilidade(self, num):
         ultimas = self.unidade_analise[num]["ultimas_cores"]
-        if len(ultimas) < 5:
-            return "NEUTRO"
+        if len(ultimas) < 5: return "NEUTRO"
         dominante = self.unidade_analise[num]["comportamento_dominante"]
-        if dominante == "NEUTRO":
-            return "NEUTRO"
-        count_dominante = sum(1 for c in ultimas if c == ('V' if dominante == "VERMELHO" else 'P'))
-        taxa = count_dominante / len(ultimas)
-        if taxa >= 0.7:
-            return "ESTÁVEL"
-        elif taxa <= 0.4:
-            return "INSTÁVEL"
+        if dominante == "NEUTRO": return "NEUTRO"
+        count = sum(1 for c in ultimas if c == ('V' if dominante == "VERMELHO" else 'P'))
+        taxa = count / len(ultimas)
+        if taxa >= 0.7: return "ESTÁVEL"
+        elif taxa <= 0.4: return "INSTÁVEL"
         return "NEUTRO"
 
     def _calcular_enfraquecimento(self, num):
-        estabilidade = self.unidade_analise[num]["estabilidade"]
-        if estabilidade == "INSTÁVEL":
-            return "ENFRAQUECIDO"
-        return "ESTÁVEL"
+        return "ENFRAQUECIDO" if self.unidade_analise[num]["estabilidade"] == "INSTÁVEL" else "ESTÁVEL"
 
     def _calcular_saturacao(self, num):
         total = self.unidade_analise[num]["ocorrencias"]
-        if total > 800:
-            return "ALTA"
-        elif total > 400:
-            return "MÉDIA"
+        if total > 800: return "ALTA"
+        elif total > 400: return "MÉDIA"
         return "BAIXA"
+
+    def injetar_aprendizado_imediato(self, sub_dados, multiplicador_peso=4, analise_contexto=None):
+        self.dados_recencia.extend(sub_dados)
+        self._processar_bloco_dados(sub_dados, multiplicador_peso, True)
+
+        if analise_contexto:
+            for regra in analise_contexto.get("regras_posicionais", []):
+                self.historico_regras[regra.get("tipo_regra", "DESCONHECIDO")]["total"] += 1
+
+            ctrl = analise_contexto.get("controlador_retardador", {})
+            if ctrl.get("dominancia") == "CONTROLADOR":
+                for item in ctrl.get("controladores", []):
+                    self.controladores_fortes[item] += 1
+
+            if analise_contexto.get("geometria") in ["CICLO_FECHADO_VPPV", "CICLO_FECHADO_PVVP"]:
+                self.padroes_fortes.append({
+                    "tipo": "GEOMETRIA_FORTE",
+                    "padrao": analise_contexto["geometria"],
+                    "peso": multiplicador_peso
+                })
+
+    def registrar_padrao_vencedor(self, analise_contexto, resultado):
+        if resultado not in ["G0", "G1"]: return
+        padrao = {
+            "geometria": analise_contexto.get("geometria"),
+            "regras_ativas": [r.get("tipo_regra") for r in analise_contexto.get("regras_posicionais", [])],
+            "controlador_dominante": analise_contexto.get("controlador_retardador", {}).get("dominancia"),
+            "modo_mercado": analise_contexto.get("contexto_avancado", {}).get("modo_mercado"),
+            "resultado": resultado,
+            "peso": 1
+        }
+        if padrao not in self.memoria_padroes_vencedores:
+            self.memoria_padroes_vencedores.append(padrao)
+        if len(self.memoria_padroes_vencedores) > 50:
+            self.memoria_padroes_vencedores.pop(0)
+
+    def calcular_bonus_memoria(self, analise_contexto):
+        bonus = 0
+        for padrao in self.memoria_padroes_vencedores:
+            match = 0
+            if padrao.get("geometria") == analise_contexto.get("geometria"):
+                match += 8
+            comuns = set(padrao.get("regras_ativas", [])) & set([r.get("tipo_regra") for r in analise_contexto.get("regras_posicionais", [])])
+            match += len(comuns) * 3
+            if match >= 12:
+                bonus += 4
+        return min(bonus, 22)
 
     def predizer_proxima_casa(self, sub_num, sub_pol, analise_contexto=None):
         if len(sub_num) < 12:
@@ -405,32 +424,22 @@ class IAPreditivaV1:
         trans = self.modelo_transicao.get(ultimas_cores, [])
         por_num = self.modelo_numerico.get(ultimo_num, [])
 
-        texto = "".join(sub_pol)
-        geom = []
-        if "PVPV" in texto: geom.extend(self.modelo_transicao.get(("XADREZ", "PVPV"), []))
-        if "VPVP" in texto: geom.extend(self.modelo_transicao.get(("XADREZ", "VPVP"), []))
-
         stats = self.unidade_analise.get(ultimo_num, {"freq_v": 0, "freq_p": 0})
 
         v_bonus = stats.get("freq_v", 0) * 3.5
         p_bonus = stats.get("freq_p", 0) * 3.5
 
-        # === NOVO: Bônus/Penalidade por Numerologia Comportamental ===
         comportamento = stats.get("comportamento_dominante", "NEUTRO")
         estabilidade = stats.get("estabilidade", "NEUTRO")
         enfraquecimento = stats.get("enfraquecimento", "ESTÁVEL")
         saturacao = stats.get("saturacao", "BAIXA")
 
-        if comportamento == "VERMELHO":
-            v_bonus += 12
-        elif comportamento == "PRETO":
-            p_bonus += 12
+        if comportamento == "VERMELHO": v_bonus += 12
+        elif comportamento == "PRETO": p_bonus += 12
 
         if estabilidade == "ESTÁVEL":
-            if comportamento == "VERMELHO":
-                v_bonus += 10
-            elif comportamento == "PRETO":
-                p_bonus += 10
+            if comportamento == "VERMELHO": v_bonus += 10
+            elif comportamento == "PRETO": p_bonus += 10
         elif estabilidade == "INSTÁVEL":
             v_bonus -= 8
             p_bonus -= 8
@@ -445,13 +454,9 @@ class IAPreditivaV1:
 
         pos_v = stats.get("pos_numero_V", 0)
         pos_p = stats.get("pos_numero_P", 0)
-        pos_total = pos_v + pos_p
-
-        if pos_total >= 5:
-            if pos_v > pos_p * 1.25:
-                v_bonus += 14
-            elif pos_p > pos_v * 1.25:
-                p_bonus += 14
+        if pos_v + pos_p >= 5:
+            if pos_v > pos_p * 1.25: v_bonus += 14
+            elif pos_p > pos_v * 1.25: p_bonus += 14
 
         if analise_contexto:
             prob_streak_v = self.calcular_probabilidade_streak_empirica('V', 5)
@@ -459,45 +464,54 @@ class IAPreditivaV1:
             prob_xadrez_5 = self.calcular_probabilidade_xadrez_empirica(5)
 
             if prob_streak_v > 2.0 or prob_streak_p > 2.0:
-                if sub_pol[-1] == 'V':
-                    p_bonus += 18
-                else:
-                    v_bonus += 18
+                if sub_pol[-1] == 'V': p_bonus += 18
+                else: v_bonus += 18
 
-            if prob_xadrez_5 < 3.0:
-                if analise_contexto.get("contexto_reversao", {}).get("xadrez_quebrou"):
-                    if sub_pol[-1] == 'V':
-                        v_bonus += 22
-                    else:
-                        p_bonus += 22
+            if prob_xadrez_5 < 3.0 and analise_contexto.get("contexto_reversao", {}).get("xadrez_quebrou"):
+                if sub_pol[-1] == 'V': v_bonus += 22
+                else: p_bonus += 22
 
         has_rec = len(self.dados_recencia) > 0
-        p_trans = 0.22 if has_rec else 0.17
-        p_num = 0.18 if has_rec else 0.16
-        p_geom = 0.25
+        p_trans, p_num, p_geom = (0.22 if has_rec else 0.17), (0.18 if has_rec else 0.16), 0.25
 
-        total_v = (trans.count('V') * p_trans) + (por_num.count('V') * p_num) + (geom.count('V') * p_geom) + v_bonus
-        total_p = (trans.count('P') * p_trans) + (por_num.count('P') * p_num) + (geom.count('P') * p_geom) + p_bonus
+        total_v = (trans.count('V') * p_trans) + (por_num.count('V') * p_num) + (0 * p_geom) + v_bonus
+        total_p = (trans.count('P') * p_trans) + (por_num.count('P') * p_num) + (0 * p_geom) + p_bonus
 
         if analise_contexto:
             bonus_memoria = self.calcular_bonus_memoria(analise_contexto)
-            if total_v > total_p:
-                total_v += bonus_memoria
-            else:
-                total_p += bonus_memoria
+            if total_v > total_p: total_v += bonus_memoria
+            else: total_p += bonus_memoria
 
         if total_v + total_p == 0:
-            return "NEUTRO", 0.0, "Sem dados suficientes para previsão"
+            return "NEUTRO", 0.0, "Sem dados suficientes"
 
         prob_v = (total_v / (total_v + total_p)) * 100
         prob_p = (total_p / (total_v + total_p)) * 100
 
         BARREIRA = 52.5
         if prob_v >= BARREIRA and prob_v > prob_p + 4:
-            return "VERMELHO", round(prob_v, 1), f"Confluência estatística forte para Vermelho ({prob_v:.1f}%)"
+            return "VERMELHO", round(prob_v, 1), f"Confluência forte para Vermelho ({prob_v:.1f}%)"
         elif prob_p >= BARREIRA and prob_p > prob_v + 4:
-            return "PRETO", round(prob_p, 1), f"Confluência estatística forte para Preto ({prob_p:.1f}%)"
-        return "NEUTRO", round(max(prob_v, prob_p), 1), "Sem confluência estatística clara"
+            return "PRETO", round(prob_p, 1), f"Confluência forte para Preto ({prob_p:.1f}%)"
+        return "NEUTRO", round(max(prob_v, prob_p), 1), "Sem confluência clara"
+
+    def calcular_probabilidade_streak_empirica(self, cor, k):
+        todos = (self.dados_longo or []) + (self.dados_recencia or [])
+        if len(todos) < k + 1: return 0.0
+        total = len(todos) - k
+        count = sum(1 for i in range(total) if all(d['cor'] == cor for d in todos[i:i+k]))
+        return round((count / total) * 100, 2) if total > 0 else 0.0
+
+    def calcular_probabilidade_xadrez_empirica(self, k):
+        todos = (self.dados_longo or []) + (self.dados_recencia or [])
+        if len(todos) < k + 1: return 0.0
+        total = len(todos) - k
+        count = 0
+        for i in range(total):
+            janela = [d['cor'] for d in todos[i:i+k]]
+            if all(janela[j] != janela[j-1] for j in range(1, len(janela))):
+                count += 1
+        return round((count / total) * 100, 2) if total > 0 else 0.0
 
 
 # ============================================================
@@ -514,7 +528,7 @@ class MotorNoCall:
         posicoes_criticas_6 = [3, 4, 5, 6, 7, 8, 9, 10, 11]
         for pos in posicoes_criticas_6:
             if sub_num[pos] == 6:
-                return True, "Volume 2 Cap 4: Trava Número 6 (Posição de No Call Ativa)"
+                return True, "Volume 2 Cap 4: Trava Número 6"
 
         posicoes_criticas_2 = [8, 9, 10, 11]
         for pos in posicoes_criticas_2:
@@ -524,7 +538,7 @@ class MotorNoCall:
         posicoes_criticas_b = [3, 4, 5, 6, 7, 8, 9, 10, 11]
         for pos in posicoes_criticas_b:
             if sub_pol[pos] == "B":
-                return True, "Volume 2 Cap 5: Trava do Branco (Posição Crítica)"
+                return True, "Volume 2 Cap 5: Trava do Branco"
 
         return False, "Evento Neutro Operacional"
 
@@ -722,7 +736,7 @@ class SequenciaOperacional:
 
 
 # ============================================================
-# MotorV1Completo (INALTERADO)
+# MotorV1Completo (COM PROTEÇÃO CONTRA MODELOS ANTIGOS)
 # ============================================================
 class MotorV1Completo:
     def __init__(self, lista_dados_xls, ia_existente=None):
@@ -732,7 +746,18 @@ class MotorV1Completo:
         self.dados_curto = lista_dados_xls[corte:]
 
         if ia_existente is not None:
-            self.ia = ia_existente
+            # Proteção: se o modelo carregado for antigo e não tiver o método, recria
+            if not hasattr(ia_existente, 'injetar_aprendizado_imediato'):
+                base_recencia = None
+                if os.path.exists("base_recencia_ativa.xlsx"):
+                    try:
+                        base_recencia = LeitorXLS("base_recencia_ativa.xlsx").ler_e_validar()
+                    except:
+                        pass
+                dados_consolidados = self.dados_curto + (base_recencia or [])
+                self.ia = IAPreditivaV1(self.dados_longo, dados_consolidados)
+            else:
+                self.ia = ia_existente
         else:
             base_recencia = None
             if os.path.exists("base_recencia_ativa.xlsx"):
