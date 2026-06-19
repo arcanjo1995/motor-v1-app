@@ -53,7 +53,6 @@ def adicionar_a_base_longo_prazo(novos_dados):
 
     base_existente = []
 
-    # Tenta ler a base existente de forma segura
     if os.path.exists(NOME_BASE_DEFINITIVA):
         try:
             base_existente = LeitorXLS(NOME_BASE_DEFINITIVA).ler_e_validar() or []
@@ -68,7 +67,6 @@ def adicionar_a_base_longo_prazo(novos_dados):
     dados_combinados = base_existente + novos_dados
     print(f"[INFO] Base anterior: {len(base_existente)} | Novos: {len(novos_dados)} | Total: {len(dados_combinados)}")
 
-    # Cria backup antes de salvar (proteção extra)
     if os.path.exists(NOME_BASE_DEFINITIVA):
         try:
             backup_name = NOME_BASE_DEFINITIVA.replace(".xlsx", f"_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx")
@@ -77,14 +75,12 @@ def adicionar_a_base_longo_prazo(novos_dados):
         except Exception as e:
             print(f"[AVISO] Não foi possível criar backup: {e}")
 
-    # Salva a nova base
     try:
         df = pd.DataFrame([{"numero": d["numero"], "cor": d["cor"]} for d in dados_combinados])
         df.to_excel(NOME_BASE_DEFINITIVA, index=False)
         print(f"[SUCESSO] Base salva com {len(dados_combinados)} registros")
     except Exception as e:
         print(f"[ERRO] Falha ao salvar o arquivo: {e}")
-        # Tenta restaurar o backup se existir
         return {"sucesso": False, "mensagem": f"Erro ao salvar o arquivo: {e}"}
 
     return treinar_base_longo_prazo_com_janelas(dados_combinados)
@@ -584,7 +580,7 @@ class JuizHierarquicoModificado:
 
 
 # ============================================================
-# MotorContagensProjetivas - ATUALIZADO COM REGRAS MAIS COMPLETAS
+# MotorContagensProjetivas - MELHORADO (Contagens + Regras existentes)
 # ============================================================
 class MotorContagensProjetivas:
     @staticmethod
@@ -592,19 +588,26 @@ class MotorContagensProjetivas:
         lista_bruta = []
         REGRAS_PROJECAO = {1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7}
 
+        # === CONTAGENS PROJETIVAS (1 a 7) - Versão melhorada ===
         for i in range(12):
             num_atual = sub_num[i]
             if num_atual in REGRAS_PROJECAO:
                 passo = REGRAS_PROJECAO[num_atual]
                 alvo_idx = i + passo
-                if alvo_idx == 11:
-                    if i < 10 and 0 in sub_num[i:11]: continue
+
+                # Agora aceita fechamento nas posições 10, 11 ou 12 (mais realista)
+                if alvo_idx >= 10 and alvo_idx < 12:
+                    # Verifica se não tem Branco interrompendo a contagem
+                    if any(sub_num[k] == 0 for k in range(i, min(alvo_idx + 1, 12))):
+                        continue
+
                     lista_bruta.append({
-                        "direcao": "VERMELHO", 
-                        "tipo_regra": f"V3_ATIVADOR_{num_atual}", 
-                        "origem": f"Volume 3: Ativador {num_atual}"
+                        "direcao": "VERMELHO",
+                        "tipo_regra": f"V3_ATIVADOR_{num_atual}",
+                        "origem": f"Volume 3: Contagem {num_atual} (fechada)"
                     })
 
+        # === CONTINUIDADE NUMÉRICA (já existia e foi mantida) ===
         par_fechamento = (sub_num[10], sub_num[11])
         continuidade_preta_validas = [(8,9), (9,10), (10,11), (11,12), (12,13), (13,14), (14,13), (13,12), (12,11), (11,10)]
         continuidade_vermelha_validas = [(1,2), (2,3), (3,4), (4,5), (5,6), (6,7), (7,6), (6,5), (5,4), (4,3)]
@@ -614,6 +617,7 @@ class MotorContagensProjetivas:
         elif par_fechamento in continuidade_vermelha_validas:
             lista_bruta.append({"direcao": "VERMELHO", "tipo_regra": "V2_CONTINUIDADE_VERMELHA", "origem": "Volume 2"})
 
+        # === REGRAS DO VOLUME 12 (mantidas exatamente como estavam) ===
         tem_branco_recente = any(p == "B" for p in sub_pol[7:11])
 
         if not tem_branco_recente:
@@ -664,7 +668,7 @@ class AnalisadorContextoAvancado:
 
 
 # ============================================================
-# LeitorXLS + SequenciaOperacional (MELHORADO)
+# LeitorXLS + SequenciaOperacional
 # ============================================================
 class LeitorXLS:
     def __init__(self, caminho_arquivo):
@@ -677,7 +681,6 @@ class LeitorXLS:
             df = pd.read_excel(self.caminho)
             df.columns = [str(col).strip().lower() for col in df.columns]
             
-            # Tenta encontrar a coluna de número de várias formas
             col_num = None
             for possible in ['número', 'numero', 'num', 'number', 'result']:
                 if possible in df.columns:
@@ -685,7 +688,6 @@ class LeitorXLS:
                     break
             
             if col_num is None:
-                # Tenta pegar a primeira coluna numérica
                 for col in df.columns:
                     if df[col].dtype in ['int64', 'float64']:
                         col_num = col
