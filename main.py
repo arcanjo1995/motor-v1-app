@@ -580,7 +580,7 @@ class JuizHierarquicoModificado:
 
 
 # ============================================================
-# MotorContagensProjetivas - MELHORADO (Contagens + Regras existentes)
+# MotorContagensProjetivas - CORRIGIDO (Posições 11 e 12)
 # ============================================================
 class MotorContagensProjetivas:
     @staticmethod
@@ -588,17 +588,17 @@ class MotorContagensProjetivas:
         lista_bruta = []
         REGRAS_PROJECAO = {1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7}
 
-        # === CONTAGENS PROJETIVAS (1 a 7) - Versão melhorada ===
+        # === CONTAGENS PROJETIVAS (1 a 7) - Ativa quando fecha na posição 11 ou 12 ===
         for i in range(12):
             num_atual = sub_num[i]
             if num_atual in REGRAS_PROJECAO:
                 passo = REGRAS_PROJECAO[num_atual]
                 alvo_idx = i + passo
 
-                # Agora aceita fechamento nas posições 10, 11 ou 12 (mais realista)
-                if alvo_idx >= 10 and alvo_idx < 12:
+                # Agora ativa quando a contagem fecha na posição 11 ou 12
+                if alvo_idx == 11 or alvo_idx == 12:
                     # Verifica se não tem Branco interrompendo a contagem
-                    if any(sub_num[k] == 0 for k in range(i, min(alvo_idx + 1, 12))):
+                    if any(sub_num[k] == 0 for k in range(i, 12)):
                         continue
 
                     lista_bruta.append({
@@ -607,7 +607,7 @@ class MotorContagensProjetivas:
                         "origem": f"Volume 3: Contagem {num_atual} (fechada)"
                     })
 
-        # === CONTINUIDADE NUMÉRICA (já existia e foi mantida) ===
+        # === CONTINUIDADE NUMÉRICA (mantida exatamente como estava) ===
         par_fechamento = (sub_num[10], sub_num[11])
         continuidade_preta_validas = [(8,9), (9,10), (10,11), (11,12), (12,13), (13,14), (14,13), (13,12), (12,11), (11,10)]
         continuidade_vermelha_validas = [(1,2), (2,3), (3,4), (4,5), (5,6), (6,7), (7,6), (6,5), (5,4), (4,3)]
