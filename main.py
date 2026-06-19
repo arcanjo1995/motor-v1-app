@@ -746,7 +746,6 @@ class MotorV1Completo:
         self.dados_curto = lista_dados_xls[corte:]
 
         if ia_existente is not None:
-            # Proteção: se o modelo carregado for antigo e não tiver o método, recria
             if not hasattr(ia_existente, 'injetar_aprendizado_imediato'):
                 base_recencia = None
                 if os.path.exists("base_recencia_ativa.xlsx"):
@@ -890,7 +889,7 @@ class MotorV1Completo:
 
 
 # ============================================================
-# ProcessadorTipoB (INALTERADO)
+# ProcessadorTipoB (CORRIGIDO - variável expectations → expectativas)
 # ============================================================
 class ProcessadorTipoB:
     def __init__(self, sequencia_12_numeros, caminho_base_dados):
@@ -937,7 +936,7 @@ class ProcessadorTipoB:
             motivo_real = "Sem regras posicionais ativas"
         else:
             count_v = sum(1 for item in expectativas if item["direcao"] == "VERMELHO")
-            count_p = sum(1 for item in expectations if item["direcao"] == "PRETO")
+            count_p = sum(1 for item in expectativas if item["direcao"] == "PRETO")
             motivo_real = f"Regras posicionais: V={count_v} | P={count_p}"
 
         sintese = [f"[{c['nome']}] {c['resultado']} → {c['detalhe']}" 
