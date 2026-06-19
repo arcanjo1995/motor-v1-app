@@ -64,7 +64,7 @@ with aba_tipo_b:
                 st.error(f"Erro ao processar: {e}")
 
 # =========================================================================
-# ABA TIPO D - MANTIDA COM RELATÓRIOS
+# ABA TIPO D - ATUALIZADA COM ANÁLISE DETALHADA POR NÚMERO
 # =========================================================================
 with aba_tipo_d:
     st.header("📊 Auditoria Cronológica Tipo D")
@@ -155,6 +155,11 @@ with aba_tipo_d:
 
                         st.info(f"Assertividade G0 + G1: **{relatorio['assertividade_g0_g1_percent']}%**")
                         st.caption(relatorio["mensagem"])
+
+                        # === NOVA SEÇÃO: Análise Detalhada por Número ===
+                        if "analise_comportamento_numeros" in relatorio:
+                            with st.expander("🔬 Análise Detalhada por Número (Comportamento Pós-Aparição)", expanded=False):
+                                st.json(relatorio["analise_comportamento_numeros"])
                     else:
                         st.warning(relatorio.get("mensagem"))
                 else:
@@ -190,6 +195,11 @@ with aba_tipo_d:
 
                         st.info(f"Assertividade G0 + G1: **{relatorio['assertividade_g0_g1_percent']}%**")
                         st.caption(relatorio["mensagem"])
+
+                        # === NOVA SEÇÃO: Análise Detalhada por Número ===
+                        if "analise_comportamento_numeros" in relatorio:
+                            with st.expander("🔬 Análise Detalhada por Número (Comportamento Pós-Aparição)", expanded=False):
+                                st.json(relatorio["analise_comportamento_numeros"])
                     else:
                         st.warning(relatorio.get("mensagem"))
                 else:
