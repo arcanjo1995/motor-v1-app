@@ -92,6 +92,9 @@ def treinar_base_longo_prazo_com_janelas(dados_completos):
     motor.processar_auditoria()
     reforcar_aprendizado_tipo_d(motor.ia)
 
+    # === ANÁLISE DETALHADA POR NÚMERO (NOVO) ===
+    analise_numeros = motor.ia.analisar_comportamento_pos_numero()
+
     seen = set()
     unique_patterns = []
     for p in motor.ia.memoria_padroes_vencedores:
@@ -128,6 +131,7 @@ def treinar_base_longo_prazo_com_janelas(dados_completos):
         "regras_com_boa_performance": regras_boas,
         "assertividade_g0_g1_percent": round(taxa_g0_g1, 2),
         "modelo_salvo_com_sucesso": sucesso_salvar,
+        "analise_comportamento_numeros": analise_numeros,   # ← NOVO
         "mensagem": "Treinamento profundo concluído com sucesso."
     }
 
@@ -513,6 +517,61 @@ class IAPreditivaV1:
                 count += 1
         return round((count / total) * 100, 2) if total > 0 else 0.0
 
+    # ============================================================
+    # NOVO MÉTODO: Análise detalhada do comportamento pós-número
+    # ============================================================
+    def analisar_comportamento_pos_numero(self):
+        """
+        Retorna análise detalhada por número:
+        - Cor mais frequente logo após a aparição
+        - Distribuição de cores pós-número
+        - Estabilidade e possível saturação / mudança de comportamento
+        """
+        relatorio = {}
+
+        for num in range(15):
+            dados = self.unidade_analise[num]
+            total = dados["ocorrencias"]
+
+            if total == 0:
+                continue
+
+            cores_pos = {
+                "VERMELHO": dados["pos_numero_V"],
+                "PRETO": dados["pos_numero_P"],
+                "BRANCO": dados["pos_numero_B"]
+            }
+
+            cor_dominante = max(cores_pos, key=cores_pos.get)
+            freq_dominante = round((cores_pos[cor_dominante] / total) * 100, 2)
+
+            ultimas = dados["ultimas_cores"]
+            if len(ultimas) >= 8:
+                ultimas_dominantes = sum(1 for c in ultimas if c == ('V' if cor_dominante == "VERMELHO" else 'P'))
+                taxa_ultimas = ultimas_dominantes / len(ultimas)
+
+                if taxa_ultimas < 0.5:
+                    tendencia = "EM MUDANÇA / SATURAÇÃO POSSÍVEL"
+                elif taxa_ultimas >= 0.75:
+                    tendencia = "ESTÁVEL"
+                else:
+                    tendencia = "MODERADO"
+            else:
+                tendencia = "DADOS INSUFICIENTES"
+
+            relatorio[num] = {
+                "total_aparicoes": total,
+                "cor_mais_frequente_apos": cor_dominante,
+                "frequencia_cor_dominante_%": freq_dominante,
+                "distribuicao_pos": cores_pos,
+                "comportamento_dominante": dados["comportamento_dominante"],
+                "estabilidade": dados["estabilidade"],
+                "saturacao": dados["saturacao"],
+                "tendencia_recente": tendencia
+            }
+
+        return relatorio
+
 
 # ============================================================
 # MotorNoCall (INALTERADO)
@@ -559,7 +618,6 @@ class JuizHierarquicoModificado:
 
         direcao_ia, confianca_ia, raciocinio_ia = previsao_ia
 
-        # Verifica se existe inversão forte no fechamento
         tem_inversao_final = any(
             "ESPELHO_INVERSO" in e.get("tipo_regra", "") or 
             "INVERSAO_FORTE" in e.get("tipo_regra", "")
@@ -570,7 +628,6 @@ class JuizHierarquicoModificado:
             count_v = sum(1 for item in expectations if item["direcao"] == "VERMELHO")
             count_p = sum(1 for item in expectations if item["direcao"] == "PRETO")
 
-            # PRIORIDADE: Inversão forte no final > contagem simples de regras
             if tem_inversao_final:
                 return "PRETO", "Inversão forte no fechamento (Espelho/Inversão)", "INVERSAO_FINAL"
 
@@ -607,7 +664,6 @@ class MotorContagensProjetivas:
         lista_bruta = []
         REGRAS_PROJECAO = {1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7}
 
-        # Contagens Projetivas tradicionais
         for i in range(12):
             num_atual = sub_num[i]
             if num_atual in REGRAS_PROJECAO:
@@ -622,7 +678,6 @@ class MotorContagensProjetivas:
                         "origem": f"Volume 3: Contagem {num_atual}"
                     })
 
-        # Continuidade no fechamento
         par_fechamento = (sub_num[10], sub_num[11])
         continuidade_preta_validas = [(8,9), (9,10), (10,11), (11,12), (12,13), (13,14), (14,13), (13,12), (12,11), (11,10)]
         continuidade_vermelha_validas = [(1,2), (2,3), (3,4), (4,5), (5,6), (6,7), (7,6), (6,5), (5,4), (4,3)]
@@ -632,11 +687,6 @@ class MotorContagensProjetivas:
         elif par_fechamento in continuidade_vermelha_validas:
             lista_bruta.append({"direcao": "VERMELHO", "tipo_regra": "V2_CONTINUIDADE_VERMELHA", "origem": "Volume 2"})
 
-        # ============================================================
-        # ANÁLISE AVANÇADA DE FECHAMENTO
-        # ============================================================
-
-        # Assunção de Contagem no Final
         if sub_num[11] in [3, 4, 5] and sub_pol[10] == sub_pol[11]:
             direcao = "VERMELHO" if sub_pol[11] == "V" else "PRETO"
             lista_bruta.append({
@@ -645,7 +695,6 @@ class MotorContagensProjetivas:
                 "origem": "Assunção de contagem no fechamento da janela"
             })
 
-        # Espelho Inverso (mais sensível)
         if len(sub_pol) >= 5:
             final = "".join(sub_pol[-5:])
             padroes_inversao = ["VPVPV", "PVPVP", "VPPVP", "PVVPV", "VPVPP", "PVPPV"]
@@ -660,7 +709,6 @@ class MotorContagensProjetivas:
                     })
                     break
 
-        # Inversão forte após repetição no final (novo)
         if len(sub_pol) >= 3:
             if sub_pol[-3] == sub_pol[-2] and sub_pol[-1] != sub_pol[-2]:
                 lista_bruta.append({
@@ -673,7 +721,7 @@ class MotorContagensProjetivas:
 
 
 # ============================================================
-# AnalisadorContextoAvancado (CORRIGIDO - Typo fix)
+# AnalisadorContextoAvancado (CORRIGIDO)
 # ============================================================
 class AnalisadorContextoAvancado:
     @staticmethod
@@ -689,7 +737,7 @@ class AnalisadorContextoAvancado:
     @staticmethod
     def detectar_modo_mercado(sub_pol):
         texto = "".join(sub_pol)
-        alternancias = sum(1 for i in range(len(texto)-1) if texto[i] != texto[i+1])   # ← CORRIGIDO
+        alternancias = sum(1 for i in range(len(texto)-1) if texto[i] != texto[i+1])
         if alternancias >= 7: return "CHUVA"
         elif alternancias <= 3: return "RECUPERACAO"
         return "NEUTRO"
