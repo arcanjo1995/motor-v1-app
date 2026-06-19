@@ -18,7 +18,7 @@ def salvar_log_json(dados, nome_arquivo="logs/sinais_tipo_b.jsonl"):
 
 
 # ============================================================
-# Funções de Persistência e Integração (PROTEGIDAS)
+# Funções de Persistência e Integração
 # ============================================================
 def salvar_modelo_longo_prazo(ia, caminho="modelo_longo_prazo.pkl"):
     try:
@@ -44,6 +44,9 @@ def integrar_recencia_no_modelo(dados_recencia, multiplicador=5):
         ia = IAPreditivaV1([], dados_recencia)
     else:
         ia.injetar_aprendizado_imediato(dados_recencia, multiplicador_peso=multiplicador)
+    
+    # Análise de comportamento na RECÊNCIA
+    ia.analise_recencia = ia.analisar_comportamento_pos_numero_recencia(dados_recencia)
     salvar_modelo_longo_prazo(ia)
     return ia
 
@@ -52,12 +55,10 @@ def adicionar_a_base_longo_prazo(novos_dados):
         return {"sucesso": False, "mensagem": "Nenhum dado novo foi fornecido."}
 
     base_existente = []
-
     if os.path.exists(NOME_BASE_DEFINITIVA):
         try:
             base_existente = LeitorXLS(NOME_BASE_DEFINITIVA).ler_e_validar() or []
-        except Exception as e:
-            print(f"[ERRO] Falha ao ler a base existente: {e}")
+        except:
             return {"sucesso": False, "mensagem": "Não foi possível ler a base antiga."}
 
     dados_combinados = base_existente + novos_dados
@@ -92,7 +93,6 @@ def treinar_base_longo_prazo_com_janelas(dados_completos):
     motor.processar_auditoria()
     reforcar_aprendizado_tipo_d(motor.ia)
 
-    # === ANÁLISE DETALHADA POR NÚMERO (NOVO) ===
     analise_numeros = motor.ia.analisar_comportamento_pos_numero()
 
     seen = set()
@@ -131,13 +131,13 @@ def treinar_base_longo_prazo_com_janelas(dados_completos):
         "regras_com_boa_performance": regras_boas,
         "assertividade_g0_g1_percent": round(taxa_g0_g1, 2),
         "modelo_salvo_com_sucesso": sucesso_salvar,
-        "analise_comportamento_numeros": analise_numeros,   # ← NOVO
+        "analise_comportamento_numeros": analise_numeros,
         "mensagem": "Treinamento profundo concluído com sucesso."
     }
 
 
 # ============================================================
-# MotorAnalise (INALTERADO)
+# MotorAnalise
 # ============================================================
 class MotorAnalise:
     @staticmethod
@@ -274,7 +274,7 @@ class MotorAnalise:
 
 
 # ============================================================
-# IAPreditivaV1 (COM NUMEROLOGIA COMPORTAMENTAL)
+# IAPreditivaV1 (COM MÉTODO DE RECÊNCIA)
 # ============================================================
 class IAPreditivaV1:
     def __init__(self, dados_longo_prazo, dados_recencia=None):
@@ -300,6 +300,7 @@ class IAPreditivaV1:
         self.historico_regras = defaultdict(lambda: {"acertos": 0, "total": 0})
         self.controladores_fortes = defaultdict(int)
         self.padroes_fortes = []
+        self.analise_recencia = {}
 
         self._treinar_modelo_profundo()
 
@@ -327,7 +328,6 @@ class IAPreditivaV1:
                 self.unidade_analise[num]["ocorrencias"] += multiplicador_peso
                 self.unidade_analise[num][cor_post] += multiplicador_peso
                 self.unidade_analise[num][f"pos_numero_{cor_post}"] += multiplicador_peso
-
                 self.unidade_analise[num]["ultimas_cores"].append(cor_post)
                 if len(self.unidade_analise[num]["ultimas_cores"]) > 10:
                     self.unidade_analise[num]["ultimas_cores"].pop(0)
@@ -338,7 +338,6 @@ class IAPreditivaV1:
                 self.unidade_analise[n]["freq_v"] = round((self.unidade_analise[n]["V"] / total) * 100, 2)
                 self.unidade_analise[n]["freq_p"] = round((self.unidade_analise[n]["P"] / total) * 100, 2)
                 self.unidade_analise[n]["freq_b"] = round((self.unidade_analise[n]["B"] / total) * 100, 2)
-
                 self.unidade_analise[n]["comportamento_dominante"] = self._calcular_comportamento_dominante(n)
                 self.unidade_analise[n]["estabilidade"] = self._calcular_estabilidade(n)
                 self.unidade_analise[n]["enfraquecimento"] = self._calcular_enfraquecimento(n)
@@ -378,12 +377,10 @@ class IAPreditivaV1:
         if analise_contexto:
             for regra in analise_contexto.get("regras_posicionais", []):
                 self.historico_regras[regra.get("tipo_regra", "DESCONHECIDO")]["total"] += 1
-
             ctrl = analise_contexto.get("controlador_retardador", {})
             if ctrl.get("dominancia") == "CONTROLADOR":
                 for item in ctrl.get("controladores", []):
                     self.controladores_fortes[item] += 1
-
             if analise_contexto.get("geometria") in ["CICLO_FECHADO_VPPV", "CICLO_FECHADO_PVVP"]:
                 self.padroes_fortes.append({
                     "tipo": "GEOMETRIA_FORTE",
@@ -427,7 +424,6 @@ class IAPreditivaV1:
 
         trans = self.modelo_transicao.get(ultimas_cores, [])
         por_num = self.modelo_numerico.get(ultimo_num, [])
-
         stats = self.unidade_analise.get(ultimo_num, {"freq_v": 0, "freq_p": 0})
 
         v_bonus = stats.get("freq_v", 0) * 3.5
@@ -517,22 +513,48 @@ class IAPreditivaV1:
                 count += 1
         return round((count / total) * 100, 2) if total > 0 else 0.0
 
-    # ============================================================
-    # NOVO MÉTODO: Análise detalhada do comportamento pós-número
-    # ============================================================
-    def analisar_comportamento_pos_numero(self):
-        """
-        Retorna análise detalhada por número:
-        - Cor mais frequente logo após a aparição
-        - Distribuição de cores pós-número
-        - Estabilidade e possível saturação / mudança de comportamento
-        """
-        relatorio = {}
+    def analisar_comportamento_pos_numero_recencia(self, dados_recencia):
+        if not dados_recencia or len(dados_recencia) < 30:
+            return {"mensagem": "Base de recência muito pequena para análise confiável"}
 
+        relatorio = {}
+        contagem = {n: {"total": 0, "pos_V": 0, "pos_P": 0, "pos_B": 0} for n in range(15)}
+
+        for i in range(len(dados_recencia) - 1):
+            num = dados_recencia[i]['numero']
+            cor_proxima = dados_recencia[i + 1]['cor']
+            contagem[num]["total"] += 1
+            if cor_proxima == "V":
+                contagem[num]["pos_V"] += 1
+            elif cor_proxima == "P":
+                contagem[num]["pos_P"] += 1
+            else:
+                contagem[num]["pos_B"] += 1
+
+        for num in range(15):
+            dados = contagem[num]
+            if dados["total"] == 0:
+                continue
+
+            total = dados["total"]
+            cores = {"VERMELHO": dados["pos_V"], "PRETO": dados["pos_P"], "BRANCO": dados["pos_B"]}
+            cor_dominante = max(cores, key=cores.get)
+            freq = round((cores[cor_dominante] / total) * 100, 2)
+
+            relatorio[num] = {
+                "total_aparicoes_recencia": total,
+                "cor_mais_frequente_apos": cor_dominante,
+                "frequencia_cor_dominante_%": freq,
+                "tendencia_recente": "FORTE" if freq >= 65 else ("MODERADA" if freq >= 55 else "FRACA")
+            }
+
+        return relatorio
+
+    def analisar_comportamento_pos_numero(self):
+        relatorio = {}
         for num in range(15):
             dados = self.unidade_analise[num]
             total = dados["ocorrencias"]
-
             if total == 0:
                 continue
 
@@ -541,7 +563,6 @@ class IAPreditivaV1:
                 "PRETO": dados["pos_numero_P"],
                 "BRANCO": dados["pos_numero_B"]
             }
-
             cor_dominante = max(cores_pos, key=cores_pos.get)
             freq_dominante = round((cores_pos[cor_dominante] / total) * 100, 2)
 
@@ -549,7 +570,6 @@ class IAPreditivaV1:
             if len(ultimas) >= 8:
                 ultimas_dominantes = sum(1 for c in ultimas if c == ('V' if cor_dominante == "VERMELHO" else 'P'))
                 taxa_ultimas = ultimas_dominantes / len(ultimas)
-
                 if taxa_ultimas < 0.5:
                     tendencia = "EM MUDANÇA / SATURAÇÃO POSSÍVEL"
                 elif taxa_ultimas >= 0.75:
@@ -569,12 +589,11 @@ class IAPreditivaV1:
                 "saturacao": dados["saturacao"],
                 "tendencia_recente": tendencia
             }
-
         return relatorio
 
 
 # ============================================================
-# MotorNoCall (INALTERADO)
+# MotorNoCall
 # ============================================================
 class MotorNoCall:
     @staticmethod
@@ -603,7 +622,7 @@ class MotorNoCall:
 
 
 # ============================================================
-# JuizHierarquicoModificado (AJUSTADO - Prioridade na Inversão Final)
+# JuizHierarquicoModificado
 # ============================================================
 class JuizHierarquicoModificado:
     @staticmethod
@@ -656,7 +675,7 @@ class JuizHierarquicoModificado:
 
 
 # ============================================================
-# MotorContagensProjetivas (AJUSTADO - Mais sensível à inversão final)
+# MotorContagensProjetivas
 # ============================================================
 class MotorContagensProjetivas:
     @staticmethod
@@ -698,7 +717,6 @@ class MotorContagensProjetivas:
         if len(sub_pol) >= 5:
             final = "".join(sub_pol[-5:])
             padroes_inversao = ["VPVPV", "PVPVP", "VPPVP", "PVVPV", "VPVPP", "PVPPV"]
-
             for padrao in padroes_inversao:
                 if padrao in final:
                     direcao_inversao = "PRETO" if sub_pol[-1] == "V" else "VERMELHO"
@@ -721,7 +739,7 @@ class MotorContagensProjetivas:
 
 
 # ============================================================
-# AnalisadorContextoAvancado (CORRIGIDO)
+# AnalisadorContextoAvancado
 # ============================================================
 class AnalisadorContextoAvancado:
     @staticmethod
@@ -744,7 +762,7 @@ class AnalisadorContextoAvancado:
 
 
 # ============================================================
-# LeitorXLS + SequenciaOperacional (INALTERADO)
+# LeitorXLS
 # ============================================================
 class LeitorXLS:
     def __init__(self, caminho_arquivo):
@@ -808,7 +826,7 @@ class SequenciaOperacional:
 
 
 # ============================================================
-# MotorV1Completo (INALTERADO)
+# MotorV1Completo
 # ============================================================
 class MotorV1Completo:
     def __init__(self, lista_dados_xls, ia_existente=None):
@@ -818,17 +836,7 @@ class MotorV1Completo:
         self.dados_curto = lista_dados_xls[corte:]
 
         if ia_existente is not None:
-            if not hasattr(ia_existente, 'injetar_aprendizado_imediato'):
-                base_recencia = None
-                if os.path.exists("base_recencia_ativa.xlsx"):
-                    try:
-                        base_recencia = LeitorXLS("base_recencia_ativa.xlsx").ler_e_validar()
-                    except:
-                        pass
-                dados_consolidados = self.dados_curto + (base_recencia or [])
-                self.ia = IAPreditivaV1(self.dados_longo, dados_consolidados)
-            else:
-                self.ia = ia_existente
+            self.ia = ia_existente
         else:
             base_recencia = None
             if os.path.exists("base_recencia_ativa.xlsx"):
@@ -961,7 +969,7 @@ class MotorV1Completo:
 
 
 # ============================================================
-# ProcessadorTipoB (INALTERADO)
+# ProcessadorTipoB
 # ============================================================
 class ProcessadorTipoB:
     def __init__(self, sequencia_12_numeros, caminho_base_dados):
@@ -1059,7 +1067,7 @@ class ProcessadorTipoB:
 
 
 # ============================================================
-# EngineMatematicoAvancado (INALTERADO)
+# EngineMatematicoAvancado
 # ============================================================
 class EngineMatematicoAvancado:
     @staticmethod
