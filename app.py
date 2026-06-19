@@ -22,7 +22,7 @@ NOME_BASE_DEFINITIVA = "resultados_blaze.xlsx"
 NOME_RECENCIA_ATIVA = "base_recencia_ativa.xlsx"
 
 # =========================================================================
-# ABA TIPO B - COMPLETA
+# ABA TIPO B
 # =========================================================================
 with aba_tipo_b:
     st.header("🎯 Processamento Operacional Tipo B")
@@ -33,9 +33,6 @@ with aba_tipo_b:
         placeholder="Exemplo: 2,11,14,4,9,12,12,7,3,9,5,12"
     )
     
-    if "ultimo_resultado" not in st.session_state:
-        st.session_state.ultimo_resultado = None
-
     if st.button("🚀 Executar Releituras e Gerar Sinal"):
         if not entrada_numeros:
             st.error("Erro: Campo de entrada vazio.")
@@ -67,7 +64,7 @@ with aba_tipo_b:
                 st.error(f"Erro ao processar: {e}")
 
 # =========================================================================
-# ABA TIPO D - COMPLETA
+# ABA TIPO D
 # =========================================================================
 with aba_tipo_d:
     st.header("📊 Auditoria Cronológica Tipo D")
@@ -99,9 +96,7 @@ with aba_tipo_d:
         with col3:
             adicionar_base = st.button("➕ Adicionar à Base de Longo Prazo")
 
-        # ============================================================
         # 1. INICIAR AUDITORIA DE RECÊNCIA
-        # ============================================================
         if rodar_auditoria:
             with open(caminho_temp, "wb") as f: f.write(arquivo_upload.getbuffer())
             if os.path.exists(NOME_RECENCIA_ATIVA): os.remove(NOME_RECENCIA_ATIVA)
@@ -115,9 +110,8 @@ with aba_tipo_d:
                 motor = MotorV1Completo(dados)
                 output_d = motor.processar_auditoria()
                 
-                st.success("✅ Auditoria de Recência realizada e integrada ao modelo!")
+                st.success("✅ Auditoria de Recência realizada e integrada!")
 
-                # === Análise de Comportamento da RECÊNCIA ===
                 if hasattr(ia, 'analise_recencia') and ia.analise_recencia:
                     with st.expander("🔬 Análise de Comportamento na RECÊNCIA (pós-número)", expanded=False):
                         st.json(ia.analise_recencia)
@@ -135,9 +129,7 @@ with aba_tipo_d:
             
             if os.path.exists(caminho_temp): os.remove(caminho_temp)
 
-        # ============================================================
         # 2. SUBSTITUIR BASE DE LONGO PRAZO
-        # ============================================================
         if salvar_como_base:
             with open(caminho_temp, "wb") as f: f.write(arquivo_upload.getbuffer())
             try:
@@ -179,9 +171,7 @@ with aba_tipo_d:
                 st.error(f"Erro ao salvar e treinar base: {e}")
             if os.path.exists(caminho_temp): os.remove(caminho_temp)
 
-        # ============================================================
         # 3. ADICIONAR À BASE DE LONGO PRAZO
-        # ============================================================
         if adicionar_base:
             with open(caminho_temp, "wb") as f: f.write(arquivo_upload.getbuffer())
             try:
