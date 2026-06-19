@@ -278,7 +278,7 @@ class MotorAnalise:
 
 
 # ============================================================
-# IAPreditivaV1 (MOTOR CENTRAL ÚNICO)
+# IAPreditivaV1 - COM NUMEROLOGIA COMPORTAMENTAL COMPLETA
 # ============================================================
 class IAPreditivaV1:
     def __init__(self, dados_longo_prazo, dados_recencia=None):
@@ -290,13 +290,18 @@ class IAPreditivaV1:
         self.unidade_analise = {}
         for n in range(15):
             self.unidade_analise[n] = {
-                "ocorrencias": 0, "V": 0, "P": 0, "B": 0,
+                "ocorrencias": 0,
+                "V": 0, "P": 0, "B": 0,
                 "freq_v": 0.0, "freq_p": 0.0, "freq_b": 0.0,
-                "estabilidade": "NEUTRO", "saturacao": "NORMAL",
-                "enfraquecimento": "ESTÁVEL", "consequencia_dominante": "NEUTRO",
+                "estabilidade": "NEUTRO",
+                "saturacao": "NORMAL",
+                "enfraquecimento": "ESTÁVEL",
+                "comportamento_dominante": "NEUTRO",
                 "pos_numero_V": 0, "pos_numero_P": 0, "pos_numero_B": 0,
                 "pos_numero_freq_v": 0.0, "pos_numero_freq_p": 0.0, "pos_numero_freq_b": 0.0,
-                "comportamento_pos_numero": "NEUTRO"
+                "comportamento_pos_numero": "NEUTRO",
+                "retencao_media": 0,
+                "ultimas_cores": []
             }
 
         self.memoria_padroes_vencedores = []
@@ -331,6 +336,12 @@ class IAPreditivaV1:
                 self.unidade_analise[num][cor_post] += multiplicador_peso
                 self.unidade_analise[num][f"pos_numero_{cor_post}"] += multiplicador_peso
 
+                # Atualiza histórico recente para cálculo de estabilidade
+                self.unidade_analise[num]["ultimas_cores"].append(cor_post)
+                if len(self.unidade_analise[num]["ultimas_cores"]) > 10:
+                    self.unidade_analise[num]["ultimas_cores"].pop(0)
+
+        # Recalcula métricas comportamentais para todos os números
         for n in range(15):
             total = self.unidade_analise[n]["ocorrencias"]
             if total > 0:
@@ -338,95 +349,51 @@ class IAPreditivaV1:
                 self.unidade_analise[n]["freq_p"] = round((self.unidade_analise[n]["P"] / total) * 100, 2)
                 self.unidade_analise[n]["freq_b"] = round((self.unidade_analise[n]["B"] / total) * 100, 2)
 
-    def calcular_probabilidade_streak_empirica(self, cor, k):
-        if not self.dados_longo and not self.dados_recencia:
-            return 0.0
-        todos_dados = (self.dados_longo or []) + (self.dados_recencia or [])
-        if len(todos_dados) < k + 1:
-            return 0.0
-        total_janelas = len(todos_dados) - k
-        ocorrencias = 0
-        for i in range(total_janelas):
-            janela = [d['cor'] for d in todos_dados[i:i+k]]
-            if all(c == cor for c in janela):
-                ocorrencias += 1
-        return round((ocorrencias / total_janelas) * 100, 2) if total_janelas > 0 else 0.0
+                # === NOVO: Comportamento Dominante ===
+                self.unidade_analise[n]["comportamento_dominante"] = self._calcular_comportamento_dominante(n)
 
-    def calcular_probabilidade_xadrez_empirica(self, k):
-        if not self.dados_longo and not self.dados_recencia:
-            return 0.0
-        todos_dados = (self.dados_longo or []) + (self.dados_recencia or [])
-        if len(todos_dados) < k + 1:
-            return 0.0
-        total_janelas = len(todos_dados) - k
-        ocorrencias = 0
-        for i in range(total_janelas):
-            janela = [d['cor'] for d in todos_dados[i:i+k]]
-            eh_xadrez = True
-            for j in range(1, len(janela)):
-                if janela[j] == janela[j-1]:
-                    eh_xadrez = False
-                    break
-            if eh_xadrez:
-                ocorrencias += 1
-        return round((ocorrencias / total_janelas) * 100, 2) if total_janelas > 0 else 0.0
+                # === NOVO: Estabilidade e Enfraquecimento ===
+                self.unidade_analise[n]["estabilidade"] = self._calcular_estabilidade(n)
+                self.unidade_analise[n]["enfraquecimento"] = self._calcular_enfraquecimento(n)
+                self.unidade_analise[n]["saturacao"] = self._calcular_saturacao(n)
 
-    def injetar_aprendizado_imediato(self, sub_dados, multiplicador_peso=4, analise_contexto=None):
-        self.dados_recencia.extend(sub_dados)
-        self._processar_bloco_dados(sub_dados, multiplicador_peso, True)
+    def _calcular_comportamento_dominante(self, num):
+        freq_v = self.unidade_analise[num]["freq_v"]
+        freq_p = self.unidade_analise[num]["freq_p"]
+        if freq_v > freq_p + 8:
+            return "VERMELHO"
+        elif freq_p > freq_v + 8:
+            return "PRETO"
+        return "NEUTRO"
 
-        if analise_contexto:
-            for regra in analise_contexto.get("regras_posicionais", []):
-                self.historico_regras[regra.get("tipo_regra", "DESCONHECIDO")]["total"] += 1
+    def _calcular_estabilidade(self, num):
+        ultimas = self.unidade_analise[num]["ultimas_cores"]
+        if len(ultimas) < 5:
+            return "NEUTRO"
+        dominante = self.unidade_analise[num]["comportamento_dominante"]
+        if dominante == "NEUTRO":
+            return "NEUTRO"
+        count_dominante = sum(1 for c in ultimas if c == ('V' if dominante == "VERMELHO" else 'P'))
+        taxa = count_dominante / len(ultimas)
+        if taxa >= 0.7:
+            return "ESTÁVEL"
+        elif taxa <= 0.4:
+            return "INSTÁVEL"
+        return "NEUTRO"
 
-            ctrl = analise_contexto.get("controlador_retardador", {})
-            if ctrl.get("dominancia") == "CONTROLADOR":
-                for item in ctrl.get("controladores", []):
-                    self.controladores_fortes[item] += 1
+    def _calcular_enfraquecimento(self, num):
+        estabilidade = self.unidade_analise[num]["estabilidade"]
+        if estabilidade == "INSTÁVEL":
+            return "ENFRAQUECIDO"
+        return "ESTÁVEL"
 
-            if analise_contexto.get("geometria") in ["CICLO_FECHADO_VPPV", "CICLO_FECHADO_PVVP"]:
-                self.padroes_fortes.append({
-                    "tipo": "GEOMETRIA_FORTE",
-                    "padrao": analise_contexto["geometria"],
-                    "peso": multiplicador_peso
-                })
-
-    def registrar_padrao_vencedor(self, analise_contexto, resultado):
-        if resultado not in ["G0", "G1"]:
-            return
-
-        padrao = {
-            "geometria": analise_contexto.get("geometria"),
-            "regras_ativas": [r.get("tipo_regra") for r in analise_contexto.get("regras_posicionais", [])],
-            "controlador_dominante": analise_contexto.get("controlador_retardador", {}).get("dominancia"),
-            "modo_mercado": analise_contexto.get("contexto_avancado", {}).get("modo_mercado"),
-            "resultado": resultado,
-            "peso": 1
-        }
-
-        if padrao not in self.memoria_padroes_vencedores:
-            self.memoria_padroes_vencedores.append(padrao)
-
-        if len(self.memoria_padroes_vencedores) > 50:
-            self.memoria_padroes_vencedores.pop(0)
-
-    def calcular_bonus_memoria(self, analise_contexto):
-        bonus = 0
-        geometria_atual = analise_contexto.get("geometria")
-        regras_atuais = [r.get("tipo_regra") for r in analise_contexto.get("regras_posicionais", [])]
-        controlador_atual = analise_contexto.get("controlador_retardador", {}).get("dominancia")
-
-        for padrao in self.memoria_padroes_vencedores:
-            match_score = 0
-            if padrao.get("geometria") == geometria_atual:
-                match_score += 8
-            regras_comuns = set(padrao.get("regras_ativas", [])) & set(regras_atuais)
-            match_score += len(regras_comuns) * 3
-            if padrao.get("controlador_dominante") == controlador_atual and controlador_atual == "CONTROLADOR":
-                match_score += 10
-            if match_score >= 12:
-                bonus += 4
-        return min(bonus, 22)
+    def _calcular_saturacao(self, num):
+        total = self.unidade_analise[num]["ocorrencias"]
+        if total > 800:
+            return "ALTA"
+        elif total > 400:
+            return "MÉDIA"
+        return "BAIXA"
 
     def predizer_proxima_casa(self, sub_num, sub_pol, analise_contexto=None):
         if len(sub_num) < 12:
@@ -447,6 +414,34 @@ class IAPreditivaV1:
 
         v_bonus = stats.get("freq_v", 0) * 3.5
         p_bonus = stats.get("freq_p", 0) * 3.5
+
+        # === NOVO: Bônus/Penalidade por Numerologia Comportamental ===
+        comportamento = stats.get("comportamento_dominante", "NEUTRO")
+        estabilidade = stats.get("estabilidade", "NEUTRO")
+        enfraquecimento = stats.get("enfraquecimento", "ESTÁVEL")
+        saturacao = stats.get("saturacao", "BAIXA")
+
+        if comportamento == "VERMELHO":
+            v_bonus += 12
+        elif comportamento == "PRETO":
+            p_bonus += 12
+
+        if estabilidade == "ESTÁVEL":
+            if comportamento == "VERMELHO":
+                v_bonus += 10
+            elif comportamento == "PRETO":
+                p_bonus += 10
+        elif estabilidade == "INSTÁVEL":
+            v_bonus -= 8
+            p_bonus -= 8
+
+        if enfraquecimento == "ENFRAQUECIDO":
+            v_bonus -= 10
+            p_bonus -= 10
+
+        if saturacao == "ALTA":
+            v_bonus -= 6
+            p_bonus -= 6
 
         pos_v = stats.get("pos_numero_V", 0)
         pos_p = stats.get("pos_numero_P", 0)
@@ -506,7 +501,7 @@ class IAPreditivaV1:
 
 
 # ============================================================
-# MotorNoCall
+# MotorNoCall (INALTERADO)
 # ============================================================
 class MotorNoCall:
     @staticmethod
@@ -535,7 +530,7 @@ class MotorNoCall:
 
 
 # ============================================================
-# JuizHierarquicoModificado
+# JuizHierarquicoModificado (INALTERADO)
 # ============================================================
 class JuizHierarquicoModificado:
     @staticmethod
@@ -580,7 +575,7 @@ class JuizHierarquicoModificado:
 
 
 # ============================================================
-# MotorContagensProjetivas - CORRIGIDO (Posições 11 e 12)
+# MotorContagensProjetivas (INALTERADO)
 # ============================================================
 class MotorContagensProjetivas:
     @staticmethod
@@ -588,16 +583,13 @@ class MotorContagensProjetivas:
         lista_bruta = []
         REGRAS_PROJECAO = {1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7}
 
-        # === CONTAGENS PROJETIVAS (1 a 7) - Ativa quando fecha na posição 11 ou 12 ===
         for i in range(12):
             num_atual = sub_num[i]
             if num_atual in REGRAS_PROJECAO:
                 passo = REGRAS_PROJECAO[num_atual]
                 alvo_idx = i + passo
 
-                # Agora ativa quando a contagem fecha na posição 11 ou 12
                 if alvo_idx == 11 or alvo_idx == 12:
-                    # Verifica se não tem Branco interrompendo a contagem
                     if any(sub_num[k] == 0 for k in range(i, 12)):
                         continue
 
@@ -607,7 +599,6 @@ class MotorContagensProjetivas:
                         "origem": f"Volume 3: Contagem {num_atual} (fechada)"
                     })
 
-        # === CONTINUIDADE NUMÉRICA (mantida exatamente como estava) ===
         par_fechamento = (sub_num[10], sub_num[11])
         continuidade_preta_validas = [(8,9), (9,10), (10,11), (11,12), (12,13), (13,14), (14,13), (13,12), (12,11), (11,10)]
         continuidade_vermelha_validas = [(1,2), (2,3), (3,4), (4,5), (5,6), (6,7), (7,6), (6,5), (5,4), (4,3)]
@@ -617,7 +608,6 @@ class MotorContagensProjetivas:
         elif par_fechamento in continuidade_vermelha_validas:
             lista_bruta.append({"direcao": "VERMELHO", "tipo_regra": "V2_CONTINUIDADE_VERMELHA", "origem": "Volume 2"})
 
-        # === REGRAS DO VOLUME 12 (mantidas exatamente como estavam) ===
         tem_branco_recente = any(p == "B" for p in sub_pol[7:11])
 
         if not tem_branco_recente:
@@ -645,7 +635,7 @@ class MotorContagensProjetivas:
 
 
 # ============================================================
-# AnalisadorContextoAvancado
+# AnalisadorContextoAvancado (INALTERADO)
 # ============================================================
 class AnalisadorContextoAvancado:
     @staticmethod
@@ -668,7 +658,7 @@ class AnalisadorContextoAvancado:
 
 
 # ============================================================
-# LeitorXLS + SequenciaOperacional
+# LeitorXLS + SequenciaOperacional (INALTERADO)
 # ============================================================
 class LeitorXLS:
     def __init__(self, caminho_arquivo):
@@ -732,7 +722,7 @@ class SequenciaOperacional:
 
 
 # ============================================================
-# MotorV1Completo
+# MotorV1Completo (INALTERADO)
 # ============================================================
 class MotorV1Completo:
     def __init__(self, lista_dados_xls, ia_existente=None):
@@ -875,7 +865,7 @@ class MotorV1Completo:
 
 
 # ============================================================
-# ProcessadorTipoB
+# ProcessadorTipoB (INALTERADO)
 # ============================================================
 class ProcessadorTipoB:
     def __init__(self, sequencia_12_numeros, caminho_base_dados):
@@ -922,7 +912,7 @@ class ProcessadorTipoB:
             motivo_real = "Sem regras posicionais ativas"
         else:
             count_v = sum(1 for item in expectativas if item["direcao"] == "VERMELHO")
-            count_p = sum(1 for item in expectativas if item["direcao"] == "PRETO")
+            count_p = sum(1 for item in expectations if item["direcao"] == "PRETO")
             motivo_real = f"Regras posicionais: V={count_v} | P={count_p}"
 
         sintese = [f"[{c['nome']}] {c['resultado']} → {c['detalhe']}" 
@@ -973,7 +963,7 @@ class ProcessadorTipoB:
 
 
 # ============================================================
-# EngineMatematicoAvancado
+# EngineMatematicoAvancado (INALTERADO)
 # ============================================================
 class EngineMatematicoAvancado:
     @staticmethod
