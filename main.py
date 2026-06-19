@@ -544,7 +544,7 @@ class MotorNoCall:
 
 
 # ============================================================
-# JuizHierarquicoModificado (MELHORADO - considera conflito)
+# JuizHierarquicoModificado (AJUSTADO - Prioridade na Inversão Final)
 # ============================================================
 class JuizHierarquicoModificado:
     @staticmethod
@@ -559,18 +559,20 @@ class JuizHierarquicoModificado:
 
         direcao_ia, confianca_ia, raciocinio_ia = previsao_ia
 
-        # Verifica se existe conflito forte (regras para as duas cores)
-        tem_vermelho = any(item["direcao"] == "VERMELHO" for item in expectations)
-        tem_preto = any(item["direcao"] == "PRETO" for item in expectations)
-        conflito_final = tem_vermelho and tem_preto
+        # Verifica se existe inversão forte no fechamento
+        tem_inversao_final = any(
+            "ESPELHO_INVERSO" in e.get("tipo_regra", "") or 
+            "INVERSAO_FORTE" in e.get("tipo_regra", "")
+            for e in expectations
+        )
 
         if expectations:
             count_v = sum(1 for item in expectations if item["direcao"] == "VERMELHO")
             count_p = sum(1 for item in expectations if item["direcao"] == "PRETO")
 
-            # Se existe conflito forte no final + regras de assunção/espelho, fica mais cauteloso
-            if conflito_final and any("ASSUNCAO" in e.get("tipo_regra", "") or "ESPELHO" in e.get("tipo_regra", "") for e in expectations):
-                return "NO CALL", "Conflito forte no fechamento (Assunção + Espelho Inverso)", "CONFLITO_FINAL"
+            # PRIORIDADE: Inversão forte no final > contagem simples de regras
+            if tem_inversao_final:
+                return "PRETO", "Inversão forte no fechamento (Espelho/Inversão)", "INVERSAO_FINAL"
 
             if count_v > count_p:
                 return "VERMELHO", "Regra posicional forte ativa", "REGRA_POSICIONAL"
@@ -585,21 +587,19 @@ class JuizHierarquicoModificado:
         if direcao_ia != "NEUTRO":
             return direcao_ia, f"IA Preditiva ({confianca_ia:.1f}%)", "IA_PREDITIVA"
 
-        if direcao_ia == "NEUTRO":
-            if expectations:
-                count_v = sum(1 for item in expectations if item["direcao"] == "VERMELHO")
-                count_p = sum(1 for item in expectations if item["direcao"] == "PRETO")
-                if count_v >= count_p:
-                    return "VERMELHO", "Fallback por regras", "FALLBACK_REGRA"
-                else:
-                    return "PRETO", "Fallback por regras", "FALLBACK_REGRA"
-            return "VERMELHO", "Fallback padrão do sistema", "FALLBACK_PADRAO"
+        if expectations:
+            count_v = sum(1 for item in expectations if item["direcao"] == "VERMELHO")
+            count_p = sum(1 for item in expectations if item["direcao"] == "PRETO")
+            if count_v >= count_p:
+                return "VERMELHO", "Fallback por regras", "FALLBACK_REGRA"
+            else:
+                return "PRETO", "Fallback por regras", "FALLBACK_REGRA"
 
-        return direcao_ia, f"IA (baixa confiança) {confianca_ia:.1f}%", "IA_FALLBACK"
+        return "VERMELHO", "Fallback padrão do sistema", "FALLBACK_PADRAO"
 
 
 # ============================================================
-# MotorContagensProjetivas (VERSÃO MÁXIMA DE ANÁLISE)
+# MotorContagensProjetivas (AJUSTADO - Mais sensível à inversão final)
 # ============================================================
 class MotorContagensProjetivas:
     @staticmethod
@@ -613,15 +613,13 @@ class MotorContagensProjetivas:
             if num_atual in REGRAS_PROJECAO:
                 passo = REGRAS_PROJECAO[num_atual]
                 alvo_idx = i + passo
-
                 if alvo_idx == 11 or alvo_idx == 12:
                     if any(sub_num[k] == 0 for k in range(i, 12)):
                         continue
-
                     lista_bruta.append({
                         "direcao": "VERMELHO",
                         "tipo_regra": f"V3_ATIVADOR_{num_atual}",
-                        "origem": f"Volume 3: Contagem {num_atual} (fechada)"
+                        "origem": f"Volume 3: Contagem {num_atual}"
                     })
 
         # Continuidade no fechamento
@@ -634,34 +632,11 @@ class MotorContagensProjetivas:
         elif par_fechamento in continuidade_vermelha_validas:
             lista_bruta.append({"direcao": "VERMELHO", "tipo_regra": "V2_CONTINUIDADE_VERMELHA", "origem": "Volume 2"})
 
-        tem_branco_recente = any(p == "B" for p in sub_pol[7:11])
-
-        if not tem_branco_recente:
-            if sub_num[5] == 2:
-                lista_bruta.append({"direcao": "VERMELHO", "tipo_regra": "V12_POSICIONAL_2", "origem": "Volume 12"})
-            if sub_num[5] == 3:
-                lista_bruta.append({"direcao": "VERMELHO", "tipo_regra": "V12_POSICIONAL_3", "origem": "Volume 12"})
-
-            if sub_num[11] == 4 and sub_pol[10] == "P":
-                lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V12_RETENCAO_4", "origem": "Volume 12"})
-
-            if sub_num[11] == 4 and sub_pol[9] == "P" and sub_pol[10] == "P":
-                lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V12_CONTINUIDADE_4", "origem": "Volume 12"})
-
-            if sub_num[10] == 5 and sub_num[11] == 10:
-                lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V12_ACOPLAMENTO_5_10", "origem": "Volume 12"})
-
-                if len(sub_pol) > 11 and sub_pol[11] == "P":
-                    lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V12_CONTINUACAO_5_10", "origem": "Volume 12"})
-
-            if sub_num[11] == 10:
-                lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V12_RESIDUO_10", "origem": "Volume 12"})
-
         # ============================================================
-        # ANÁLISE AVANÇADA DE FECHAMENTO (MÁXIMA PROFUNDIDADE)
+        # ANÁLISE AVANÇADA DE FECHAMENTO
         # ============================================================
 
-        # 1. Assunção de Contagem no Final
+        # Assunção de Contagem no Final
         if sub_num[11] in [3, 4, 5] and sub_pol[10] == sub_pol[11]:
             direcao = "VERMELHO" if sub_pol[11] == "V" else "PRETO"
             lista_bruta.append({
@@ -670,9 +645,9 @@ class MotorContagensProjetivas:
                 "origem": "Assunção de contagem no fechamento da janela"
             })
 
-        # 2. Detecção de Espelho Inverso (mais sensível)
-        if len(sub_pol) >= 6:
-            final = "".join(sub_pol[-6:])
+        # Espelho Inverso (mais sensível)
+        if len(sub_pol) >= 5:
+            final = "".join(sub_pol[-5:])
             padroes_inversao = ["VPVPV", "PVPVP", "VPPVP", "PVVPV", "VPVPP", "PVPPV"]
 
             for padrao in padroes_inversao:
@@ -685,18 +660,13 @@ class MotorContagensProjetivas:
                     })
                     break
 
-        # 3. Conflito no Fechamento (últimas 4 posições)
-        if len(sub_pol) >= 4:
-            ultimas_cores = sub_pol[-4:]
-            tem_v = "V" in ultimas_cores
-            tem_p = "P" in ultimas_cores
-
-            if tem_v and tem_p:
-                # Existe alternância forte no final
+        # Inversão forte após repetição no final (novo)
+        if len(sub_pol) >= 3:
+            if sub_pol[-3] == sub_pol[-2] and sub_pol[-1] != sub_pol[-2]:
                 lista_bruta.append({
                     "direcao": "NEUTRO",
-                    "tipo_regra": "CONFLITO_FINAL",
-                    "origem": "Conflito de cores no fechamento da janela"
+                    "tipo_regra": "INVERSAO_FORTE_FINAL",
+                    "origem": "Inversão clara na última posição após repetição"
                 })
 
         return lista_bruta
@@ -720,8 +690,8 @@ class AnalisadorContextoAvancado:
     def detectar_modo_mercado(sub_pol):
         texto = "".join(sub_pol)
         alternancias = sum(1 for i in range(len(texto)-1) if texto[i] != texto[i+1])
-        if alternancias >= 7: return "CHUVA"
-        elif alternancias <= 3: return "RECUPERACAO"
+        if alternancas >= 7: return "CHUVA"
+        elif alternancas <= 3: return "RECUPERACAO"
         return "NEUTRO"
 
 
