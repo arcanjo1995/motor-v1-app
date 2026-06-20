@@ -6,23 +6,28 @@ from main import (
     ProcessadorTipoB,
     treinar_base_longo_prazo_com_janelas,
     integrar_recencia_no_modelo,
-    adicionar_a_base_longo_prazo
+    adicionar_a_base_longo_prazo,
+    carregar_modelo_longo_prazo
 )
 
 st.set_page_config(page_title="MOTOR V1 - Painel Operacional", page_icon="🛡️", layout="wide")
 st.title("🛡️ Sistema de Auditoria Analítica - MOTOR V1")
-st.caption("Versão com Análise de Comportamento na Recência")
+st.caption("Versão com Análise de Padrões Avançados")
 
-aba_tipo_b, aba_tipo_d = st.tabs([
+# ============================================================
+# CRIAÇÃO DAS 3 ABAS
+# ============================================================
+aba_tipo_b, aba_tipo_d, aba_padroes = st.tabs([
     "🎯 TIPO B — Sequência Operacional (Sinal Real)", 
-    "📊 TIPO D — Auditoria Cronológica (.xlsx)"
+    "📊 TIPO D — Auditoria Cronológica (.xlsx)",
+    "📈 Análise de Padrões Avançados"
 ])
 
 NOME_BASE_DEFINITIVA = "resultados_blaze.xlsx"
 NOME_RECENCIA_ATIVA = "base_recencia_ativa.xlsx"
 
 # =========================================================================
-# ABA TIPO B
+# ABA TIPO B (inalterada)
 # =========================================================================
 with aba_tipo_b:
     st.header("🎯 Processamento Operacional Tipo B")
@@ -64,7 +69,7 @@ with aba_tipo_b:
                 st.error(f"Erro ao processar: {e}")
 
 # =========================================================================
-# ABA TIPO D
+# ABA TIPO D (inalterada)
 # =========================================================================
 with aba_tipo_d:
     st.header("📊 Auditoria Cronológica Tipo D")
@@ -209,3 +214,59 @@ with aba_tipo_d:
             except Exception as e:
                 st.error(f"Erro ao adicionar dados à base: {e}")
             if os.path.exists(caminho_temp): os.remove(caminho_temp)
+
+# =========================================================================
+# NOVA ABA: ANÁLISE DE PADRÕES AVANÇADOS
+# =========================================================================
+with aba_padroes:
+    st.header("📈 Análise de Padrões Avançados")
+    st.info("Aqui você pode visualizar os padrões aprendidos pelo motor (Xadrez, Streak Breakers, N-grams, etc.).")
+
+    if st.button("🔄 Carregar Padrões do Modelo Atual"):
+        ia = carregar_modelo_longo_prazo()
+        
+        if ia is None:
+            st.warning("Nenhum modelo de longo prazo encontrado. Treine uma base primeiro.")
+        else:
+            st.success("Modelo carregado com sucesso!")
+
+            # === 1. ESTATÍSTICAS DE XADREZ ===
+            with st.expander("♟️ Estatísticas de Xadrez", expanded=True):
+                if hasattr(ia, 'xadrez_stats') and ia.xadrez_stats:
+                    st.write("**Quebras vs Continuacoes de Xadrez:**")
+                    st.json({
+                        "Total de Quebras": ia.xadrez_stats.get("quebras", 0),
+                        "Total de Continuacoes": ia.xadrez_stats.get("continuacoes", 0),
+                        "Números que mais quebram Xadrez": dict(ia.xadrez_stats.get("numeros_quebradores", {}))
+                    })
+                else:
+                    st.info("Ainda não há estatísticas de Xadrez registradas.")
+
+            # === 2. STREAK BREAKERS ===
+            with st.expander("🔥 Números que Quebram Streak (Streak Breakers)", expanded=True):
+                if hasattr(ia, 'streak_breaker_stats'):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.write("**Quebradores de Streak Vermelho**")
+                        st.json(dict(ia.streak_breaker_stats.get("V", {})))
+                    with col2:
+                        st.write("**Quebradores de Streak Preto**")
+                        st.json(dict(ia.streak_breaker_stats.get("P", {})))
+                else:
+                    st.info("Ainda não há dados de Streak Breakers.")
+
+            # === 3. COLOR N-GRAMS ===
+            with st.expander("📊 Padrões de Cores (N-grams)", expanded=False):
+                if hasattr(ia, 'color_ngrams'):
+                    st.write("**1-gram (Cores individuais)**")
+                    st.json(dict(ia.color_ngrams.get(1, {})))
+                    
+                    st.write("**2-gram (Padrões de 2 cores)**")
+                    st.json(dict(ia.color_ngrams.get(2, {})))
+                    
+                    st.write("**3-gram (Padrões de 3 cores)**")
+                    st.json(dict(ia.color_ngrams.get(3, {})))
+                else:
+                    st.info("Ainda não há n-grams registrados.")
+
+            st.caption("Esses padrões são aprendidos automaticamente quando você treina ou adiciona dados na base de longo prazo.")
