@@ -39,13 +39,7 @@ def carregar_modelo_longo_prazo(caminho="modelo_longo_prazo.pkl"):
     return None
 
 
-# ============================================================
-# NOVA FUNÇÃO: Análise de Regime da Recência (visão ampla)
-# ============================================================
 def analisar_regime_recencia(dados_recencia):
-    """
-    Analisa a recência como um todo para entender o estado atual do mercado.
-    """
     if not dados_recencia or len(dados_recencia) < 20:
         return {
             "viés_atual": "INDEFINIDO",
@@ -112,7 +106,7 @@ def integrar_recencia_no_modelo(dados_recencia, multiplicador=5):
         ia.injetar_aprendizado_imediato(dados_recencia, multiplicador_peso=multiplicador)
 
     ia.analise_recencia = ia.analisar_comportamento_pos_numero_recencia(dados_recencia)
-    ia.regime_recencia = analisar_regime_recencia(dados_recencia)   # ← NOVO: regime amplo
+    ia.regime_recencia = analisar_regime_recencia(dados_recencia)
     salvar_modelo_longo_prazo(ia)
     return ia
 
@@ -160,6 +154,9 @@ def treinar_base_longo_prazo_com_janelas(dados_completos):
     motor = MotorV1Completo(dados_completos)
     motor.processar_auditoria()
     reforcar_aprendizado_tipo_d(motor.ia)
+
+    # NOVO: Mapeamento avançado de padrões (Xadrez, Streak Breakers e N-grams)
+    motor.ia.mapear_padroes_avancados(dados_completos)
 
     analise_numeros = motor.ia.analisar_comportamento_pos_numero()
 
@@ -342,7 +339,7 @@ class MotorAnalise:
 
 
 # ============================================================
-# IAPreditivaV1 (inalterado)
+# IAPreditivaV1 (com mapeamento avançado de padrões + uso em predizer_proxima_casa)
 # ============================================================
 class IAPreditivaV1:
     def __init__(self, dados_longo_prazo, dados_recencia=None):
@@ -364,12 +361,17 @@ class IAPreditivaV1:
                 "ultimas_cores": []
             }
 
+        # NOVAS ESTRUTURAS PARA PADRÕES AVANÇADOS
+        self.xadrez_stats = defaultdict(lambda: {"quebras": 0, "continuacoes": 0, "numeros_quebradores": defaultdict(int)})
+        self.streak_breaker_stats = {"V": defaultdict(int), "P": defaultdict(int)}
+        self.color_ngrams = {1: defaultdict(int), 2: defaultdict(int), 3: defaultdict(int)}
+
         self.memoria_padroes_vencedores = []
         self.historico_regras = defaultdict(lambda: {"acertos": 0, "total": 0})
         self.controladores_fortes = defaultdict(int)
         self.padroes_fortes = []
         self.analise_recencia = {}
-        self.regime_recencia = None   # ← NOVO
+        self.regime_recencia = None
 
         self._treinar_modelo_profundo()
 
@@ -378,6 +380,47 @@ class IAPreditivaV1:
             self._processar_bloco_dados(self.dados_longo, 1, True)
         if self.dados_recencia and len(self.dados_recencia) >= 5:
             self._processar_bloco_dados(self.dados_recencia, 4, True)
+
+    def mapear_padroes_avancados(self, dados):
+        """Mapeamento completo de Xadrez, Streak Breakers e N-grams"""
+        if not dados or len(dados) < 10:
+            return
+
+        cores = [d['cor'] for d in dados]
+        numeros = [d['numero'] for d in dados]
+
+        # Xadrez com números que quebram
+        i = 0
+        while i < len(cores) - 4:
+            janela = cores[i:i+4]
+            if all(janela[j] != janela[j-1] for j in range(1, 4)) and 'B' not in janela:
+                proximo_cor = cores[i+4] if i+4 < len(cores) else None
+                num_quebra = numeros[i+3] if i+3 < len(numeros) else None
+                if proximo_cor and num_quebra:
+                    if proximo_cor == janela[-1]:
+                        self.xadrez_stats['continuacoes'] += 1
+                    else:
+                        self.xadrez_stats['quebras'] += 1
+                        self.xadrez_stats['numeros_quebradores'][num_quebra] += 1
+            i += 1
+
+        # Streak Breakers
+        i = 0
+        while i < len(cores) - 3:
+            if cores[i] == cores[i+1] == cores[i+2] and cores[i] != 'B':
+                cor_streak = cores[i]
+                num_quebra = numeros[i+3] if i+3 < len(numeros) else None
+                if num_quebra and cores[i+3] != cor_streak:
+                    self.streak_breaker_stats[cor_streak][num_quebra] += 1
+            i += 1
+
+        # Color N-grams
+        for i in range(len(cores)):
+            self.color_ngrams[1][cores[i]] += 1
+            if i + 1 < len(cores):
+                self.color_ngrams[2][f"{cores[i]}-{cores[i+1]}"] += 1
+            if i + 2 < len(cores):
+                self.color_ngrams[3][f"{cores[i]}-{cores[i+1]}-{cores[i+2]}"] += 1
 
     def _processar_bloco_dados(self, dados, multiplicador_peso, treinamento_profundo=False):
         if not dados: return
@@ -442,20 +485,9 @@ class IAPreditivaV1:
     def injetar_aprendizado_imediato(self, sub_dados, multiplicador_peso=4, analise_contexto=None):
         self.dados_recencia.extend(sub_dados)
         self._processar_bloco_dados(sub_dados, multiplicador_peso, True)
-
         if analise_contexto:
             for regra in analise_contexto.get("regras_posicionais", []):
                 self.historico_regras[regra.get("tipo_regra", "DESCONHECIDO")]["total"] += 1
-            ctrl = analise_contexto.get("controlador_retardador", {})
-            if ctrl.get("dominancia") == "CONTROLADOR":
-                for item in ctrl.get("controladores", []):
-                    self.controladores_fortes[item] += 1
-            if analise_contexto.get("geometria") in ["CICLO_FECHADO_VPPV", "CICLO_FECHADO_PVVP"]:
-                self.padroes_fortes.append({
-                    "tipo": "GEOMETRIA_FORTE",
-                    "padrao": analise_contexto["geometria"],
-                    "peso": multiplicador_peso
-                })
 
     def registrar_padrao_vencedor(self, analise_contexto, resultado):
         if resultado not in ["G0", "G1"]: return
@@ -548,6 +580,22 @@ class IAPreditivaV1:
             if prob_xadrez_5 < 3.0 and analise_contexto.get("contexto_reversao", {}).get("xadrez_quebrou"):
                 if sub_pol[-1] == 'V': v_bonus += 22
                 else: p_bonus += 22
+
+        # ============================================================
+        # NOVO: Bônus de padrões avançados (Xadrez e Streak Breakers)
+        # ============================================================
+        if hasattr(self, 'xadrez_stats') and self.xadrez_stats:
+            if ultimo_num in self.xadrez_stats.get('numeros_quebradores', {}):
+                if sub_pol[-1] == 'V':
+                    p_bonus += 12
+                else:
+                    v_bonus += 12
+
+        if hasattr(self, 'streak_breaker_stats'):
+            if sub_pol[-1] == 'V' and ultimo_num in self.streak_breaker_stats.get('V', {}):
+                p_bonus += 10
+            elif sub_pol[-1] == 'P' and ultimo_num in self.streak_breaker_stats.get('P', {}):
+                v_bonus += 10
 
         has_rec = len(self.dados_recencia) > 0
         p_trans, p_num, p_geom = (0.22 if has_rec else 0.17), (0.18 if has_rec else 0.16), 0.25
@@ -1094,9 +1142,6 @@ class ProcessadorTipoB:
                 "motivo_real": f"NO CALL pelo MotorNoCall: {motivo_nc}"
             }
 
-        # ============================================================
-        # INFLUÊNCIA AMPLA DA RECÊNCIA (como você pediu)
-        # ============================================================
         sinal = direcao_ia
         justificativa = f"IA Preditiva ({conf_ia:.1f}%)"
         regra_id = "IA_PREDITIVA"
@@ -1115,13 +1160,11 @@ class ProcessadorTipoB:
             elif modo == "XADREZ_DOMINANTE":
                 justificativa += " (Xadrez dominante na recência)"
 
-        # Geometria forte tem prioridade máxima
         if geometria in ["CICLO_FECHADO_VPPV", "CICLO_FECHADO_PVVP"]:
             sinal = "PRETO" if geometria == "CICLO_FECHADO_VPPV" else "VERMELHO"
             justificativa = f"Geometria forte + Recência ({regime_rec['viés_atual'] if regime_rec else 'N/A'})"
             regra_id = "GEOMETRIA_FORTE"
 
-        # Veto de streak
         if sinal != "NO CALL" and streak >= 6:
             if direcao_ia != sinal:
                 sinal = "NO CALL"
