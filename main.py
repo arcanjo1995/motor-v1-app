@@ -155,7 +155,6 @@ def treinar_base_longo_prazo_com_janelas(dados_completos):
     motor.processar_auditoria()
     reforcar_aprendizado_tipo_d(motor.ia)
 
-    # NOVO: Mapeamento avançado de padrões (Xadrez, Streak Breakers e N-grams)
     motor.ia.mapear_padroes_avancados(dados_completos)
 
     analise_numeros = motor.ia.analisar_comportamento_pos_numero()
@@ -339,7 +338,7 @@ class MotorAnalise:
 
 
 # ============================================================
-# IAPreditivaV1 (com mapeamento avançado de padrões + uso em predizer_proxima_casa)
+# IAPreditivaV1 (melhorado - varredura completa + uso no sinal)
 # ============================================================
 class IAPreditivaV1:
     def __init__(self, dados_longo_prazo, dados_recencia=None):
@@ -361,10 +360,20 @@ class IAPreditivaV1:
                 "ultimas_cores": []
             }
 
-        # NOVAS ESTRUTURAS PARA PADRÕES AVANÇADOS
-        self.xadrez_stats = defaultdict(lambda: {"quebras": 0, "continuacoes": 0, "numeros_quebradores": defaultdict(int)})
+        # Estruturas de padrões avançados
+        self.xadrez_stats = {"quebras": 0, "continuacoes": 0, "numeros_quebradores": defaultdict(int)}
         self.streak_breaker_stats = {"V": defaultdict(int), "P": defaultdict(int)}
         self.color_ngrams = {1: defaultdict(int), 2: defaultdict(int), 3: defaultdict(int)}
+
+        # NOVO: Estruturas mais detalhadas por padrão
+        self.padroes_xadrez_detalhado = defaultdict(lambda: {
+            "total": 0, "apos_V": 0, "apos_P": 0, "apos_B": 0,
+            "quebradores": defaultdict(int)
+        })
+        self.padroes_streak_detalhado = defaultdict(lambda: {
+            "total": 0, "apos_V": 0, "apos_P": 0, "apos_B": 0,
+            "quebradores": defaultdict(int)
+        })
 
         self.memoria_padroes_vencedores = []
         self.historico_regras = defaultdict(lambda: {"acertos": 0, "total": 0})
@@ -382,39 +391,54 @@ class IAPreditivaV1:
             self._processar_bloco_dados(self.dados_recencia, 4, True)
 
     def mapear_padroes_avancados(self, dados):
-        """Mapeamento completo de Xadrez, Streak Breakers e N-grams"""
+        """Varredura completa do histórico para padrões"""
         if not dados or len(dados) < 10:
             return
 
         cores = [d['cor'] for d in dados]
         numeros = [d['numero'] for d in dados]
 
-        # Xadrez com números que quebram
+        # Xadrez detalhado
         i = 0
         while i < len(cores) - 4:
             janela = cores[i:i+4]
             if all(janela[j] != janela[j-1] for j in range(1, 4)) and 'B' not in janela:
-                proximo_cor = cores[i+4] if i+4 < len(cores) else None
-                num_quebra = numeros[i+3] if i+3 < len(numeros) else None
-                if proximo_cor and num_quebra:
-                    if proximo_cor == janela[-1]:
-                        self.xadrez_stats['continuacoes'] += 1
+                comprimento = 4
+                if i + 4 < len(cores):
+                    proximo_cor = cores[i+4]
+                    num_quebra = numeros[i+3]
+
+                    chave = f"XADREZ_{comprimento}"
+                    self.padroes_xadrez_detalhado[chave]["total"] += 1
+                    self.padroes_xadrez_detalhado[chave][f"apos_{proximo_cor}"] += 1
+
+                    if proximo_cor != janela[-1]:
+                        self.padroes_xadrez_detalhado[chave]["quebradores"][num_quebra] += 1
+                        self.xadrez_stats["quebras"] += 1
+                        self.xadrez_stats["numeros_quebradores"][num_quebra] += 1
                     else:
-                        self.xadrez_stats['quebras'] += 1
-                        self.xadrez_stats['numeros_quebradores'][num_quebra] += 1
+                        self.xadrez_stats["continuacoes"] += 1
             i += 1
 
-        # Streak Breakers
+        # Streak detalhado
         i = 0
         while i < len(cores) - 3:
             if cores[i] == cores[i+1] == cores[i+2] and cores[i] != 'B':
                 cor_streak = cores[i]
-                num_quebra = numeros[i+3] if i+3 < len(numeros) else None
-                if num_quebra and cores[i+3] != cor_streak:
-                    self.streak_breaker_stats[cor_streak][num_quebra] += 1
+                if i + 3 < len(cores):
+                    proximo_cor = cores[i+3]
+                    num_quebra = numeros[i+3]
+
+                    chave = f"STREAK_3"
+                    self.padroes_streak_detalhado[chave]["total"] += 1
+                    self.padroes_streak_detalhado[chave][f"apos_{proximo_cor}"] += 1
+
+                    if proximo_cor != cor_streak:
+                        self.padroes_streak_detalhado[chave]["quebradores"][num_quebra] += 1
+                        self.streak_breaker_stats[cor_streak][num_quebra] += 1
             i += 1
 
-        # Color N-grams
+        # N-grams
         for i in range(len(cores)):
             self.color_ngrams[1][cores[i]] += 1
             if i + 1 < len(cores):
@@ -581,9 +605,7 @@ class IAPreditivaV1:
                 if sub_pol[-1] == 'V': v_bonus += 22
                 else: p_bonus += 22
 
-        # ============================================================
-        # NOVO: Bônus de padrões avançados (Xadrez e Streak Breakers)
-        # ============================================================
+        # Bônus de padrões avançados
         if hasattr(self, 'xadrez_stats') and self.xadrez_stats:
             if ultimo_num in self.xadrez_stats.get('numeros_quebradores', {}):
                 if sub_pol[-1] == 'V':
