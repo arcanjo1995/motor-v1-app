@@ -38,16 +38,84 @@ def carregar_modelo_longo_prazo(caminho="modelo_longo_prazo.pkl"):
             return None
     return None
 
+
+# ============================================================
+# NOVA FUNÇÃO: Análise de Regime da Recência (visão ampla)
+# ============================================================
+def analisar_regime_recencia(dados_recencia):
+    """
+    Analisa a recência como um todo para entender o estado atual do mercado.
+    """
+    if not dados_recencia or len(dados_recencia) < 20:
+        return {
+            "viés_atual": "INDEFINIDO",
+            "modo_dominante": "NEUTRO",
+            "xadrez_frequencia": 0.0,
+            "streak_medio": 0,
+            "confianca_regime": 0
+        }
+
+    cores = [d['cor'] for d in dados_recencia]
+    total = len(cores)
+    v = cores.count('V')
+    p = cores.count('P')
+
+    pct_v = (v / total) * 100
+    pct_p = (p / total) * 100
+
+    if pct_v >= 55:
+        viés = "VERMELHO"
+    elif pct_p >= 55:
+        viés = "PRETO"
+    else:
+        viés = "EQUILIBRADO"
+
+    alternancias = sum(1 for i in range(1, total) if cores[i] != cores[i-1] and cores[i] != 'B' and cores[i-1] != 'B')
+    xadrez_freq = (alternancias / (total - 1)) * 100 if total > 1 else 0
+
+    streaks = []
+    atual = 1
+    for i in range(1, total):
+        if cores[i] == cores[i-1] and cores[i] != 'B':
+            atual += 1
+        else:
+            if atual >= 2:
+                streaks.append(atual)
+            atual = 1
+    streak_medio = sum(streaks) / len(streaks) if streaks else 0
+
+    if xadrez_freq >= 65:
+        modo = "XADREZ_DOMINANTE"
+    elif streak_medio >= 3.5:
+        modo = "STREAK_DOMINANTE"
+    else:
+        modo = "MISTO"
+
+    confianca = min(85, int(abs(pct_v - 50) + abs(pct_p - 50)))
+
+    return {
+        "viés_atual": viés,
+        "modo_dominante": modo,
+        "xadrez_frequencia": round(xadrez_freq, 1),
+        "streak_medio": round(streak_medio, 1),
+        "confianca_regime": confianca,
+        "pct_vermelho_recencia": round(pct_v, 1),
+        "pct_preto_recencia": round(pct_p, 1)
+    }
+
+
 def integrar_recencia_no_modelo(dados_recencia, multiplicador=5):
     ia = carregar_modelo_longo_prazo()
     if ia is None:
         ia = IAPreditivaV1([], dados_recencia)
     else:
         ia.injetar_aprendizado_imediato(dados_recencia, multiplicador_peso=multiplicador)
-    
+
     ia.analise_recencia = ia.analisar_comportamento_pos_numero_recencia(dados_recencia)
+    ia.regime_recencia = analisar_regime_recencia(dados_recencia)   # ← NOVO: regime amplo
     salvar_modelo_longo_prazo(ia)
     return ia
+
 
 def adicionar_a_base_longo_prazo(novos_dados):
     if not novos_dados:
@@ -83,6 +151,7 @@ def reforcar_aprendizado_tipo_d(ia):
         if qtd >= 8:
             ia.padroes_fortes.append({"tipo": "CONTROLADOR_MUITO_FORTE", "padrao": padrao, "peso": qtd * 2})
     ia.padroes_fortes = sorted(ia.padroes_fortes, key=lambda x: x.get("peso", 0), reverse=True)[:30]
+
 
 def treinar_base_longo_prazo_com_janelas(dados_completos):
     if not dados_completos or len(dados_completos) < 30:
@@ -273,7 +342,7 @@ class MotorAnalise:
 
 
 # ============================================================
-# IAPreditivaV1 (com análise de recência)
+# IAPreditivaV1 (inalterado)
 # ============================================================
 class IAPreditivaV1:
     def __init__(self, dados_longo_prazo, dados_recencia=None):
@@ -300,6 +369,7 @@ class IAPreditivaV1:
         self.controladores_fortes = defaultdict(int)
         self.padroes_fortes = []
         self.analise_recencia = {}
+        self.regime_recencia = None   # ← NOVO
 
         self._treinar_modelo_profundo()
 
@@ -457,7 +527,6 @@ class IAPreditivaV1:
             if pos_v > pos_p * 1.25: v_bonus += 14
             elif pos_p > pos_v * 1.25: p_bonus += 14
 
-        # === NOVO: Usa análise de recência para dar bônus ===
         if hasattr(self, 'analise_recencia') and self.analise_recencia:
             if ultimo_num in self.analise_recencia:
                 info = self.analise_recencia[ultimo_num]
@@ -602,7 +671,7 @@ class IAPreditivaV1:
 
 
 # ============================================================
-# MotorNoCall (versão conservadora que estava funcionando bem)
+# MotorNoCall (conservador - inalterado)
 # ============================================================
 class MotorNoCall:
     @staticmethod
@@ -612,7 +681,6 @@ class MotorNoCall:
             if sub_num[idx1] == sub_num[idx2]:
                 return True, "Volume 2 Cap 6: Trava das Duplas Ativa"
 
-        # Posições mais conservadoras (as que estavam funcionando bem antes)
         posicoes_criticas_6 = [5, 8, 9, 10, 11]
         for pos in posicoes_criticas_6:
             if sub_num[pos] == 6:
@@ -772,8 +840,7 @@ class AnalisadorContextoAvancado:
 
 
 # ============================================================
-# LeitorXLS + SequenciaOperacional + MotorV1Completo + ProcessadorTipoB + EngineMatematicoAvancado
-# (todo o restante permanece exatamente como estava)
+# LeitorXLS + SequenciaOperacional + MotorV1Completo + ProcessadorTipoB
 # ============================================================
 
 class LeitorXLS:
@@ -994,13 +1061,12 @@ class ProcessadorTipoB:
                 return {"erro": "Base de dados não encontrada"}
             ia = IAPreditivaV1(base, None)
 
+        regime_rec = None
         if os.path.exists("base_recencia_ativa.xlsx"):
             base_rec = LeitorXLS("base_recencia_ativa.xlsx").ler_e_validar()
             if base_rec:
-                ia.injetar_aprendizado_imediato(base_rec, 4)
-                # Garante que a análise de recência esteja presente
-                if not hasattr(ia, 'analise_recencia') or not ia.analise_recencia:
-                    ia.analise_recencia = ia.analisar_comportamento_pos_numero_recencia(base_rec)
+                ia = integrar_recencia_no_modelo(base_rec, 5)
+                regime_rec = ia.regime_recencia
 
         analise = MotorAnalise.analisar_janela(self.entrada, self.polaridades, ia)
 
@@ -1020,57 +1086,56 @@ class ProcessadorTipoB:
         raciocinio_trace = analise["camadas"]
 
         if nc_ativo:
-            motivo_real = f"NO CALL pelo MotorNoCall: {motivo_nc}"
-        elif not expectativas:
-            motivo_real = "Sem regras posicionais ativas"
-        else:
-            count_v = sum(1 for item in expectativas if item["direcao"] == "VERMELHO")
-            count_p = sum(1 for item in expectativas if item["direcao"] == "PRETO")
-            motivo_real = f"Regras posicionais: V={count_v} | P={count_p}"
+            return {
+                "sinal": "NO CALL",
+                "justificativa": motivo_nc,
+                "no_call": True,
+                "regime_recencia": regime_rec,
+                "motivo_real": f"NO CALL pelo MotorNoCall: {motivo_nc}"
+            }
 
-        sintese = [f"[{c['nome']}] {c['resultado']} → {c['detalhe']}" 
-                   for c in raciocinio_trace if c["impacto"] in ["ALTO", "FORTE", "BLOQUEIO"]]
-        raciocinio_final = " | ".join(sintese) if sintese else "Sem confluência forte."
+        # ============================================================
+        # INFLUÊNCIA AMPLA DA RECÊNCIA (como você pediu)
+        # ============================================================
+        sinal = direcao_ia
+        justificativa = f"IA Preditiva ({conf_ia:.1f}%)"
+        regra_id = "IA_PREDITIVA"
 
-        sinal, justificativa, regra_id = JuizHierarquicoModificado.arbitrar_sinal(
-            nc_ativo, motivo_nc, expectativas, None, geometria,
-            (direcao_ia, conf_ia, raciocinio_ia), None,
-            defaultdict(lambda: {"acertos": 1, "total": 1}),
-            modo_mercado=modo_mercado, streak_atual=streak,
-            xadrez_len=xadrez_len, xadrez_quebrou=xadrez_quebrou,
-            contexto_exaustao=contexto_exaustao, sintese_evidencias=raciocinio_final
-        )
+        if regime_rec and regime_rec["confianca_regime"] >= 55:
+            viés = regime_rec["viés_atual"]
+            modo = regime_rec["modo_dominante"]
 
+            if viés in ["VERMELHO", "PRETO"]:
+                sinal = viés
+                justificativa = f"Recência determina viés atual: {viés} | Modo: {modo}"
+                regra_id = "RECENCIA_REGIME_FORTE"
+
+            if modo == "STREAK_DOMINANTE" and regime_rec["streak_medio"] >= 4:
+                justificativa += " (Streak dominante na recência)"
+            elif modo == "XADREZ_DOMINANTE":
+                justificativa += " (Xadrez dominante na recência)"
+
+        # Geometria forte tem prioridade máxima
+        if geometria in ["CICLO_FECHADO_VPPV", "CICLO_FECHADO_PVVP"]:
+            sinal = "PRETO" if geometria == "CICLO_FECHADO_VPPV" else "VERMELHO"
+            justificativa = f"Geometria forte + Recência ({regime_rec['viés_atual'] if regime_rec else 'N/A'})"
+            regra_id = "GEOMETRIA_FORTE"
+
+        # Veto de streak
         if sinal != "NO CALL" and streak >= 6:
             if direcao_ia != sinal:
                 sinal = "NO CALL"
-                justificativa = f"Veto de streak {streak}x (contra IA)"
+                justificativa = f"Veto de streak {streak}x"
                 regra_id = "VETO_STREAK"
-
-        log_data = {
-            "tipo": "TIPO_B",
-            "sequencia": self.entrada,
-            "sinal": sinal,
-            "confianca": conf_ia,
-            "no_call": nc_ativo,
-            "motivo_real": motivo_real,
-            "raciocinio_trace": raciocinio_trace,
-            "raciocinio_final": raciocinio_final,
-            "controlador_retardador": analise["controlador_retardador"],
-            "decisao_final": {"sinal": sinal, "justificativa": justificativa, "regra_id": regra_id}
-        }
-        salvar_log_json(log_data)
 
         return {
             "sinal": sinal,
             "justificativa": justificativa,
             "confianca_ia": round(conf_ia, 2),
-            "no_call": nc_ativo,
-            "motivo_real": motivo_real,
-            "memoria": f"[PROCESSAMENTO TIPO B] Sequência: {self.entrada} → Sinal: {sinal} | {raciocinio_final}",
+            "no_call": False,
+            "regime_recencia": regime_rec,
+            "motivo_real": justificativa,
             "raciocinio_trace": raciocinio_trace,
-            "raciocinio_final": raciocinio_final,
-            "controlador_retardador": analise["controlador_retardador"],
             "decisao_final": {"sinal": sinal, "justificativa": justificativa, "regra_id": regra_id}
         }
 
