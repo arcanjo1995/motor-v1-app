@@ -45,7 +45,6 @@ def integrar_recencia_no_modelo(dados_recencia, multiplicador=5):
     else:
         ia.injetar_aprendizado_imediato(dados_recencia, multiplicador_peso=multiplicador)
     
-    # Análise de comportamento na RECÊNCIA
     ia.analise_recencia = ia.analisar_comportamento_pos_numero_recencia(dados_recencia)
     salvar_modelo_longo_prazo(ia)
     return ia
@@ -137,7 +136,7 @@ def treinar_base_longo_prazo_com_janelas(dados_completos):
 
 
 # ============================================================
-# MotorAnalise
+# MotorAnalise (inalterado)
 # ============================================================
 class MotorAnalise:
     @staticmethod
@@ -274,7 +273,7 @@ class MotorAnalise:
 
 
 # ============================================================
-# IAPreditivaV1 (COM MÉTODO DE RECÊNCIA)
+# IAPreditivaV1 (com análise de recência)
 # ============================================================
 class IAPreditivaV1:
     def __init__(self, dados_longo_prazo, dados_recencia=None):
@@ -458,6 +457,16 @@ class IAPreditivaV1:
             if pos_v > pos_p * 1.25: v_bonus += 14
             elif pos_p > pos_v * 1.25: p_bonus += 14
 
+        # === NOVO: Usa análise de recência para dar bônus ===
+        if hasattr(self, 'analise_recencia') and self.analise_recencia:
+            if ultimo_num in self.analise_recencia:
+                info = self.analise_recencia[ultimo_num]
+                if info.get("tendencia_recente") == "FORTE":
+                    if info["cor_mais_frequente_apos"] == "VERMELHO":
+                        v_bonus += 15
+                    else:
+                        p_bonus += 15
+
         if analise_contexto:
             prob_streak_v = self.calcular_probabilidade_streak_empirica('V', 5)
             prob_streak_p = self.calcular_probabilidade_streak_empirica('P', 5)
@@ -593,7 +602,7 @@ class IAPreditivaV1:
 
 
 # ============================================================
-# MotorNoCall
+# MotorNoCall (versão conservadora que estava funcionando bem)
 # ============================================================
 class MotorNoCall:
     @staticmethod
@@ -603,17 +612,18 @@ class MotorNoCall:
             if sub_num[idx1] == sub_num[idx2]:
                 return True, "Volume 2 Cap 6: Trava das Duplas Ativa"
 
-        posicoes_criticas_6 = [3, 4, 5, 6, 7, 8, 9, 10, 11]
+        # Posições mais conservadoras (as que estavam funcionando bem antes)
+        posicoes_criticas_6 = [5, 8, 9, 10, 11]
         for pos in posicoes_criticas_6:
             if sub_num[pos] == 6:
-                return True, "Volume 2 Cap 4: Trava Número 6"
+                return True, "Volume 2 Cap 4: Trava Número 6 (Posição de No Call Ativa)"
 
         posicoes_criticas_2 = [8, 9, 10, 11]
         for pos in posicoes_criticas_2:
             if sub_num[pos] == 2:
                 return True, "Volume 2 Cap 3: Trava Número 2"
 
-        posicoes_criticas_b = [3, 4, 5, 6, 7, 8, 9, 10, 11]
+        posicoes_criticas_b = [5, 8, 9, 10, 11]
         for pos in posicoes_criticas_b:
             if sub_pol[pos] == "B":
                 return True, "Volume 2 Cap 5: Trava do Branco"
@@ -622,7 +632,7 @@ class MotorNoCall:
 
 
 # ============================================================
-# JuizHierarquicoModificado
+# JuizHierarquicoModificado (inalterado)
 # ============================================================
 class JuizHierarquicoModificado:
     @staticmethod
@@ -675,7 +685,7 @@ class JuizHierarquicoModificado:
 
 
 # ============================================================
-# MotorContagensProjetivas
+# MotorContagensProjetivas (inalterado)
 # ============================================================
 class MotorContagensProjetivas:
     @staticmethod
@@ -739,7 +749,7 @@ class MotorContagensProjetivas:
 
 
 # ============================================================
-# AnalisadorContextoAvancado
+# AnalisadorContextoAvancado (inalterado)
 # ============================================================
 class AnalisadorContextoAvancado:
     @staticmethod
@@ -762,8 +772,10 @@ class AnalisadorContextoAvancado:
 
 
 # ============================================================
-# LeitorXLS
+# LeitorXLS + SequenciaOperacional + MotorV1Completo + ProcessadorTipoB + EngineMatematicoAvancado
+# (todo o restante permanece exatamente como estava)
 # ============================================================
+
 class LeitorXLS:
     def __init__(self, caminho_arquivo):
         self.caminho = caminho_arquivo
@@ -825,9 +837,6 @@ class SequenciaOperacional:
         self.total = len(self.numerica)
 
 
-# ============================================================
-# MotorV1Completo
-# ============================================================
 class MotorV1Completo:
     def __init__(self, lista_dados_xls, ia_existente=None):
         self.seq = SequenciaOperacional(lista_dados_xls)
@@ -968,9 +977,6 @@ class MotorV1Completo:
         return output
 
 
-# ============================================================
-# ProcessadorTipoB
-# ============================================================
 class ProcessadorTipoB:
     def __init__(self, sequencia_12_numeros, caminho_base_dados):
         self.entrada = sequencia_12_numeros
@@ -992,6 +998,9 @@ class ProcessadorTipoB:
             base_rec = LeitorXLS("base_recencia_ativa.xlsx").ler_e_validar()
             if base_rec:
                 ia.injetar_aprendizado_imediato(base_rec, 4)
+                # Garante que a análise de recência esteja presente
+                if not hasattr(ia, 'analise_recencia') or not ia.analise_recencia:
+                    ia.analise_recencia = ia.analisar_comportamento_pos_numero_recencia(base_rec)
 
         analise = MotorAnalise.analisar_janela(self.entrada, self.polaridades, ia)
 
@@ -1066,9 +1075,6 @@ class ProcessadorTipoB:
         }
 
 
-# ============================================================
-# EngineMatematicoAvancado
-# ============================================================
 class EngineMatematicoAvancado:
     @staticmethod
     def calcular_raridade_sequencia(sub_pol):
