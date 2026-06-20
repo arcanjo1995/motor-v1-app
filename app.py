@@ -69,7 +69,7 @@ with aba_tipo_b:
                 st.error(f"Erro ao processar: {e}")
 
 # =========================================================================
-# ABA TIPO D (inalterada)
+# ABA TIPO D (ATUALIZADA COM RELATÓRIO DE PADRÕES)
 # =========================================================================
 with aba_tipo_d:
     st.header("📊 Auditoria Cronológica Tipo D")
@@ -101,7 +101,9 @@ with aba_tipo_d:
         with col3:
             adicionar_base = st.button("➕ Adicionar à Base de Longo Prazo")
 
+        # ============================================================
         # 1. INICIAR AUDITORIA DE RECÊNCIA
+        # ============================================================
         if rodar_auditoria:
             with open(caminho_temp, "wb") as f: f.write(arquivo_upload.getbuffer())
             if os.path.exists(NOME_RECENCIA_ATIVA): os.remove(NOME_RECENCIA_ATIVA)
@@ -134,7 +136,9 @@ with aba_tipo_d:
             
             if os.path.exists(caminho_temp): os.remove(caminho_temp)
 
-        # 2. SUBSTITUIR BASE DE LONGO PRAZO
+        # ============================================================
+        # 2. SUBSTITUIR BASE DE LONGO PRAZO (COM RELATÓRIO DE PADRÕES)
+        # ============================================================
         if salvar_como_base:
             with open(caminho_temp, "wb") as f: f.write(arquivo_upload.getbuffer())
             try:
@@ -148,6 +152,7 @@ with aba_tipo_d:
                     if relatorio.get("sucesso"):
                         st.success("✅ Base de Longo Prazo substituída e treinada com sucesso!")
                         
+                        # === RELATÓRIO DE NÚMEROS ===
                         st.subheader("📊 Relatório de Treinamento da Base Longa")
                         col1, col2, col3 = st.columns(3)
                         with col1:
@@ -168,6 +173,38 @@ with aba_tipo_d:
                         if "analise_comportamento_numeros" in relatorio:
                             with st.expander("🔬 Análise Detalhada por Número (Comportamento Pós-Aparição)", expanded=False):
                                 st.json(relatorio["analise_comportamento_numeros"])
+
+                        # === NOVO: RELATÓRIO DE PADRÕES ===
+                        st.subheader("♟️ Padrões Avançados Aprendidos nesta Base")
+                        ia_atual = carregar_modelo_longo_prazo()
+                        if ia_atual:
+                            # Xadrez
+                            with st.expander("Padrões de Xadrez (com cor após e números que trollam)", expanded=False):
+                                if hasattr(ia_atual, 'padroes_xadrez_detalhado') and ia_atual.padroes_xadrez_detalhado:
+                                    for padrao, info in ia_atual.padroes_xadrez_detalhado.items():
+                                        if info.get("total", 0) >= 8:  # só mostra padrões relevantes
+                                            st.markdown(f"**{padrao}** — Apareceu {info['total']}x")
+                                            st.json({
+                                                "Após o padrão → Vermelho": info.get("apos_V", 0),
+                                                "Após o padrão → Preto": info.get("apos_P", 0),
+                                                "Números que mais trollam": dict(info.get("quebradores", {}))
+                                            })
+                                else:
+                                    st.info("Nenhum padrão de Xadrez relevante encontrado.")
+
+                            # Streak
+                            with st.expander("Padrões de Streak (com cor após e números que trollam)", expanded=False):
+                                if hasattr(ia_atual, 'padroes_streak_detalhado') and ia_atual.padroes_streak_detalhado:
+                                    for padrao, info in ia_atual.padroes_streak_detalhado.items():
+                                        if info.get("total", 0) >= 8:
+                                            st.markdown(f"**{padrao}** — Apareceu {info['total']}x")
+                                            st.json({
+                                                "Após o padrão → Vermelho": info.get("apos_V", 0),
+                                                "Após o padrão → Preto": info.get("apos_P", 0),
+                                                "Números que mais trollam": dict(info.get("quebradores", {}))
+                                            })
+                                else:
+                                    st.info("Nenhum padrão de Streak relevante encontrado.")
                     else:
                         st.warning(relatorio.get("mensagem"))
                 else:
@@ -176,7 +213,9 @@ with aba_tipo_d:
                 st.error(f"Erro ao salvar e treinar base: {e}")
             if os.path.exists(caminho_temp): os.remove(caminho_temp)
 
-        # 3. ADICIONAR À BASE DE LONGO PRAZO
+        # ============================================================
+        # 3. ADICIONAR À BASE DE LONGO PRAZO (COM RELATÓRIO DE PADRÕES)
+        # ============================================================
         if adicionar_base:
             with open(caminho_temp, "wb") as f: f.write(arquivo_upload.getbuffer())
             try:
@@ -207,6 +246,36 @@ with aba_tipo_d:
                         if "analise_comportamento_numeros" in relatorio:
                             with st.expander("🔬 Análise Detalhada por Número (Comportamento Pós-Aparição)", expanded=False):
                                 st.json(relatorio["analise_comportamento_numeros"])
+
+                        # === NOVO: RELATÓRIO DE PADRÕES ===
+                        st.subheader("♟️ Padrões Avançados Aprendidos nesta Base")
+                        ia_atual = carregar_modelo_longo_prazo()
+                        if ia_atual:
+                            with st.expander("Padrões de Xadrez (com cor após e números que trollam)", expanded=False):
+                                if hasattr(ia_atual, 'padroes_xadrez_detalhado') and ia_atual.padroes_xadrez_detalhado:
+                                    for padrao, info in ia_atual.padroes_xadrez_detalhado.items():
+                                        if info.get("total", 0) >= 8:
+                                            st.markdown(f"**{padrao}** — Apareceu {info['total']}x")
+                                            st.json({
+                                                "Após o padrão → Vermelho": info.get("apos_V", 0),
+                                                "Após o padrão → Preto": info.get("apos_P", 0),
+                                                "Números que mais trollam": dict(info.get("quebradores", {}))
+                                            })
+                                else:
+                                    st.info("Nenhum padrão de Xadrez relevante encontrado.")
+
+                            with st.expander("Padrões de Streak (com cor após e números que trollam)", expanded=False):
+                                if hasattr(ia_atual, 'padroes_streak_detalhado') and ia_atual.padroes_streak_detalhado:
+                                    for padrao, info in ia_atual.padroes_streak_detalhado.items():
+                                        if info.get("total", 0) >= 8:
+                                            st.markdown(f"**{padrao}** — Apareceu {info['total']}x")
+                                            st.json({
+                                                "Após o padrão → Vermelho": info.get("apos_V", 0),
+                                                "Após o padrão → Preto": info.get("apos_P", 0),
+                                                "Números que mais trollam": dict(info.get("quebradores", {}))
+                                            })
+                                else:
+                                    st.info("Nenhum padrão de Streak relevante encontrado.")
                     else:
                         st.warning(relatorio.get("mensagem"))
                 else:
@@ -216,11 +285,11 @@ with aba_tipo_d:
             if os.path.exists(caminho_temp): os.remove(caminho_temp)
 
 # =========================================================================
-# ABA: ANÁLISE DE PADRÕES AVANÇADOS (ATUALIZADA)
+# ABA: ANÁLISE DE PADRÕES AVANÇADOS
 # =========================================================================
 with aba_padroes:
     st.header("📈 Análise de Padrões Avançados")
-    st.info("Visualização dos padrões aprendidos pelo motor (Xadrez, Streak, N-grams e comportamento pós-padrão).")
+    st.info("Visualização dos padrões aprendidos pelo motor.")
 
     if st.button("🔄 Carregar Padrões do Modelo Atual"):
         ia = carregar_modelo_longo_prazo()
@@ -230,84 +299,30 @@ with aba_padroes:
         else:
             st.success("Modelo carregado com sucesso!")
 
-            # === 1. XADREZ DETALHADO ===
-            with st.expander("♟️ Padrões de Xadrez (com cor após e números que trollam)", expanded=True):
+            with st.expander("♟️ Padrões de Xadrez Detalhados", expanded=True):
                 if hasattr(ia, 'padroes_xadrez_detalhado') and ia.padroes_xadrez_detalhado:
                     for padrao, info in ia.padroes_xadrez_detalhado.items():
-                        if info["total"] > 0:
-                            st.markdown(f"**{padrao}** — Total: {info['total']}")
-                            col1, col2 = st.columns(2)
-                            with col1:
-                                st.write("**Cor que mais sai logo após:**")
-                                st.json({
-                                    "Vermelho (V)": info.get("apos_V", 0),
-                                    "Preto (P)": info.get("apos_P", 0),
-                                    "Branco (B)": info.get("apos_B", 0)
-                                })
-                            with col2:
-                                st.write("**Números que mais trollam esse padrão:**")
-                                st.json(dict(info.get("quebradores", {})))
-                            st.divider()
+                        if info.get("total", 0) >= 5:
+                            st.markdown(f"**{padrao}** — {info['total']}x")
+                            st.json({
+                                "Após → Vermelho": info.get("apos_V", 0),
+                                "Após → Preto": info.get("apos_P", 0),
+                                "Números que trollam": dict(info.get("quebradores", {}))
+                            })
                 else:
-                    st.info("Ainda não há padrões de Xadrez registrados.")
+                    st.info("Sem padrões de Xadrez registrados.")
 
-            # === 2. STREAK DETALHADO ===
-            with st.expander("🔥 Padrões de Streak (com cor após e números que trollam)", expanded=True):
+            with st.expander("🔥 Padrões de Streak Detalhados", expanded=True):
                 if hasattr(ia, 'padroes_streak_detalhado') and ia.padroes_streak_detalhado:
                     for padrao, info in ia.padroes_streak_detalhado.items():
-                        if info["total"] > 0:
-                            st.markdown(f"**{padrao}** — Total: {info['total']}")
-                            col1, col2 = st.columns(2)
-                            with col1:
-                                st.write("**Cor que mais sai logo após:**")
-                                st.json({
-                                    "Vermelho (V)": info.get("apos_V", 0),
-                                    "Preto (P)": info.get("apos_P", 0),
-                                    "Branco (B)": info.get("apos_B", 0)
-                                })
-                            with col2:
-                                st.write("**Números que mais trollam esse padrão:**")
-                                st.json(dict(info.get("quebradores", {})))
-                            st.divider()
+                        if info.get("total", 0) >= 5:
+                            st.markdown(f"**{padrao}** — {info['total']}x")
+                            st.json({
+                                "Após → Vermelho": info.get("apos_V", 0),
+                                "Após → Preto": info.get("apos_P", 0),
+                                "Números que trollam": dict(info.get("quebradores", {}))
+                            })
                 else:
-                    st.info("Ainda não há padrões de Streak registrados.")
+                    st.info("Sem padrões de Streak registrados.")
 
-            # === 3. ESTATÍSTICAS GERAIS DE XADREZ ===
-            with st.expander("📊 Estatísticas Gerais de Xadrez", expanded=False):
-                if hasattr(ia, 'xadrez_stats') and ia.xadrez_stats:
-                    st.json({
-                        "Total de Quebras": ia.xadrez_stats.get("quebras", 0),
-                        "Total de Continuações": ia.xadrez_stats.get("continuacoes", 0),
-                        "Números que mais quebram Xadrez": dict(ia.xadrez_stats.get("numeros_quebradores", {}))
-                    })
-                else:
-                    st.info("Sem dados gerais de Xadrez.")
-
-            # === 4. STREAK BREAKERS ===
-            with st.expander("🔥 Números que Quebram Streak (Geral)", expanded=False):
-                if hasattr(ia, 'streak_breaker_stats'):
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.write("**Quebradores de Streak Vermelho**")
-                        st.json(dict(ia.streak_breaker_stats.get("V", {})))
-                    with col2:
-                        st.write("**Quebradores de Streak Preto**")
-                        st.json(dict(ia.streak_breaker_stats.get("P", {})))
-                else:
-                    st.info("Sem dados de Streak Breakers.")
-
-            # === 5. COLOR N-GRAMS ===
-            with st.expander("📊 Padrões de Cores (N-grams)", expanded=False):
-                if hasattr(ia, 'color_ngrams'):
-                    st.write("**1-gram (Cores individuais)**")
-                    st.json(dict(ia.color_ngrams.get(1, {})))
-                    
-                    st.write("**2-gram (Padrões de 2 cores)**")
-                    st.json(dict(ia.color_ngrams.get(2, {})))
-                    
-                    st.write("**3-gram (Padrões de 3 cores)**")
-                    st.json(dict(ia.color_ngrams.get(3, {})))
-                else:
-                    st.info("Sem n-grams registrados.")
-
-            st.caption("Esses padrões são atualizados automaticamente quando você treina ou adiciona dados na base de longo prazo.")
+            st.caption("Esses padrões são atualizados automaticamente ao treinar ou adicionar dados na base de longo prazo.")
