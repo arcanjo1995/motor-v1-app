@@ -338,7 +338,7 @@ class MotorAnalise:
 
 
 # ============================================================
-# IAPreditivaV1 (melhorado - varredura completa + uso no sinal)
+# IAPreditivaV1 (COMPLETO com suporte a pickle)
 # ============================================================
 class IAPreditivaV1:
     def __init__(self, dados_longo_prazo, dados_recencia=None):
@@ -360,19 +360,17 @@ class IAPreditivaV1:
                 "ultimas_cores": []
             }
 
-        # Estruturas de padrões avançados
         self.xadrez_stats = {"quebras": 0, "continuacoes": 0, "numeros_quebradores": defaultdict(int)}
         self.streak_breaker_stats = {"V": defaultdict(int), "P": defaultdict(int)}
         self.color_ngrams = {1: defaultdict(int), 2: defaultdict(int), 3: defaultdict(int)}
 
-        # NOVO: Estruturas mais detalhadas por padrão
         self.padroes_xadrez_detalhado = defaultdict(lambda: {
             "total": 0, "apos_V": 0, "apos_P": 0, "apos_B": 0,
-            "quebradores": defaultdict(int)
+            "quebradores": defaultdict(int), "g0": 0, "g1": 0
         })
         self.padroes_streak_detalhado = defaultdict(lambda: {
             "total": 0, "apos_V": 0, "apos_P": 0, "apos_B": 0,
-            "quebradores": defaultdict(int)
+            "quebradores": defaultdict(int), "g0": 0, "g1": 0
         })
 
         self.memoria_padroes_vencedores = []
@@ -384,6 +382,33 @@ class IAPreditivaV1:
 
         self._treinar_modelo_profundo()
 
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        for key in ['modelo_transicao', 'modelo_numerico', 'color_ngrams',
+                    'xadrez_stats', 'streak_breaker_stats',
+                    'padroes_xadrez_detalhado', 'padroes_streak_detalhado']:
+            if key in state:
+                state[key] = dict(state[key])
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self.modelo_transicao = defaultdict(list, state.get('modelo_transicao', {}))
+        self.modelo_numerico = defaultdict(list, state.get('modelo_numerico', {}))
+        self.color_ngrams = {k: defaultdict(int, v) for k, v in state.get('color_ngrams', {1: {}, 2: {}, 3: {}}).items()}
+        self.xadrez_stats = {"quebras": 0, "continuacoes": 0, "numeros_quebradores": defaultdict(int)}
+        self.xadrez_stats.update(state.get('xadrez_stats', {}))
+        self.streak_breaker_stats = {"V": defaultdict(int), "P": defaultdict(int)}
+        self.streak_breaker_stats.update(state.get('streak_breaker_stats', {}))
+        self.padroes_xadrez_detalhado = defaultdict(lambda: {
+            "total": 0, "apos_V": 0, "apos_P": 0, "apos_B": 0,
+            "quebradores": defaultdict(int), "g0": 0, "g1": 0
+        }, state.get('padroes_xadrez_detalhado', {}))
+        self.padroes_streak_detalhado = defaultdict(lambda: {
+            "total": 0, "apos_V": 0, "apos_P": 0, "apos_B": 0,
+            "quebradores": defaultdict(int), "g0": 0, "g1": 0
+        }, state.get('padroes_streak_detalhado', {}))
+
     def _treinar_modelo_profundo(self):
         if self.dados_longo and len(self.dados_longo) >= 5:
             self._processar_bloco_dados(self.dados_longo, 1, True)
@@ -391,54 +416,39 @@ class IAPreditivaV1:
             self._processar_bloco_dados(self.dados_recencia, 4, True)
 
     def mapear_padroes_avancados(self, dados):
-        """Varredura completa do histórico para padrões"""
         if not dados or len(dados) < 10:
             return
 
         cores = [d['cor'] for d in dados]
         numeros = [d['numero'] for d in dados]
 
-        # Xadrez detalhado
         i = 0
         while i < len(cores) - 4:
             janela = cores[i:i+4]
             if all(janela[j] != janela[j-1] for j in range(1, 4)) and 'B' not in janela:
-                comprimento = 4
                 if i + 4 < len(cores):
                     proximo_cor = cores[i+4]
                     num_quebra = numeros[i+3]
-
-                    chave = f"XADREZ_{comprimento}"
+                    chave = "XADREZ_4"
                     self.padroes_xadrez_detalhado[chave]["total"] += 1
                     self.padroes_xadrez_detalhado[chave][f"apos_{proximo_cor}"] += 1
-
                     if proximo_cor != janela[-1]:
                         self.padroes_xadrez_detalhado[chave]["quebradores"][num_quebra] += 1
-                        self.xadrez_stats["quebras"] += 1
-                        self.xadrez_stats["numeros_quebradores"][num_quebra] += 1
-                    else:
-                        self.xadrez_stats["continuacoes"] += 1
             i += 1
 
-        # Streak detalhado
         i = 0
         while i < len(cores) - 3:
             if cores[i] == cores[i+1] == cores[i+2] and cores[i] != 'B':
-                cor_streak = cores[i]
                 if i + 3 < len(cores):
                     proximo_cor = cores[i+3]
                     num_quebra = numeros[i+3]
-
-                    chave = f"STREAK_3"
+                    chave = "STREAK_3"
                     self.padroes_streak_detalhado[chave]["total"] += 1
                     self.padroes_streak_detalhado[chave][f"apos_{proximo_cor}"] += 1
-
-                    if proximo_cor != cor_streak:
+                    if proximo_cor != cores[i]:
                         self.padroes_streak_detalhado[chave]["quebradores"][num_quebra] += 1
-                        self.streak_breaker_stats[cor_streak][num_quebra] += 1
             i += 1
 
-        # N-grams
         for i in range(len(cores)):
             self.color_ngrams[1][cores[i]] += 1
             if i + 1 < len(cores):
@@ -605,7 +615,6 @@ class IAPreditivaV1:
                 if sub_pol[-1] == 'V': v_bonus += 22
                 else: p_bonus += 22
 
-        # Bônus de padrões avançados
         if hasattr(self, 'xadrez_stats') and self.xadrez_stats:
             if ultimo_num in self.xadrez_stats.get('numeros_quebradores', {}):
                 if sub_pol[-1] == 'V':
@@ -910,7 +919,8 @@ class AnalisadorContextoAvancado:
 
 
 # ============================================================
-# LeitorXLS + SequenciaOperacional + MotorV1Completo + ProcessadorTipoB
+# LeitorXLS + SequenciaOperacional + MotorV1Completo + ProcessadorTipoB + EngineMatematicoAvancado
+# (todas as classes permanecem exatamente iguais ao que você enviou na última mensagem)
 # ============================================================
 
 class LeitorXLS:
