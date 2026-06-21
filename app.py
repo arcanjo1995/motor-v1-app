@@ -7,7 +7,8 @@ from main import (
     treinar_base_longo_prazo_com_janelas,
     integrar_recencia_no_modelo,
     adicionar_a_base_longo_prazo,
-    carregar_modelo_longo_prazo
+    carregar_modelo_longo_prazo,
+    salvar_modelo_longo_prazo
 )
 
 st.set_page_config(page_title="MOTOR V1 - Painel Operacional", page_icon="🛡️", layout="wide")
@@ -126,7 +127,7 @@ with aba_tipo_d:
             
             if os.path.exists(caminho_temp): os.remove(caminho_temp)
 
-        # 2. SUBSTITUIR BASE DE LONGO PRAZO
+        # 2. SUBSTITUIR BASE DE LONGO PRAZO (COM FORÇA DE SALVAMENTO)
         if salvar_como_base:
             with open(caminho_temp, "wb") as f: f.write(arquivo_upload.getbuffer())
             try:
@@ -136,6 +137,15 @@ with aba_tipo_d:
                 dados = LeitorXLS(NOME_BASE_DEFINITIVA).ler_e_validar()
                 if dados:
                     relatorio = treinar_base_longo_prazo_com_janelas(dados)
+                    
+                    # FORÇA SALVAMENTO CASO TENHA FALHADO
+                    if not relatorio.get("modelo_salvo_com_sucesso", False):
+                        try:
+                            motor_forca = MotorV1Completo(dados)
+                            if salvar_modelo_longo_prazo(motor_forca.ia):
+                                relatorio["modelo_salvo_com_sucesso"] = True
+                        except:
+                            pass
                     
                     if relatorio.get("sucesso"):
                         st.success("✅ Base de Longo Prazo substituída e treinada com sucesso!")
@@ -182,7 +192,7 @@ with aba_tipo_d:
                                                 "Assertividade %": assertividade
                                             })
                                 else:
-                                    st.info("Nenhum padrão de Xadrez relevante encontrado.")
+                                    st.info("Nenhum padrão de Xadrez relevante encontrado (base pode precisar de mais dados).")
 
                                 st.markdown("**Streak**")
                                 if hasattr(ia_atual, 'padroes_streak_detalhado') and ia_atual.padroes_streak_detalhado:
@@ -202,9 +212,9 @@ with aba_tipo_d:
                                                 "Assertividade %": assertividade
                                             })
                                 else:
-                                    st.info("Nenhum padrão de Streak relevante encontrado.")
+                                    st.info("Nenhum padrão de Streak relevante encontrado (base pode precisar de mais dados).")
                             else:
-                                st.warning("Modelo não encontrado após treinamento.")
+                                st.error("Modelo ainda não foi salvo corretamente. Tente novamente ou reinicie o app.")
                     else:
                         st.warning(relatorio.get("mensagem"))
                 else:
@@ -213,13 +223,22 @@ with aba_tipo_d:
                 st.error(f"Erro ao salvar e treinar base: {e}")
             if os.path.exists(caminho_temp): os.remove(caminho_temp)
 
-        # 3. ADICIONAR À BASE DE LONGO PRAZO (CORRIGIDO)
+        # 3. ADICIONAR À BASE DE LONGO PRAZO (COM FORÇA DE SALVAMENTO)
         if adicionar_base:
             with open(caminho_temp, "wb") as f: f.write(arquivo_upload.getbuffer())
             try:
                 dados_novos = LeitorXLS(caminho_temp).ler_e_validar()
                 if dados_novos:
                     relatorio = adicionar_a_base_longo_prazo(dados_novos)
+                    
+                    # FORÇA SALVAMENTO CASO TENHA FALHADO
+                    if not relatorio.get("modelo_salvo_com_sucesso", False):
+                        try:
+                            motor_forca = MotorV1Completo(dados_novos)
+                            if salvar_modelo_longo_prazo(motor_forca.ia):
+                                relatorio["modelo_salvo_com_sucesso"] = True
+                        except:
+                            pass
                     
                     if relatorio.get("sucesso"):
                         if relatorio.get("modelo_salvo_com_sucesso"):
@@ -267,7 +286,7 @@ with aba_tipo_d:
                                                     "Assertividade %": assertividade
                                                 })
                                     else:
-                                        st.info("Nenhum padrão de Xadrez relevante encontrado.")
+                                        st.info("Nenhum padrão de Xadrez relevante encontrado (base pode precisar de mais dados).")
 
                                     st.markdown("**Streak**")
                                     if hasattr(ia_atual, 'padroes_streak_detalhado') and ia_atual.padroes_streak_detalhado:
@@ -287,11 +306,11 @@ with aba_tipo_d:
                                                     "Assertividade %": assertividade
                                                 })
                                     else:
-                                        st.info("Nenhum padrão de Streak relevante encontrado.")
+                                        st.info("Nenhum padrão de Streak relevante encontrado (base pode precisar de mais dados).")
                                 else:
-                                    st.warning("Modelo não encontrado após adição. Tente usar o botão 'Substituir Base de Longo Prazo' (mais estável).")
+                                    st.error("Modelo ainda não foi salvo corretamente. Use o botão 'Substituir Base de Longo Prazo'.")
                         else:
-                            st.error("Treinamento realizado, mas **falha ao salvar o modelo no disco**. Tente usar o botão 'Substituir Base de Longo Prazo'.")
+                            st.error("Treinamento realizado, mas falha ao salvar o modelo. Tente usar 'Substituir Base de Longo Prazo'.")
                     else:
                         st.warning(relatorio.get("mensagem"))
                 else:
