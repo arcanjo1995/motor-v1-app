@@ -69,7 +69,7 @@ with aba_tipo_b:
                 st.error(f"Erro ao processar: {e}")
 
 # =========================================================================
-# ABA TIPO D (ATUALIZADA COM RELATÓRIO DE PADRÕES)
+# ABA TIPO D - COM RELATÓRIO DE PADRÕES APÓS TREINAMENTO
 # =========================================================================
 with aba_tipo_d:
     st.header("📊 Auditoria Cronológica Tipo D")
@@ -101,9 +101,7 @@ with aba_tipo_d:
         with col3:
             adicionar_base = st.button("➕ Adicionar à Base de Longo Prazo")
 
-        # ============================================================
         # 1. INICIAR AUDITORIA DE RECÊNCIA
-        # ============================================================
         if rodar_auditoria:
             with open(caminho_temp, "wb") as f: f.write(arquivo_upload.getbuffer())
             if os.path.exists(NOME_RECENCIA_ATIVA): os.remove(NOME_RECENCIA_ATIVA)
@@ -136,9 +134,7 @@ with aba_tipo_d:
             
             if os.path.exists(caminho_temp): os.remove(caminho_temp)
 
-        # ============================================================
-        # 2. SUBSTITUIR BASE DE LONGO PRAZO (COM RELATÓRIO DE PADRÕES)
-        # ============================================================
+        # 2. SUBSTITUIR BASE DE LONGO PRAZO
         if salvar_como_base:
             with open(caminho_temp, "wb") as f: f.write(arquivo_upload.getbuffer())
             try:
@@ -152,7 +148,6 @@ with aba_tipo_d:
                     if relatorio.get("sucesso"):
                         st.success("✅ Base de Longo Prazo substituída e treinada com sucesso!")
                         
-                        # === RELATÓRIO DE NÚMEROS ===
                         st.subheader("📊 Relatório de Treinamento da Base Longa")
                         col1, col2, col3 = st.columns(3)
                         with col1:
@@ -174,15 +169,14 @@ with aba_tipo_d:
                             with st.expander("🔬 Análise Detalhada por Número (Comportamento Pós-Aparição)", expanded=False):
                                 st.json(relatorio["analise_comportamento_numeros"])
 
-                        # === NOVO: RELATÓRIO DE PADRÕES ===
+                        # === RELATÓRIO DE PADRÕES ===
                         st.subheader("♟️ Padrões Avançados Aprendidos nesta Base")
                         ia_atual = carregar_modelo_longo_prazo()
                         if ia_atual:
-                            # Xadrez
-                            with st.expander("Padrões de Xadrez (com cor após e números que trollam)", expanded=False):
+                            with st.expander("Padrões de Xadrez (com cor após e números que trollam)", expanded=True):
                                 if hasattr(ia_atual, 'padroes_xadrez_detalhado') and ia_atual.padroes_xadrez_detalhado:
                                     for padrao, info in ia_atual.padroes_xadrez_detalhado.items():
-                                        if info.get("total", 0) >= 8:  # só mostra padrões relevantes
+                                        if info.get("total", 0) >= 8:
                                             st.markdown(f"**{padrao}** — Apareceu {info['total']}x")
                                             st.json({
                                                 "Após o padrão → Vermelho": info.get("apos_V", 0),
@@ -192,8 +186,7 @@ with aba_tipo_d:
                                 else:
                                     st.info("Nenhum padrão de Xadrez relevante encontrado.")
 
-                            # Streak
-                            with st.expander("Padrões de Streak (com cor após e números que trollam)", expanded=False):
+                            with st.expander("Padrões de Streak (com cor após e números que trollam)", expanded=True):
                                 if hasattr(ia_atual, 'padroes_streak_detalhado') and ia_atual.padroes_streak_detalhado:
                                     for padrao, info in ia_atual.padroes_streak_detalhado.items():
                                         if info.get("total", 0) >= 8:
@@ -213,9 +206,7 @@ with aba_tipo_d:
                 st.error(f"Erro ao salvar e treinar base: {e}")
             if os.path.exists(caminho_temp): os.remove(caminho_temp)
 
-        # ============================================================
-        # 3. ADICIONAR À BASE DE LONGO PRAZO (COM RELATÓRIO DE PADRÕES)
-        # ============================================================
+        # 3. ADICIONAR À BASE DE LONGO PRAZO
         if adicionar_base:
             with open(caminho_temp, "wb") as f: f.write(arquivo_upload.getbuffer())
             try:
@@ -247,11 +238,11 @@ with aba_tipo_d:
                             with st.expander("🔬 Análise Detalhada por Número (Comportamento Pós-Aparição)", expanded=False):
                                 st.json(relatorio["analise_comportamento_numeros"])
 
-                        # === NOVO: RELATÓRIO DE PADRÕES ===
+                        # === RELATÓRIO DE PADRÕES ===
                         st.subheader("♟️ Padrões Avançados Aprendidos nesta Base")
                         ia_atual = carregar_modelo_longo_prazo()
                         if ia_atual:
-                            with st.expander("Padrões de Xadrez (com cor após e números que trollam)", expanded=False):
+                            with st.expander("Padrões de Xadrez (com cor após e números que trollam)", expanded=True):
                                 if hasattr(ia_atual, 'padroes_xadrez_detalhado') and ia_atual.padroes_xadrez_detalhado:
                                     for padrao, info in ia_atual.padroes_xadrez_detalhado.items():
                                         if info.get("total", 0) >= 8:
@@ -264,7 +255,7 @@ with aba_tipo_d:
                                 else:
                                     st.info("Nenhum padrão de Xadrez relevante encontrado.")
 
-                            with st.expander("Padrões de Streak (com cor após e números que trollam)", expanded=False):
+                            with st.expander("Padrões de Streak (com cor após e números que trollam)", expanded=True):
                                 if hasattr(ia_atual, 'padroes_streak_detalhado') and ia_atual.padroes_streak_detalhado:
                                     for padrao, info in ia_atual.padroes_streak_detalhado.items():
                                         if info.get("total", 0) >= 8:
