@@ -69,7 +69,7 @@ with aba_tipo_b:
                 st.error(f"Erro ao processar: {e}")
 
 # =========================================================================
-# ABA TIPO D - COM RELATÓRIO DE PADRÕES APÓS TREINAMENTO
+# ABA TIPO D (ATUALIZADA COM RELATÓRIO DE PADRÕES)
 # =========================================================================
 with aba_tipo_d:
     st.header("📊 Auditoria Cronológica Tipo D")
@@ -173,7 +173,7 @@ with aba_tipo_d:
                         st.subheader("♟️ Padrões Avançados Aprendidos nesta Base")
                         ia_atual = carregar_modelo_longo_prazo()
                         if ia_atual:
-                            with st.expander("Padrões de Xadrez (com cor após e números que trollam)", expanded=True):
+                            with st.expander("Padrões de Xadrez (com cor após e números que trollam)", expanded=False):
                                 if hasattr(ia_atual, 'padroes_xadrez_detalhado') and ia_atual.padroes_xadrez_detalhado:
                                     for padrao, info in ia_atual.padroes_xadrez_detalhado.items():
                                         if info.get("total", 0) >= 8:
@@ -186,7 +186,7 @@ with aba_tipo_d:
                                 else:
                                     st.info("Nenhum padrão de Xadrez relevante encontrado.")
 
-                            with st.expander("Padrões de Streak (com cor após e números que trollam)", expanded=True):
+                            with st.expander("Padrões de Streak (com cor após e números que trollam)", expanded=False):
                                 if hasattr(ia_atual, 'padroes_streak_detalhado') and ia_atual.padroes_streak_detalhado:
                                     for padrao, info in ia_atual.padroes_streak_detalhado.items():
                                         if info.get("total", 0) >= 8:
@@ -242,7 +242,7 @@ with aba_tipo_d:
                         st.subheader("♟️ Padrões Avançados Aprendidos nesta Base")
                         ia_atual = carregar_modelo_longo_prazo()
                         if ia_atual:
-                            with st.expander("Padrões de Xadrez (com cor após e números que trollam)", expanded=True):
+                            with st.expander("Padrões de Xadrez (com cor após e números que trollam)", expanded=False):
                                 if hasattr(ia_atual, 'padroes_xadrez_detalhado') and ia_atual.padroes_xadrez_detalhado:
                                     for padrao, info in ia_atual.padroes_xadrez_detalhado.items():
                                         if info.get("total", 0) >= 8:
@@ -255,7 +255,7 @@ with aba_tipo_d:
                                 else:
                                     st.info("Nenhum padrão de Xadrez relevante encontrado.")
 
-                            with st.expander("Padrões de Streak (com cor após e números que trollam)", expanded=True):
+                            with st.expander("Padrões de Streak (com cor após e números que trollam)", expanded=False):
                                 if hasattr(ia_atual, 'padroes_streak_detalhado') and ia_atual.padroes_streak_detalhado:
                                     for padrao, info in ia_atual.padroes_streak_detalhado.items():
                                         if info.get("total", 0) >= 8:
