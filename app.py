@@ -157,16 +157,13 @@ with aba_tipo_d:
                         st.info(f"Assertividade G0 + G1: **{relatorio['assertividade_g0_g1_percent']}%**")
                         st.caption(relatorio["mensagem"])
 
-                        # === EXPANDER DE NÚMEROS (mantido exatamente) ===
                         if "analise_comportamento_numeros" in relatorio:
                             with st.expander("🔬 Análise Detalhada por Número (Comportamento Pós-Aparição)", expanded=False):
                                 st.json(relatorio["analise_comportamento_numeros"])
 
-                        # === EXPANDER DE PADRÕES (MESMO LAYOUT DO DE NÚMEROS) ===
                         with st.expander("♟️ Padrões Avançados Aprendidos nesta Base (Xadrez e Streak) + Métricas de Assertividade", expanded=False):
                             ia_atual = carregar_modelo_longo_prazo()
                             if ia_atual:
-                                # Xadrez
                                 st.markdown("**Xadrez**")
                                 if hasattr(ia_atual, 'padroes_xadrez_detalhado') and ia_atual.padroes_xadrez_detalhado:
                                     for padrao, info in ia_atual.padroes_xadrez_detalhado.items():
@@ -187,7 +184,6 @@ with aba_tipo_d:
                                 else:
                                     st.info("Nenhum padrão de Xadrez relevante encontrado.")
 
-                                # Streak
                                 st.markdown("**Streak**")
                                 if hasattr(ia_atual, 'padroes_streak_detalhado') and ia_atual.padroes_streak_detalhado:
                                     for padrao, info in ia_atual.padroes_streak_detalhado.items():
@@ -217,7 +213,7 @@ with aba_tipo_d:
                 st.error(f"Erro ao salvar e treinar base: {e}")
             if os.path.exists(caminho_temp): os.remove(caminho_temp)
 
-        # 3. ADICIONAR À BASE DE LONGO PRAZO
+        # 3. ADICIONAR À BASE DE LONGO PRAZO (CORRIGIDO)
         if adicionar_base:
             with open(caminho_temp, "wb") as f: f.write(arquivo_upload.getbuffer())
             try:
@@ -226,74 +222,76 @@ with aba_tipo_d:
                     relatorio = adicionar_a_base_longo_prazo(dados_novos)
                     
                     if relatorio.get("sucesso"):
-                        st.success("✅ Dados adicionados e base treinada com sucesso!")
-                        
-                        st.subheader("📊 Relatório de Treinamento Após Adição")
-                        col1, col2, col3 = st.columns(3)
-                        with col1:
-                            st.metric("Registros Totais na Base", relatorio["registros_processados"])
-                            st.metric("Janelas Analisadas", relatorio["janelas_analisadas"])
-                        with col2:
-                            st.metric("G0", relatorio["G0"])
-                            st.metric("G1", relatorio["G1"])
-                            st.metric("G2", relatorio["G2"])
-                        with col3:
-                            st.metric("Falhas", relatorio["FALHA"])
-                            st.metric("NO CALL", relatorio["NO CALL"])
-                            st.metric("Regras Boas", relatorio["regras_com_boa_performance"])
+                        if relatorio.get("modelo_salvo_com_sucesso"):
+                            st.success("✅ Dados adicionados e base treinada com sucesso!")
+                            
+                            st.subheader("📊 Relatório de Treinamento Após Adição")
+                            col1, col2, col3 = st.columns(3)
+                            with col1:
+                                st.metric("Registros Totais na Base", relatorio["registros_processados"])
+                                st.metric("Janelas Analisadas", relatorio["janelas_analisadas"])
+                            with col2:
+                                st.metric("G0", relatorio["G0"])
+                                st.metric("G1", relatorio["G1"])
+                                st.metric("G2", relatorio["G2"])
+                            with col3:
+                                st.metric("Falhas", relatorio["FALHA"])
+                                st.metric("NO CALL", relatorio["NO CALL"])
+                                st.metric("Regras Boas", relatorio["regras_com_boa_performance"])
 
-                        st.info(f"Assertividade G0 + G1: **{relatorio['assertividade_g0_g1_percent']}%**")
-                        st.caption(relatorio["mensagem"])
+                            st.info(f"Assertividade G0 + G1: **{relatorio['assertividade_g0_g1_percent']}%**")
+                            st.caption(relatorio["mensagem"])
 
-                        if "analise_comportamento_numeros" in relatorio:
-                            with st.expander("🔬 Análise Detalhada por Número (Comportamento Pós-Aparição)", expanded=False):
-                                st.json(relatorio["analise_comportamento_numeros"])
+                            if "analise_comportamento_numeros" in relatorio:
+                                with st.expander("🔬 Análise Detalhada por Número (Comportamento Pós-Aparição)", expanded=False):
+                                    st.json(relatorio["analise_comportamento_numeros"])
 
-                        # === EXPANDER DE PADRÕES (MESMO LAYOUT) ===
-                        with st.expander("♟️ Padrões Avançados Aprendidos nesta Base (Xadrez e Streak) + Métricas de Assertividade", expanded=False):
-                            ia_atual = carregar_modelo_longo_prazo()
-                            if ia_atual:
-                                st.markdown("**Xadrez**")
-                                if hasattr(ia_atual, 'padroes_xadrez_detalhado') and ia_atual.padroes_xadrez_detalhado:
-                                    for padrao, info in ia_atual.padroes_xadrez_detalhado.items():
-                                        if info.get("total", 0) >= 8:
-                                            total = info.get("total", 0)
-                                            g0 = info.get("g0", 0)
-                                            g1 = info.get("g1", 0)
-                                            assertividade = round(((g0 + g1) / total) * 100, 1) if total > 0 else 0.0
-                                            st.markdown(f"**{padrao}** — {total}x")
-                                            st.json({
-                                                "Após → Vermelho": info.get("apos_V", 0),
-                                                "Após → Preto": info.get("apos_P", 0),
-                                                "Números que trollam": dict(info.get("quebradores", {})),
-                                                "G0": g0,
-                                                "G1": g1,
-                                                "Assertividade %": assertividade
-                                            })
+                            with st.expander("♟️ Padrões Avançados Aprendidos nesta Base (Xadrez e Streak) + Métricas de Assertividade", expanded=False):
+                                ia_atual = carregar_modelo_longo_prazo()
+                                if ia_atual:
+                                    st.markdown("**Xadrez**")
+                                    if hasattr(ia_atual, 'padroes_xadrez_detalhado') and ia_atual.padroes_xadrez_detalhado:
+                                        for padrao, info in ia_atual.padroes_xadrez_detalhado.items():
+                                            if info.get("total", 0) >= 8:
+                                                total = info.get("total", 0)
+                                                g0 = info.get("g0", 0)
+                                                g1 = info.get("g1", 0)
+                                                assertividade = round(((g0 + g1) / total) * 100, 1) if total > 0 else 0.0
+                                                st.markdown(f"**{padrao}** — {total}x")
+                                                st.json({
+                                                    "Após → Vermelho": info.get("apos_V", 0),
+                                                    "Após → Preto": info.get("apos_P", 0),
+                                                    "Números que trollam": dict(info.get("quebradores", {})),
+                                                    "G0": g0,
+                                                    "G1": g1,
+                                                    "Assertividade %": assertividade
+                                                })
+                                    else:
+                                        st.info("Nenhum padrão de Xadrez relevante encontrado.")
+
+                                    st.markdown("**Streak**")
+                                    if hasattr(ia_atual, 'padroes_streak_detalhado') and ia_atual.padroes_streak_detalhado:
+                                        for padrao, info in ia_atual.padroes_streak_detalhado.items():
+                                            if info.get("total", 0) >= 8:
+                                                total = info.get("total", 0)
+                                                g0 = info.get("g0", 0)
+                                                g1 = info.get("g1", 0)
+                                                assertividade = round(((g0 + g1) / total) * 100, 1) if total > 0 else 0.0
+                                                st.markdown(f"**{padrao}** — {total}x")
+                                                st.json({
+                                                    "Após → Vermelho": info.get("apos_V", 0),
+                                                    "Após → Preto": info.get("apos_P", 0),
+                                                    "Números que trollam": dict(info.get("quebradores", {})),
+                                                    "G0": g0,
+                                                    "G1": g1,
+                                                    "Assertividade %": assertividade
+                                                })
+                                    else:
+                                        st.info("Nenhum padrão de Streak relevante encontrado.")
                                 else:
-                                    st.info("Nenhum padrão de Xadrez relevante encontrado.")
-
-                                st.markdown("**Streak**")
-                                if hasattr(ia_atual, 'padroes_streak_detalhado') and ia_atual.padroes_streak_detalhado:
-                                    for padrao, info in ia_atual.padroes_streak_detalhado.items():
-                                        if info.get("total", 0) >= 8:
-                                            total = info.get("total", 0)
-                                            g0 = info.get("g0", 0)
-                                            g1 = info.get("g1", 0)
-                                            assertividade = round(((g0 + g1) / total) * 100, 1) if total > 0 else 0.0
-                                            st.markdown(f"**{padrao}** — {total}x")
-                                            st.json({
-                                                "Após → Vermelho": info.get("apos_V", 0),
-                                                "Após → Preto": info.get("apos_P", 0),
-                                                "Números que trollam": dict(info.get("quebradores", {})),
-                                                "G0": g0,
-                                                "G1": g1,
-                                                "Assertividade %": assertividade
-                                            })
-                                else:
-                                    st.info("Nenhum padrão de Streak relevante encontrado.")
-                            else:
-                                st.warning("Modelo não encontrado após adição.")
+                                    st.warning("Modelo não encontrado após adição. Tente usar o botão 'Substituir Base de Longo Prazo' (mais estável).")
+                        else:
+                            st.error("Treinamento realizado, mas **falha ao salvar o modelo no disco**. Tente usar o botão 'Substituir Base de Longo Prazo'.")
                     else:
                         st.warning(relatorio.get("mensagem"))
                 else:
