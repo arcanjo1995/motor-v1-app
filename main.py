@@ -171,7 +171,13 @@ def treinar_base_longo_prazo_com_janelas(dados_completos):
             unique_patterns.append(p)
 
     motor.ia.memoria_padroes_vencedores = unique_patterns
+    
+    # PRIMEIRA TENTATIVA DE SALVAMENTO
     sucesso_salvar = salvar_modelo_longo_prazo(motor.ia)
+    
+    # SEGUNDA TENTATIVA (caso a primeira falhe)
+    if not sucesso_salvar:
+        sucesso_salvar = salvar_modelo_longo_prazo(motor.ia)
 
     stats = getattr(motor, 'stats', {"G0": 0, "G1": 0, "G2": 0, "FALHA": 0, "NO CALL": 0})
     total_janelas = sum(stats.values()) if stats else 0
@@ -521,7 +527,7 @@ class IAPreditivaV1:
         self._processar_bloco_dados(sub_dados, multiplicador_peso, True)
         if analise_contexto:
             for regra in analise_contexto.get("regras_posicionais", []):
-                self.historico_regras[regra.get("tipo_regra", "DESCONHECIDO")]["total"] += 1
+                self.historico_regras[regra.get("tipo_regra", "DESCONHEVIDO")]["total"] += 1
 
     def registrar_padrao_vencedor(self, analise_contexto, resultado):
         if resultado not in ["G0", "G1"]: return
@@ -920,7 +926,7 @@ class AnalisadorContextoAvancado:
 
 # ============================================================
 # LeitorXLS + SequenciaOperacional + MotorV1Completo + ProcessadorTipoB + EngineMatematicoAvancado
-# (todas as classes permanecem exatamente iguais ao que você enviou na última mensagem)
+# (todas as classes permanecem exatamente iguais)
 # ============================================================
 
 class LeitorXLS:
