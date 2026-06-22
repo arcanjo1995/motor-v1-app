@@ -5,6 +5,7 @@ import pickle
 import json
 from datetime import datetime
 import time
+import tempfile
 
 NOME_BASE_DEFINITIVA = "resultados_blaze.xlsx"
 
@@ -19,7 +20,7 @@ def salvar_log_json(dados, nome_arquivo="logs/sinais_tipo_b.jsonl"):
 
 
 # ============================================================
-# Funções de Persistência (VERSÃO MAIS ROBUSTA POSSÍVEL)
+# Funções de Persistência (VERSÃO FINAL ROBUSTA)
 # ============================================================
 def salvar_modelo_longo_prazo(ia, caminho="modelo_longo_prazo.pkl"):
     try:
@@ -28,26 +29,39 @@ def salvar_modelo_longo_prazo(ia, caminho="modelo_longo_prazo.pkl"):
             os.makedirs(pasta, exist_ok=True)
 
         for tentativa in range(5):
+            tmp_path = None
             try:
-                with open(caminho, "wb") as f:
-                    pickle.dump(ia, f, protocol=pickle.HIGHEST_PROTOCOL)
-                    f.flush()
-                    os.fsync(f.fileno())
+                with tempfile.NamedTemporaryFile(mode='wb', delete=False, suffix='.pkl') as tmp:
+                    tmp_path = tmp.name
+                    pickle.dump(ia, tmp, protocol=pickle.HIGHEST_PROTOCOL)
+                    tmp.flush()
+                    os.fsync(tmp.fileno())
+
+                if os.path.exists(caminho):
+                    os.remove(caminho)
+                os.replace(tmp_path, caminho)
                 return True
             except Exception as e:
-                print(f"Tentativa {tentativa + 1} falhou: {e}")
-                time.sleep(0.8)
+                print(f"Tentativa {tentativa + 1} de salvar o modelo falhou: {e}")
+                if tmp_path and os.path.exists(tmp_path):
+                    try:
+                        os.remove(tmp_path)
+                    except:
+                        pass
+                time.sleep(0.7)
         return False
     except Exception as e:
-        print(f"Erro crítico ao salvar: {e}")
+        print(f"Erro crítico ao salvar modelo: {e}")
         return False
+
 
 def carregar_modelo_longo_prazo(caminho="modelo_longo_prazo.pkl"):
     if os.path.exists(caminho):
         try:
             with open(caminho, "rb") as f:
                 return pickle.load(f)
-        except:
+        except Exception as e:
+            print(f"Erro ao carregar modelo: {e}")
             return None
     return None
 
@@ -167,10 +181,7 @@ def treinar_base_longo_prazo_com_janelas(dados_completos):
     motor = MotorV1Completo(dados_completos)
     motor.processar_auditoria()
     reforcar_aprendizado_tipo_d(motor.ia)
-
     motor.ia.mapear_padroes_avancados(dados_completos)
-
-    analise_numeros = motor.ia.analisar_comportamento_pos_numero()
 
     seen = set()
     unique_patterns = []
@@ -185,13 +196,17 @@ def treinar_base_longo_prazo_com_janelas(dados_completos):
 
     motor.ia.memoria_padroes_vencedores = unique_patterns
 
-    # Tenta salvar até 5 vezes
+    # SALVAMENTO ROBUSTO
     sucesso_salvar = False
-    for _ in range(5):
+    for _ in range(3):
         sucesso_salvar = salvar_modelo_longo_prazo(motor.ia)
         if sucesso_salvar:
-            break
-        time.sleep(0.8)
+            ia_verif = carregar_modelo_longo_prazo()
+            if ia_verif is not None:
+                break
+            else:
+                sucesso_salvar = False
+        time.sleep(0.6)
 
     stats = getattr(motor, 'stats', {"G0": 0, "G1": 0, "G2": 0, "FALHA": 0, "NO CALL": 0})
     total_janelas = sum(stats.values()) if stats else 0
@@ -202,6 +217,8 @@ def treinar_base_longo_prazo_com_janelas(dados_completos):
             regras_boas += 1
 
     taxa_g0_g1 = ((stats.get("G0", 0) + stats.get("G1", 0)) / total_janelas * 100) if total_janelas > 0 else 0
+
+    analise_numeros = motor.ia.analisar_comportamento_pos_numero()
 
     return {
         "sucesso": True,
@@ -216,13 +233,15 @@ def treinar_base_longo_prazo_com_janelas(dados_completos):
         "assertividade_g0_g1_percent": round(taxa_g0_g1, 2),
         "modelo_salvo_com_sucesso": sucesso_salvar,
         "analise_comportamento_numeros": analise_numeros,
+        "ia_treinada": motor.ia,                    # ← Retornamos a IA treinada para fallback
         "mensagem": "Treinamento profundo concluído com sucesso."
     }
 
 
 # ============================================================
-# MotorAnalise (inalterado)
+# CLASSES PRINCIPAIS (mantidas exatamente como estavam funcionando)
 # ============================================================
+
 class MotorAnalise:
     @staticmethod
     def analisar_janela(sub_num, sub_pol, ia_modelo, base_longa=None):
@@ -357,9 +376,6 @@ class MotorAnalise:
         }
 
 
-# ============================================================
-# IAPreditivaV1 (COMPLETO - inalterado)
-# ============================================================
 class IAPreditivaV1:
     def __init__(self, dados_longo_prazo, dados_recencia=None):
         self.dados_longo = dados_longo_prazo
@@ -769,11 +785,6 @@ class IAPreditivaV1:
         return relatorio
 
 
-# ============================================================
-# MotorNoCall, JuizHierarquicoModificado, MotorContagensProjetivas, AnalisadorContextoAvancado
-# (todas as classes permanecem exatamente iguais)
-# ============================================================
-
 class MotorNoCall:
     @staticmethod
     def checar_no_call(sub_num, sub_pol):
@@ -930,11 +941,6 @@ class AnalisadorContextoAvancado:
         elif alternancias <= 3: return "RECUPERACAO"
         return "NEUTRO"
 
-
-# ============================================================
-# LeitorXLS + SequenciaOperacional + MotorV1Completo + ProcessadorTipoB + EngineMatematicoAvancado
-# (todas as classes permanecem exatamente iguais)
-# ============================================================
 
 class LeitorXLS:
     def __init__(self, caminho_arquivo):
@@ -1301,8 +1307,3 @@ class EngineMatematicoAvancado:
             "custo_total_operacao": round(custo_total, 2),
             "house_edge_estatico": "-6.67%"
         }
-
-
-# ============================================================
-# FIM DO CÓDIGO
-# ============================================================
