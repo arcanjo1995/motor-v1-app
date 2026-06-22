@@ -4,6 +4,7 @@ from collections import defaultdict
 import pickle
 import json
 from datetime import datetime
+import time
 
 NOME_BASE_DEFINITIVA = "resultados_blaze.xlsx"
 
@@ -18,15 +19,25 @@ def salvar_log_json(dados, nome_arquivo="logs/sinais_tipo_b.jsonl"):
 
 
 # ============================================================
-# Funções de Persistência e Integração
+# Funções de Persistência e Integração (VERSÃO ROBUSTA)
 # ============================================================
 def salvar_modelo_longo_prazo(ia, caminho="modelo_longo_prazo.pkl"):
     try:
-        with open(caminho, "wb") as f:
-            pickle.dump(ia, f)
-        return True
+        pasta = os.path.dirname(caminho)
+        if pasta:
+            os.makedirs(pasta, exist_ok=True)
+
+        for tentativa in range(3):
+            try:
+                with open(caminho, "wb") as f:
+                    pickle.dump(ia, f)
+                return True
+            except Exception as e:
+                print(f"Tentativa {tentativa + 1} de salvar o modelo falhou: {e}")
+                time.sleep(0.5)
+        return False
     except Exception as e:
-        print(f"Erro ao salvar modelo: {e}")
+        print(f"Erro crítico ao salvar modelo: {e}")
         return False
 
 def carregar_modelo_longo_prazo(caminho="modelo_longo_prazo.pkl"):
@@ -171,13 +182,14 @@ def treinar_base_longo_prazo_com_janelas(dados_completos):
             unique_patterns.append(p)
 
     motor.ia.memoria_padroes_vencedores = unique_patterns
-    
-    # PRIMEIRA TENTATIVA DE SALVAMENTO
-    sucesso_salvar = salvar_modelo_longo_prazo(motor.ia)
-    
-    # SEGUNDA TENTATIVA (caso a primeira falhe)
-    if not sucesso_salvar:
+
+    # Tenta salvar até 3 vezes
+    sucesso_salvar = False
+    for _ in range(3):
         sucesso_salvar = salvar_modelo_longo_prazo(motor.ia)
+        if sucesso_salvar:
+            break
+        time.sleep(0.5)
 
     stats = getattr(motor, 'stats', {"G0": 0, "G1": 0, "G2": 0, "FALHA": 0, "NO CALL": 0})
     total_janelas = sum(stats.values()) if stats else 0
@@ -207,7 +219,7 @@ def treinar_base_longo_prazo_com_janelas(dados_completos):
 
 
 # ============================================================
-# MotorAnalise (inalterado)
+# MotorAnalise
 # ============================================================
 class MotorAnalise:
     @staticmethod
@@ -344,7 +356,7 @@ class MotorAnalise:
 
 
 # ============================================================
-# IAPreditivaV1 (COMPLETO com suporte a pickle)
+# IAPreditivaV1 (COMPLETO)
 # ============================================================
 class IAPreditivaV1:
     def __init__(self, dados_longo_prazo, dados_recencia=None):
@@ -926,7 +938,6 @@ class AnalisadorContextoAvancado:
 
 # ============================================================
 # LeitorXLS + SequenciaOperacional + MotorV1Completo + ProcessadorTipoB + EngineMatematicoAvancado
-# (todas as classes permanecem exatamente iguais)
 # ============================================================
 
 class LeitorXLS:
