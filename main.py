@@ -49,7 +49,6 @@ def salvar_modelo_longo_prazo(ia, caminho="modelo_longo_prazo.pkl"):
         for tentativa in range(5):
             tmp_path = None
             try:
-                # dir=dir_alvo garante estabilidade mesmo em servidores Streamlit isolados
                 with tempfile.NamedTemporaryFile(mode='wb', delete=False, suffix='.pkl', dir=dir_alvo) as tmp:
                     tmp_path = tmp.name
                     pickle.dump(ia, tmp, protocol=pickle.HIGHEST_PROTOCOL)
@@ -419,7 +418,6 @@ class IAPreditivaV1:
         self.streak_breaker_stats = {"V": defaultdict(int), "P": defaultdict(int)}
         self.color_ngrams = {1: defaultdict(int), 2: defaultdict(int), 3: defaultdict(int)}
 
-        # Uso de fábricas nomeadas globais para evitar falhas do Pickle
         self.padroes_xadrez_detalhado = defaultdict(fabrica_padrao_detalhado)
         self.padroes_streak_detalhado = defaultdict(fabrica_padrao_detalhado)
 
@@ -694,7 +692,8 @@ class IAPreditivaV1:
         if comportamento == "VERMELHO": v_bonus += 12
         elif comportamento == "PRETO": p_bonus += 12
 
-        if abrir_estabilidade := stabilidade == "ESTÁVEL":
+        # Restauração da nomenclatura original exata semWalrus Operator
+        if estabilidade == "ESTÁVEL":
             if comportamento == "VERMELHO": v_bonus += 10
             elif comportamento == "PRETO": p_bonus += 10
         elif estabilidade == "INSTÁVEL":
@@ -944,7 +943,7 @@ class JuizHierarquicoModificado:
             else:
                 return "PRETO", "Fallback por regras", "FALLBACK_REGRA"
 
-        return "VERMELHO", "Fallback padrão do systema", "FALLBACK_PADRAO"
+        return "VERMELHO", "Fallback padrão do sistema", "FALLBACK_PADRAO"
 
 
 class MotorContagensProjetivas:
@@ -991,7 +990,7 @@ class MotorContagensProjetivas:
                 if padrao in final:
                     direcao_inversao = "PRETO" if sub_pol[-1] == "V" else "VERMELHO"
                     lista_bruta.append({
-                        "direcao": diecao_inversao,
+                        "direcao": direcao_inversao,
                         "tipo_regra": "ESPELHO_INVERSO_FINAL",
                         "origem": f"Padrão de inversão detectado ({padrao})"
                     })
@@ -1176,7 +1175,6 @@ class MotorV1Completo:
 
             stats[classificacao] = stats.get(classificacao, 0) + 1
 
-            # CORREÇÃO DEFINITIVA DO NameError: de 'expectations' para 'expectativas'
             if classificacao in ["G0", "G1"]:
                 contexto_analise = {
                     "geometria": geometria,
