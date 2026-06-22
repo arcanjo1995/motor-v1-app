@@ -233,13 +233,13 @@ def treinar_base_longo_prazo_com_janelas(dados_completos):
         "assertividade_g0_g1_percent": round(taxa_g0_g1, 2),
         "modelo_salvo_com_sucesso": sucesso_salvar,
         "analise_comportamento_numeros": analise_numeros,
-        "ia_treinada": motor.ia,                    # ← Retornamos a IA treinada para fallback
+        "ia_treinada": motor.ia,
         "mensagem": "Treinamento profundo concluído com sucesso."
     }
 
 
 # ============================================================
-# CLASSES PRINCIPAIS (mantidas exatamente como estavam funcionando)
+# CLASSES PRINCIPAIS
 # ============================================================
 
 class MotorAnalise:
@@ -420,30 +420,109 @@ class IAPreditivaV1:
 
     def __getstate__(self):
         state = self.__dict__.copy()
-        for key in ['modelo_transicao', 'modelo_numerico', 'color_ngrams',
-                    'xadrez_stats', 'streak_breaker_stats',
-                    'padroes_xadrez_detalhado', 'padroes_streak_detalhado']:
-            if key in state:
-                state[key] = dict(state[key])
+        
+        # Converte as estruturas externas e internas em dicts nativos purificados
+        if 'modelo_transicao' in state:
+            state['modelo_transicao'] = dict(state['modelo_transicao'])
+        if 'modelo_numerico' in state:
+            state['modelo_numerico'] = dict(state['modelo_numerico'])
+        if 'controladores_fortes' in state:
+            state['controladores_fortes'] = dict(state['controladores_fortes'])
+        if 'historico_regras' in state:
+            state['historico_regras'] = dict(state['historico_regras'])
+            
+        if 'color_ngrams' in state:
+            state['color_ngrams'] = {k: dict(v) for k, v in state['color_ngrams'].items()}
+            
+        if 'xadrez_stats' in state and isinstance(state['xadrez_stats'], dict):
+            xs = state['xadrez_stats'].copy()
+            if 'numeros_quebradores' in xs:
+                xs['numeros_quebradores'] = dict(xs['numeros_quebradores'])
+            state['xadrez_stats'] = xs
+            
+        if 'streak_breaker_stats' in state and isinstance(state['streak_breaker_stats'], dict):
+            ss = state['streak_breaker_stats'].copy()
+            for cor_k in ss:
+                ss[cor_k] = dict(ss[cor_k])
+            state['streak_breaker_stats'] = ss
+
+        if 'padroes_xadrez_detalhado' in state:
+            px = {}
+            for k, v in state['padroes_xadrez_detalhado'].items():
+                v_copy = v.copy()
+                if 'quebradores' in v_copy:
+                    v_copy['quebradores'] = dict(v_copy['quebradores'])
+                px[k] = v_copy
+            state['padroes_xadrez_detalhado'] = px
+
+        if 'padroes_streak_detalhado' in state:
+            ps = {}
+            for k, v in state['padroes_streak_detalhado'].items():
+                v_copy = v.copy()
+                if 'quebradores' in v_copy:
+                    v_copy['quebradores'] = dict(v_copy['quebradores'])
+                ps[k] = v_copy
+            state['padroes_streak_detalhado'] = ps
+            
         return state
 
     def __setstate__(self, state):
         self.__dict__.update(state)
         self.modelo_transicao = defaultdict(list, state.get('modelo_transicao', {}))
         self.modelo_numerico = defaultdict(list, state.get('modelo_numerico', {}))
-        self.color_ngrams = {k: defaultdict(int, v) for k, v in state.get('color_ngrams', {1: {}, 2: {}, 3: {}}).items()}
-        self.xadrez_stats = {"quebras": 0, "continuacoes": 0, "numeros_quebradores": defaultdict(int)}
-        self.xadrez_stats.update(state.get('xadrez_stats', {}))
-        self.streak_breaker_stats = {"V": defaultdict(int), "P": defaultdict(int)}
-        self.streak_breaker_stats.update(state.get('streak_breaker_stats', {}))
+        self.controladores_fortes = defaultdict(int, state.get('controladores_fortes', {}))
+        
+        self.historico_regras = defaultdict(lambda: {"acertos": 0, "total": 0})
+        for k, v in state.get('historico_regras', {}).items():
+            self.historico_regras[k] = {"acertos": v.get("acertos", 0), "total": v.get("total", 0)}
+
+        c_grams = state.get('color_ngrams', {1: {}, 2: {}, 3: {}})
+        self.color_ngrams = {k: defaultdict(int, v) for k, v in c_grams.items()}
+        
+        x_st = state.get('xadrez_stats', {})
+        self.xadrez_stats = {
+            "quebras": x_st.get("quebras", 0),
+            "continuacoes": x_st.get("continuacoes", 0),
+            "numeros_quebradores": defaultdict(int, x_st.get("numeros_quebradores", {}))
+        }
+        
+        s_st = state.get('streak_breaker_stats', {"V": {}, "P": {}})
+        self.streak_breaker_stats = {
+            "V": defaultdict(int, s_st.get("V", {})),
+            "P": defaultdict(int, s_st.get("P", {}))
+        }
+
+        px_loaded = state.get('padroes_xadrez_detalhado', {})
         self.padroes_xadrez_detalhado = defaultdict(lambda: {
             "total": 0, "apos_V": 0, "apos_P": 0, "apos_B": 0,
             "quebradores": defaultdict(int), "g0": 0, "g1": 0
-        }, state.get('padroes_xadrez_detalhado', {}))
+        })
+        for k, v in px_loaded.items():
+            self.padroes_xadrez_detalhado[k] = {
+                "total": v.get("total", 0),
+                "apos_V": v.get("apos_V", 0),
+                "apos_P": v.get("apos_P", 0),
+                "apos_B": v.get("apos_B", 0),
+                "quebradores": defaultdict(int, v.get("quebradores", {})),
+                "g0": v.get("g0", 0),
+                "g1": v.get("g1", 0)
+            }
+
+        ps_loaded = state.get('padroes_streak_detalhado', {})
         self.padroes_streak_detalhado = defaultdict(lambda: {
             "total": 0, "apos_V": 0, "apos_P": 0, "apos_B": 0,
             "quebradores": defaultdict(int), "g0": 0, "g1": 0
-        }, state.get('padroes_streak_detalhado', {}))
+        })
+        for k, v in ps_loaded.items():
+            self.padroes_streak_detalhado[k] = {
+                "total": v.get("total", 0),
+                "apos_V": v.get("apos_V", 0),
+                "apos_P": v.get("apos_P", 0),
+                "apos_B": v.get("apos_B", 0),
+                "quebradores": defaultdict(int, v.get("quebradores", {})),
+                "g0": v.get("g0", 0),
+                "g1": v.get("g1", 0)
+            }
 
     def _treinar_modelo_profundo(self):
         if self.dados_longo and len(self.dados_longo) >= 5:
@@ -608,7 +687,7 @@ class IAPreditivaV1:
         if comportamento == "VERMELHO": v_bonus += 12
         elif comportamento == "PRETO": p_bonus += 12
 
-        if estabilidade == "ESTÁVEL":
+        if abrir_estabilidade := estabilidade == "ESTÁVEL":
             if comportamento == "VERMELHO": v_bonus += 10
             elif comportamento == "PRETO": p_bonus += 10
         elif estabilidade == "INSTÁVEL":
@@ -770,7 +849,7 @@ class IAPreditivaV1:
                 else:
                     tendencia = "MODERADO"
             else:
-                tendencia = "DADOS INSUFICIENTES"
+                tendencia = "DADOS INSUFIDIENTES"
 
             relatorio[num] = {
                 "total_aparicoes": total,
@@ -1230,7 +1309,7 @@ class ProcessadorTipoB:
             "regime_recencia": regime_rec,
             "motivo_real": justificativa,
             "raciocinio_trace": raciocinio_trace,
-            "decisao_final": {"sinal": sinal, "justificativa": justificativa, "regra_id": regra_id}
+            "decisao_final": {"sinal": sinal, "justificativa": justificativa, "regra_id": regla_id}
         }
 
 
