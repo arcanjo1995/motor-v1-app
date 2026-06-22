@@ -10,7 +10,7 @@ import tempfile
 NOME_BASE_DEFINITIVA = "resultados_blaze.xlsx"
 
 # ============================================================
-# Funções de Fábrica Globais (Substitutos Oficiais dos Lambdas para o Pickle)
+# Funções de Fábrica Globais (Substitutos de Lambdas para o Pickle)
 # ============================================================
 def fabrica_padrao_detalhado():
     return {
@@ -49,7 +49,7 @@ def salvar_modelo_longo_prazo(ia, caminho="modelo_longo_prazo.pkl"):
         for tentativa in range(5):
             tmp_path = None
             try:
-                # dir=dir_alvo garante que o arquivo temporário seja criado no mesmo disco/pasta do projeto
+                # dir=dir_alvo garante estabilidade mesmo em servidores Streamlit isolados
                 with tempfile.NamedTemporaryFile(mode='wb', delete=False, suffix='.pkl', dir=dir_alvo) as tmp:
                     tmp_path = tmp.name
                     pickle.dump(ia, tmp, protocol=pickle.HIGHEST_PROTOCOL)
@@ -299,7 +299,7 @@ class MotorAnalise:
         resultado["camadas"].append({
             "camada": 3, "nome": "Regras Posicionais (Volume 12)",
             "resultado": f"{len(expectativas)} regras ativas",
-            "detalhe": [e["tipo_regra"] for e in expectations] if expectations else "Nenhuma",
+            "detalhe": [e["tipo_regra"] for e in expectativas] if expectativas else "Nenhuma",
             "impacto": "ALTO" if expectativas else "BAIXO"
         })
 
@@ -419,7 +419,7 @@ class IAPreditivaV1:
         self.streak_breaker_stats = {"V": defaultdict(int), "P": defaultdict(int)}
         self.color_ngrams = {1: defaultdict(int), 2: defaultdict(int), 3: defaultdict(int)}
 
-        # Utilizando as funções nomeadas criadas no topo do arquivo
+        # Uso de fábricas nomeadas globais para evitar falhas do Pickle
         self.padroes_xadrez_detalhado = defaultdict(fabrica_padrao_detalhado)
         self.padroes_streak_detalhado = defaultdict(fabrica_padrao_detalhado)
 
@@ -431,6 +431,105 @@ class IAPreditivaV1:
         self.regime_recencia = None
 
         self._treinar_modelo_profundo()
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        
+        if 'modelo_transicao' in state:
+            state['modelo_transicao'] = dict(state['modelo_transicao'])
+        if 'modelo_numerico' in state:
+            state['modelo_numerico'] = dict(state['modelo_numerico'])
+        if 'controladores_fortes' in state:
+            state['controladores_fortes'] = dict(state['controladores_fortes'])
+        if 'historico_regras' in state:
+            state['historico_regras'] = dict(state['historico_regras'])
+            
+        if 'color_ngrams' in state:
+            state['color_ngrams'] = {k: dict(v) for k, v in state['color_ngrams'].items()}
+            
+        if 'xadrez_stats' in state and isinstance(state['xadrez_stats'], dict):
+            xs = state['xadrez_stats'].copy()
+            if 'numeros_quebradores' in xs:
+                xs['numeros_quebradores'] = dict(xs['numeros_quebradores'])
+            state['xadrez_stats'] = xs
+            
+        if 'streak_breaker_stats' in state and isinstance(state['streak_breaker_stats'], dict):
+            ss = state['streak_breaker_stats'].copy()
+            for cor_k in ss:
+                ss[cor_k] = dict(ss[cor_k])
+            state['streak_breaker_stats'] = ss
+
+        if 'padroes_xadrez_detalhado' in state:
+            px = {}
+            for k, v in state['padroes_xadrez_detalhado'].items():
+                v_copy = v.copy()
+                if 'quebradores' in v_copy:
+                    v_copy['quebradores'] = dict(v_copy['quebradores'])
+                px[k] = v_copy
+            state['padroes_xadrez_detalhado'] = px
+
+        if 'padroes_streak_detalhado' in state:
+            ps = {}
+            for k, v in state['padroes_streak_detalhado'].items():
+                v_copy = v.copy()
+                if 'quebradores' in v_copy:
+                    v_copy['quebradores'] = dict(v_copy['quebradores'])
+                ps[k] = v_copy
+            state['padroes_streak_detalhado'] = ps
+            
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self.modelo_transicao = defaultdict(list, state.get('modelo_transicao', {}))
+        self.modelo_numerico = defaultdict(list, state.get('modelo_numerico', {}))
+        self.controladores_fortes = defaultdict(int, state.get('controladores_fortes', {}))
+        
+        self.historico_regras = defaultdict(fabrica_historico_regras_zerado)
+        for k, v in state.get('historico_regras', {}).items():
+            self.historico_regras[k] = {"acertos": v.get("acertos", 0), "total": v.get("total", 0)}
+
+        c_grams = state.get('color_ngrams', {1: {}, 2: {}, 3: {}})
+        self.color_ngrams = {k: defaultdict(int, v) for k, v in c_grams.items()}
+        
+        x_st = state.get('xadrez_stats', {})
+        self.xadrez_stats = {
+            "quebras": x_st.get("quebras", 0),
+            "continuacoes": x_st.get("continuacoes", 0),
+            "numeros_quebradores": defaultdict(int, x_st.get("numeros_quebradores", {}))
+        }
+        
+        s_st = state.get('streak_breaker_stats', {"V": {}, "P": {}})
+        self.streak_breaker_stats = {
+            "V": defaultdict(int, s_st.get("V", {})),
+            "P": defaultdict(int, s_st.get("P", {}))
+        }
+
+        px_loaded = state.get('padroes_xadrez_detalhado', {})
+        self.padroes_xadrez_detalhado = defaultdict(fabrica_padrao_detalhado)
+        for k, v in px_loaded.items():
+            self.padroes_xadrez_detalhado[k] = {
+                "total": v.get("total", 0),
+                "apos_V": v.get("apos_V", 0),
+                "apos_P": v.get("apos_P", 0),
+                "apos_B": v.get("apos_B", 0),
+                "quebradores": defaultdict(int, v.get("quebradores", {})),
+                "g0": v.get("g0", 0),
+                "g1": v.get("g1", 0)
+            }
+
+        ps_loaded = state.get('padroes_streak_detalhado', {})
+        self.padroes_streak_detalhado = defaultdict(fabrica_padrao_detalhado)
+        for k, v in ps_loaded.items():
+            self.padroes_streak_detalhado[k] = {
+                "total": v.get("total", 0),
+                "apos_V": v.get("apos_V", 0),
+                "apos_P": v.get("apos_P", 0),
+                "apos_B": v.get("apos_B", 0),
+                "quebradores": defaultdict(int, v.get("quebradores", {})),
+                "g0": v.get("g0", 0),
+                "g1": v.get("g1", 0)
+            }
 
     def _treinar_modelo_profundo(self):
         if self.dados_longo and len(self.dados_longo) >= 5:
@@ -544,7 +643,7 @@ class IAPreditivaV1:
         self._processar_bloco_dados(sub_dados, multiplicador_peso, True)
         if analise_contexto:
             for regra in analise_contexto.get("regras_posicionais", []):
-                self.historico_regras[regra.get("tipo_regra", "DESCONHECIDO")]["total"] += 1
+                self.historico_regras[regra.get("tipo_regra", "DESCONHEVIDO")]["total"] += 1
 
     def registrar_padrao_vencedor(self, analise_contexto, resultado):
         if resultado not in ["G0", "G1"]: return
@@ -595,7 +694,7 @@ class IAPreditivaV1:
         if comportamento == "VERMELHO": v_bonus += 12
         elif comportamento == "PRETO": p_bonus += 12
 
-        if estabilidade == "ESTÁVEL":
+        if abrir_estabilidade := stabilidade == "ESTÁVEL":
             if comportamento == "VERMELHO": v_bonus += 10
             elif comportamento == "PRETO": p_bonus += 10
         elif estabilidade == "INSTÁVEL":
@@ -845,7 +944,7 @@ class JuizHierarquicoModificado:
             else:
                 return "PRETO", "Fallback por regras", "FALLBACK_REGRA"
 
-        return "VERMELHO", "Fallback padrão do sistema", "FALLBACK_PADRAO"
+        return "VERMELHO", "Fallback padrão do systema", "FALLBACK_PADRAO"
 
 
 class MotorContagensProjetivas:
@@ -892,7 +991,7 @@ class MotorContagensProjetivas:
                 if padrao in final:
                     direcao_inversao = "PRETO" if sub_pol[-1] == "V" else "VERMELHO"
                     lista_bruta.append({
-                        "direcao": direcao_inversao,
+                        "direcao": diecao_inversao,
                         "tipo_regra": "ESPELHO_INVERSO_FINAL",
                         "origem": f"Padrão de inversão detectado ({padrao})"
                     })
@@ -1050,8 +1149,8 @@ class MotorV1Completo:
                 modo_mercado = analise["contexto_avancado"].get("modo_mercado", "NEUTRO")
 
                 sinal, justificativa, regra_id = JuizHierarquicoModificado.arbitrar_sinal(
-                    False, "", expectativas, None, geometry_mercado=geometria,
-                    previsao_ia=(direcao_ia, conf_ia, raciocinio_ia), status_inversao=None, historico_regras=self.historico_regras,
+                    False, "", expectativas, None, geometria,
+                    (direcao_ia, conf_ia, raciocinio_ia), None, self.historico_regras,
                     modo_mercado=modo_mercado,
                     streak_atual=streak,
                     xadrez_len=xadrez_len,
@@ -1077,10 +1176,11 @@ class MotorV1Completo:
 
             stats[classificacao] = stats.get(classificacao, 0) + 1
 
+            # CORREÇÃO DEFINITIVA DO NameError: de 'expectations' para 'expectativas'
             if classificacao in ["G0", "G1"]:
                 contexto_analise = {
                     "geometria": geometria,
-                    "regras_posicionais": expectations,
+                    "regras_posicionais": expectativas,
                     "controlador_retardador": analise.get("controlador_retardador", {}),
                     "contexto_avancado": {"modo_mercado": modo_mercado}
                 }
