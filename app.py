@@ -127,7 +127,7 @@ with aba_tipo_d:
             
             if os.path.exists(caminho_temp): os.remove(caminho_temp)
 
-        # 2. SUBSTITUIR BASE DE LONGO PRAZO (com salvamento de emergência)
+        # 2. SUBSTITUIR BASE DE LONGO PRAZO
         if salvar_como_base:
             with open(caminho_temp, "wb") as f: f.write(arquivo_upload.getbuffer())
             try:
@@ -138,15 +138,16 @@ with aba_tipo_d:
                 if dados:
                     relatorio = treinar_base_longo_prazo_com_janelas(dados)
                     
-                    # === SALVAMENTO DE EMERGÊNCIA ===
+                    # === FALLBACK DE SALVAMENTO ===
                     if not relatorio.get("modelo_salvo_com_sucesso", False):
                         try:
-                            motor_emergencia = MotorV1Completo(dados)
-                            if salvar_modelo_longo_prazo(motor_emergencia.ia):
-                                relatorio["modelo_salvo_com_sucesso"] = True
+                            ia_para_salvar = relatorio.get("ia_treinada")
+                            if ia_para_salvar:
+                                if salvar_modelo_longo_prazo(ia_para_salvar):
+                                    relatorio["modelo_salvo_com_sucesso"] = True
                         except:
                             pass
-                    # =================================
+                    # ================================
                     
                     if relatorio.get("sucesso"):
                         if relatorio.get("modelo_salvo_com_sucesso"):
