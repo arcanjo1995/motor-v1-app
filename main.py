@@ -566,7 +566,7 @@ class IAPreditivaV1:
         cores = [d['cor'] for d in dados]
         numeros = [d['numero'] for d in dados]
 
-        # 1. Manutenção do Bloco Original XADREZ_4 com Coleta de Assertividade
+        # 1. XADREZ_4
         i = 0
         while i < len(cores) - 4:
             janela = cores[i:i+4]
@@ -588,7 +588,7 @@ class IAPreditivaV1:
                     self.padroes_xadrez_detalhado[chave]["_futuros"].append((c1, c2, c3))
             i += 1
 
-        # 2. Manutenção do Bloco Original STREAK_3 com Coleta de Assertividade
+        # 2. STREAK_3
         i = 0
         while i < len(cores) - 3:
             if cores[i] == cores[i+1] == cores[i+2] and cores[i] != 'B':
@@ -609,7 +609,7 @@ class IAPreditivaV1:
                     self.padroes_streak_detalhado[chave]["_futuros"].append((c1, c2, c3))
             i += 1
 
-        # 3. Varredura e Mapeamento Geral de Padrões Dinâmicos Pequenos e Grandes (Tamanhos 3 a 10)
+        # 3. Padrões Gerais (3 a 10)
         for tam in range(3, 11):
             i = 0
             while i <= len(cores) - tam - 1:
@@ -668,7 +668,7 @@ class IAPreditivaV1:
                 
                 i += 1
 
-        # 4. Processamento de Ngrams Padrão
+        # 4. Ngrams
         for i in range(len(cores)):
             self.color_ngrams[1][cores[i]] += 1
             if i + 1 < len(cores):
@@ -676,7 +676,7 @@ class IAPreditivaV1:
             if i + 2 < len(cores):
                 self.color_ngrams[3][f"{cores[i]}-{cores[i+1]}-{cores[i+2]}"] += 1
 
-        # 5. Consolidação e Preenchimento Automático de G0 e G1 com base na Tendência Estatística do Padrão
+        # 5. Consolidação G0 e G1
         for dic in [self.padroes_xadrez_detalhado, self.padroes_streak_detalhado, self.padroes_gerais_detalhado]:
             for chave, info in list(dic.items()):
                 v = info.get("apos_V", 0)
@@ -867,7 +867,7 @@ class IAPreditivaV1:
                 v_bonus += 10
 
         # =========================================================================
-        # CONEXÃO ATIVA DO MAPEAMENTO AVANÇADO DE PADRÕES DINÂMICOS NO MOTOR DE SINAIS
+        # CONEXÃO ATIVA DO MAPEAMENTO AVANÇADO DE PADRÕES DINÂMICOS
         # =========================================================================
         padroes_detectados = []
 
@@ -1451,17 +1451,15 @@ class ProcessadorTipoB:
             }
 
         # ============================================================
-        # LÓGICA REFACTORIZADA - IA como cérebro central (respeitando sua filosofia)
-        # Todo o aprendizado pesado (padrões dinâmicos com assertividade real G0/G1,
-        # recência injetada, análise de regime, etc.) já está embutido na IA
-        # através de predizer_proxima_casa + mapear_padroes_avancados + injetar_aprendizado_imediato
+        # LÓGICA REFACTORIZADA - IA como cérebro central
+        # Todo o aprendizado (padrões dinâmicos + recência + assertividade real)
+        # já está embutido na predição da IA via predizer_proxima_casa
         # ============================================================
-
         sinal = direcao_ia
         justificativa = f"IA Preditiva com todo aprendizado embutido ({conf_ia:.1f}%)"
         regra_id = "IA_ENRIQUECIDA_PADROES_RECENCIA"
 
-        # Veto de segurança EXTREMO (streak muito alto) - camada de proteção final
+        # Veto de segurança EXTREMO (streak >= 7)
         if streak >= 7:
             sinal = "NO CALL"
             justificativa = f"Veto de segurança por streak extremo ({streak}x) - proteção do sistema"
