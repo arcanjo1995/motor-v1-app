@@ -287,7 +287,6 @@ class MotorAnalise:
             return resultado
 
         geometria = AnalisadorContextoAvancado.mapear_padroes_geometria(sub_pol)
-        # CORREÇÃO DO NameError: De geometry para geometria
         resultado["geometria"] = geometria
         resultado["camadas"].append({
             "camada": 2, "nome": "Geometria",
@@ -811,7 +810,6 @@ class IAPreditivaV1:
         if comportamento == "VERMELHO": v_bonus += 12
         elif comportamento == "PRETO": p_bonus += 12
 
-        # CORREÇÃO DEFINITIVA DO NameError: De stabilidade para estabilidade
         if estabilidade == "ESTÁVEL":
             if comportamento == "VERMELHO": v_bonus += 10
             elif comportamento == "PRETO": p_bonus += 10
@@ -1106,7 +1104,6 @@ class JuizHierarquicoModificado:
         if geometria_mercado == "CICLO_FECHADO_PVVP":
             return "VERMELHO", "Geometria PVVP (Padrão forte)", "GEOMETRIA_FORTE"
 
-        # Conexão de rastro dinâmico para a auditoria de windows Tipo D
         if direcao_ia != "NEUTRO":
             return direcao_ia, f"IA Preditiva ({confianca_ia:.1f}%) [{raciocinio_ia}]", "IA_PREDITIVA"
 
@@ -1453,34 +1450,22 @@ class ProcessadorTipoB:
                 "motivo_real": f"NO CALL pelo MotorNoCall: {motivo_nc}"
             }
 
+        # ============================================================
+        # LÓGICA REFACTORIZADA - IA como cérebro central (respeitando sua filosofia)
+        # Todo o aprendizado pesado (padrões dinâmicos com assertividade real G0/G1,
+        # recência injetada, análise de regime, etc.) já está embutido na IA
+        # através de predizer_proxima_casa + mapear_padroes_avancados + injetar_aprendizado_imediato
+        # ============================================================
+
         sinal = direcao_ia
-        justificativa = f"IA Preditiva ({conf_ia:.1f}%)"
-        regra_id = "IA_PREDITIVA"
+        justificativa = f"IA Preditiva com todo aprendizado embutido ({conf_ia:.1f}%)"
+        regra_id = "IA_ENRIQUECIDA_PADROES_RECENCIA"
 
-        if regime_rec and regime_rec["confianca_regime"] >= 55:
-            viés = regime_rec["viés_atual"]
-            modo = regime_rec["modo_dominante"]
-
-            if viés in ["VERMELHO", "PRETO"]:
-                sinal = viés
-                justificativa = f"Recência determina viés atual: {viés} | Modo: {modo}"
-                regra_id = "RECENCIA_REGIME_FORTE"
-
-            if modo == "STREAK_DOMINANTE" and regime_rec["streak_medio"] >= 4:
-                justificativa += " (Streak dominante na recência)"
-            elif modo == "XADREZ_DOMINANTE":
-                justurnativa += " (Xadrez dominante na recência)"
-
-        if geometria in ["CICLO_FECHADO_VPPV", "CICLO_FECHADO_PVVP"]:
-            sinal = "PRETO" if geometria == "CICLO_FECHADO_VPPV" else "VERMELHO"
-            justificativa = f"Geometria forte + Recência ({regime_rec['viés_atual'] if regime_rec else 'N/A'})"
-            regra_id = "GEOMETRIA_FORTE"
-
-        if sinal != "NO CALL" and streak >= 6:
-            if direcao_ia != sinal:
-                sinal = "NO CALL"
-                justificativa = f"Veto de streak {streak}x"
-                regra_id = "VETO_STREAK"
+        # Veto de segurança EXTREMO (streak muito alto) - camada de proteção final
+        if streak >= 7:
+            sinal = "NO CALL"
+            justificativa = f"Veto de segurança por streak extremo ({streak}x) - proteção do sistema"
+            regra_id = "VETO_STREAK_EXTREMO"
 
         return {
             "sinal": sinal,
