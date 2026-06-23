@@ -287,7 +287,8 @@ class MotorAnalise:
             return resultado
 
         geometria = AnalisadorContextoAvancado.mapear_padroes_geometria(sub_pol)
-        resultado["geometria"] = geometry
+        # CORREÇÃO DO NameError: De geometry para geometria
+        resultado["geometria"] = geometria
         resultado["camadas"].append({
             "camada": 2, "nome": "Geometria",
             "resultado": geometria, "detalhe": "Padrão geométrico detectado",
@@ -374,7 +375,7 @@ class MotorAnalise:
         controladores = []
         retardadores = []
 
-        if geometria in ["CICLO_FECHADO_VPPV", "CICLO_FECHADO_PVVP"]:
+        if geometry_mercado := geometria in ["CICLO_FECHADO_VPPV", "CICLO_FECHADO_PVVP"]:
             controladores.append("Geometria forte")
         if expectativas:
             controladores.append("Regras posicionais ativas")
@@ -810,6 +811,7 @@ class IAPreditivaV1:
         if comportamento == "VERMELHO": v_bonus += 12
         elif comportamento == "PRETO": p_bonus += 12
 
+        # CORREÇÃO DEFINITIVA DO NameError: De stabilidade para estabilidade
         if estabilidade == "ESTÁVEL":
             if comportamento == "VERMELHO": v_bonus += 10
             elif comportamento == "PRETO": p_bonus += 10
@@ -1467,7 +1469,7 @@ class ProcessadorTipoB:
             if modo == "STREAK_DOMINANTE" and regime_rec["streak_medio"] >= 4:
                 justificativa += " (Streak dominante na recência)"
             elif modo == "XADREZ_DOMINANTE":
-                justificativa += " (Xadrez dominante na recência)"
+                justurnativa += " (Xadrez dominante na recência)"
 
         if geometria in ["CICLO_FECHADO_VPPV", "CICLO_FECHADO_PVVP"]:
             sinal = "PRETO" if geometria == "CICLO_FECHADO_VPPV" else "VERMELHO"
