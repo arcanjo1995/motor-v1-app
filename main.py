@@ -287,7 +287,7 @@ class MotorAnalise:
             return resultado
 
         geometria = AnalisadorContextoAvancado.mapear_padroes_geometria(sub_pol)
-        resultado["geometria"] = geometria
+        resultado["geometria"] = geometry
         resultado["camadas"].append({
             "camada": 2, "nome": "Geometria",
             "resultado": geometria, "detalhe": "Padrão geométrico detectado",
@@ -374,7 +374,7 @@ class MotorAnalise:
         controladores = []
         retardadores = []
 
-        if geometry_mercado := geometria in ["CICLO_FECHADO_VPPV", "CICLO_FECHADO_PVVP"]:
+        if geometria in ["CICLO_FECHADO_VPPV", "CICLO_FECHADO_PVVP"]:
             controladores.append("Geometria forte")
         if expectativas:
             controladores.append("Regras posicionais ativas")
@@ -810,7 +810,6 @@ class IAPreditivaV1:
         if comportamento == "VERMELHO": v_bonus += 12
         elif comportamento == "PRETO": p_bonus += 12
 
-        # CORREÇÃO DA DIGITAÇÃO: De 'stabilidade' para 'estabilidade'
         if estabilidade == "ESTÁVEL":
             if comportamento == "VERMELHO": v_bonus += 10
             elif comportamento == "PRETO": p_bonus += 10
@@ -870,6 +869,8 @@ class IAPreditivaV1:
         # =========================================================================
         # CONEXÃO ATIVA DO MAPEAMENTO AVANÇADO DE PADRÕES DINÂMICOS NO MOTOR DE SINAIS
         # =========================================================================
+        padroes_detectados = []
+
         if hasattr(self, 'padroes_gerais_detalhado') and self.padroes_gerais_detalhado:
             for tam in range(3, 11):
                 if len(sub_pol) >= tam:
@@ -888,8 +889,10 @@ class IAPreditivaV1:
                                     peso_bonus = int(assert_real * 32 * (min(tot_ocorr, 100) / 100))
                                     if v_ocorr > p_ocorr:
                                         v_bonus += peso_bonus
+                                        padroes_detectados.append(f"{chave} (+{peso_bonus} V)")
                                     elif p_ocorr > v_ocorr:
                                         p_bonus += peso_bonus
+                                        padroes_detectados.append(f"{chave} (+{peso_bonus} P)")
 
         if hasattr(self, 'padroes_xadrez_detalhado') and self.padroes_xadrez_detalhado and len(sub_pol) >= 4:
             tail_4 = sub_pol[-4:]
@@ -898,8 +901,10 @@ class IAPreditivaV1:
                 if info_x and info_x.get("total", 0) >= 5:
                     if info_x.get("apos_V", 0) > info_x.get("apos_P", 0):
                         v_bonus += 16
+                        padroes_detectados.append("XADREZ_4 (+16 V)")
                     elif info_x.get("apos_P", 0) > info_x.get("apos_V", 0):
                         p_bonus += 16
+                        padroes_detectados.append("XADREZ_4 (+16 P)")
 
         if hasattr(self, 'padroes_streak_detalhado') and self.padroes_streak_detalhado and len(sub_pol) >= 3:
             tail_3 = sub_pol[-3:]
@@ -908,8 +913,12 @@ class IAPreditivaV1:
                 if info_s and info_s.get("total", 0) >= 5:
                     if info_s.get("apos_V", 0) > info_s.get("apos_P", 0):
                         v_bonus += 16
+                        padroes_detectados.append("STREAK_3 (+16 V)")
                     elif info_s.get("apos_P", 0) > info_s.get("apos_V", 0):
                         p_bonus += 16
+                        padroes_detectados.append("STREAK_3 (+16 P)")
+        
+        str_padroes = f" | Padrões Ativos: {', '.join(padroes_detectados)}" if padroes_detectados else " | Nenhum Padrão Dinâmico"
         # =========================================================================
 
         has_rec = len(self.dados_recencia) > 0
@@ -924,17 +933,17 @@ class IAPreditivaV1:
             else: total_p += bonus_memoria
 
         if total_v + total_p == 0:
-            return "NEUTRO", 0.0, "Sem dados suficientes"
+            return "NEUTRO", 0.0, f"Sem dados suficientes{str_padroes}"
 
         prob_v = (total_v / (total_v + total_p)) * 100
         prob_p = (total_p / (total_v + total_p)) * 100
 
         BARREIRA = 52.5
         if prob_v >= BARREIRA and prob_v > prob_p + 4:
-            return "VERMELHO", round(prob_v, 1), f"Confluência forte para Vermelho ({prob_v:.1f}%)"
+            return "VERMELHO", round(prob_v, 1), f"Confluência Vermelho ({prob_v:.1f}%){str_padroes}"
         elif prob_p >= BARREIRA and prob_p > prob_v + 4:
-            return "PRETO", round(prob_p, 1), f"Confluência forte para Preto ({prob_p:.1f}%)"
-        return "NEUTRO", round(max(prob_v, prob_p), 1), "Sem confluência clara"
+            return "PRETO", round(prob_p, 1), f"Confluência Preto ({prob_p:.1f}%){str_padroes}"
+        return "NEUTRO", round(max(prob_v, prob_p), 1), f"Sem confluência clara{str_padroes}"
 
     def calcular_probabilidade_streak_empirica(self, cor, k):
         todos = (self.dados_longo or []) + (self.dados_recencia or [])
@@ -1095,8 +1104,9 @@ class JuizHierarquicoModificado:
         if geometria_mercado == "CICLO_FECHADO_PVVP":
             return "VERMELHO", "Geometria PVVP (Padrão forte)", "GEOMETRIA_FORTE"
 
+        # Conexão de rastro dinâmico para a auditoria de windows Tipo D
         if direcao_ia != "NEUTRO":
-            return direcao_ia, f"IA Preditiva ({confianca_ia:.1f}%)", "IA_PREDITIVA"
+            return direcao_ia, f"IA Preditiva ({confianca_ia:.1f}%) [{raciocinio_ia}]", "IA_PREDITIVA"
 
         if expectations:
             count_v = sum(1 for item in expectations if item["direcao"] == "VERMELHO")
@@ -1124,7 +1134,7 @@ class MotorContagensProjetivas:
                     if any(sub_num[k] == 0 for k in range(i, 12)):
                         continue
                     lista_bruta.append({
-                        "direcao": "VERVELHO",
+                        "direcao": "VERMELHO",
                         "tipo_regra": f"V3_ATIVADOR_{num_atual}",
                         "origem": f"Volume 3: Contagem {num_atual}"
                     })
@@ -1478,6 +1488,7 @@ class ProcessadorTipoB:
             "regime_recencia": regime_rec,
             "motivo_real": justificativa,
             "raciocinio_trace": raciocinio_trace,
+            "raciocinio_final": raciocinio_ia,
             "decisao_final": {"sinal": sinal, "justificativa": justificativa, "regra_id": regra_id}
         }
 
