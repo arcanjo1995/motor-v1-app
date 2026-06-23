@@ -15,7 +15,8 @@ NOME_BASE_DEFINITIVA = "resultados_blaze.xlsx"
 def fabrica_padrao_detalhado():
     return {
         "total": 0, "apos_V": 0, "apos_P": 0, "apos_B": 0,
-        "quebradores": defaultdict(int), "g0": 0, "g1": 0
+        "quebradores": defaultdict(int), "g0": 0, "g1": 0,
+        "_futuros": []
     }
 
 def fabrica_historico_regras_zerado():
@@ -373,7 +374,7 @@ class MotorAnalise:
         controladores = []
         retardadores = []
 
-        if geometria in ["CICLO_FECHADO_VPPV", "CICLO_FECHADO_PVVP"]:
+        if geometry_mercado := geometria in ["CICLO_FECHADO_VPPV", "CICLO_FECHADO_PVVP"]:
             controladores.append("Geometria forte")
         if expectativas:
             controladores.append("Regras posicionais ativas")
@@ -420,6 +421,7 @@ class IAPreditivaV1:
 
         self.padroes_xadrez_detalhado = defaultdict(fabrica_padrao_detalhado)
         self.padroes_streak_detalhado = defaultdict(fabrica_padrao_detalhado)
+        self.padroes_gerais_detalhado = defaultdict(fabrica_padrao_detalhado)
 
         self.memoria_padroes_vencedores = []
         self.historico_regras = defaultdict(fabrica_historico_regras_zerado)
@@ -474,6 +476,15 @@ class IAPreditivaV1:
                     v_copy['quebradores'] = dict(v_copy['quebradores'])
                 ps[k] = v_copy
             state['padroes_streak_detalhado'] = ps
+
+        if 'padroes_gerais_detalhado' in state:
+            pg = {}
+            for k, v in state['padroes_gerais_detalhado'].items():
+                v_copy = v.copy()
+                if 'quebradores' in v_copy:
+                    v_copy['quebradores'] = dict(v_copy['quebradores'])
+                pg[k] = v_copy
+            state['padroes_gerais_detalhado'] = pg
             
         return state
 
@@ -529,6 +540,19 @@ class IAPreditivaV1:
                 "g1": v.get("g1", 0)
             }
 
+        pg_loaded = state.get('padroes_gerais_detalhado', {})
+        self.padroes_gerais_detalhado = defaultdict(fabrica_padrao_detalhado)
+        for k, v in pg_loaded.items():
+            self.padroes_gerais_detalhado[k] = {
+                "total": v.get("total", 0),
+                "apos_V": v.get("apos_V", 0),
+                "apos_P": v.get("apos_P", 0),
+                "apos_B": v.get("apos_B", 0),
+                "quebradores": defaultdict(int, v.get("quebradores", {})),
+                "g0": v.get("g0", 0),
+                "g1": v.get("g1", 0)
+            }
+
     def _treinar_modelo_profundo(self):
         if self.dados_longo and len(self.dados_longo) >= 5:
             self._processar_bloco_dados(self.dados_longo, 1, True)
@@ -542,6 +566,7 @@ class IAPreditivaV1:
         cores = [d['cor'] for d in dados]
         numeros = [d['numero'] for d in dados]
 
+        # 1. Manutenção do Bloco Original XADREZ_4 com Coleta de Assertividade
         i = 0
         while i < len(cores) - 4:
             janela = cores[i:i+4]
@@ -554,8 +579,16 @@ class IAPreditivaV1:
                     self.padroes_xadrez_detalhado[chave][f"apos_{proximo_cor}"] += 1
                     if proximo_cor != janela[-1]:
                         self.padroes_xadrez_detalhado[chave]["quebradores"][num_quebra] += 1
+                    
+                    c1 = cores[i+4] if i+4 < len(cores) else None
+                    c2 = cores[i+5] if i+5 < len(cores) else None
+                    c3 = cores[i+6] if i+6 < len(cores) else None
+                    if "_futuros" not in self.padroes_xadrez_detalhado[chave]:
+                        self.padroes_xadrez_detalhado[chave]["_futuros"] = []
+                    self.padroes_xadrez_detalhado[chave]["_futuros"].append((c1, c2, c3))
             i += 1
 
+        # 2. Manutenção do Bloco Original STREAK_3 com Coleta de Assertividade
         i = 0
         while i < len(cores) - 3:
             if cores[i] == cores[i+1] == cores[i+2] and cores[i] != 'B':
@@ -567,14 +600,99 @@ class IAPreditivaV1:
                     self.padroes_streak_detalhado[chave][f"apos_{proximo_cor}"] += 1
                     if proximo_cor != cores[i]:
                         self.padroes_streak_detalhado[chave]["quebradores"][num_quebra] += 1
+                    
+                    c1 = cores[i+3] if i+3 < len(cores) else None
+                    c2 = cores[i+4] if i+4 < len(cores) else None
+                    c3 = cores[i+5] if i+5 < len(cores) else None
+                    if "_futuros" not in self.padroes_streak_detalhado[chave]:
+                        self.padroes_streak_detalhado[chave]["_futuros"] = []
+                    self.padroes_streak_detalhado[chave]["_futuros"].append((c1, c2, c3))
             i += 1
 
+        # 3. Varredura e Mapeamento Geral de Padrões Dinâmicos Pequenos e Grandes (Tamanhos 3 a 10)
+        for tam in range(3, 11):
+            i = 0
+            while i <= len(cores) - tam - 1:
+                janela_cores = cores[i:i+tam]
+                if 'B' in janela_cores:
+                    i += 1
+                    continue
+                
+                proxima_cor = cores[i+tam]
+                num_quebra = numeros[i+tam-1]
+                janela_str = "-".join(janela_cores)
+                
+                eh_streak = len(set(janela_cores)) == 1
+                eh_xadrez = all(janela_cores[j] != janela_cores[j-1] for j in range(1, tam))
+                
+                eh_duplo = False
+                if tam >= 4 and tam % 2 == 0:
+                    metade = tam // 2
+                    if len(set(janela_cores[:metade])) == 1 and len(set(janela_cores[metade:])) == 1 and janela_cores[0] != janela_cores[metade]:
+                        eh_duplo = True
+                
+                eh_espelho_normal = all(janela_cores[j] == janela_cores[tam-1-j] for j in range(tam)) and not eh_streak
+                eh_espelho_invertido = all(janela_cores[j] != janela_cores[tam-1-j] for j in range(tam)) and not eh_xadrez
+                
+                if eh_streak:
+                    tipo_prefix = f"STREAK_{tam}"
+                elif eh_xadrez:
+                    tipo_prefix = f"XADREZ_{tam}"
+                elif eh_duplo:
+                    tipo_prefix = f"DUPLO_{tam}"
+                elif eh_espelho_normal:
+                    tipo_prefix = f"ESPELHO_NORMAL_{tam}"
+                elif eh_espelho_invertido:
+                    tipo_prefix = f"ESPELHO_INVERTIDO_{tam}"
+                else:
+                    tipo_prefix = f"PADRAO_GERAL_{tam}"
+                    
+                chave = f"{tipo_prefix} [{janela_str}]"
+                
+                self.padroes_gerais_detalhado[chave]["total"] += 1
+                self.padroes_gerais_detalhado[chave][f"apos_{proxima_cor}"] += 1
+                
+                if eh_streak and proxima_cor != janela_cores[-1]:
+                    self.padroes_gerais_detalhado[chave]["quebradores"][num_quebra] += 1
+                elif eh_xadrez and proxima_cor == janela_cores[-1]:
+                    self.padroes_gerais_detalhado[chave]["quebradores"][num_quebra] += 1
+                elif (eh_duplo or eh_espelho_normal or eh_espelho_invertido) and proxima_cor != janela_cores[-1]:
+                    self.padroes_gerais_detalhado[chave]["quebradores"][num_quebra] += 1
+                
+                c1 = cores[i+tam] if i+tam < len(cores) else None
+                c2 = cores[i+tam+1] if i+tam+1 < len(cores) else None
+                c3 = cores[i+tam+2] if i+tam+2 < len(cores) else None
+                if "_futuros" not in self.padroes_gerais_detalhado[chave]:
+                    self.padroes_gerais_detalhado[chave]["_futuros"] = []
+                self.padroes_gerais_detalhado[chave]["_futuros"].append((c1, c2, c3))
+                
+                i += 1
+
+        # 4. Processamento de Ngrams Padrão
         for i in range(len(cores)):
             self.color_ngrams[1][cores[i]] += 1
             if i + 1 < len(cores):
                 self.color_ngrams[2][f"{cores[i]}-{cores[i+1]}"] += 1
             if i + 2 < len(cores):
                 self.color_ngrams[3][f"{cores[i]}-{cores[i+1]}-{cores[i+2]}"] += 1
+
+        # 5. Consolidação e Preenchimento Automático de G0 e G1 com base na Tendência Estatística do Padrão
+        for dic in [self.padroes_xadrez_detalhado, self.padroes_streak_detalhado, self.padroes_gerais_detalhado]:
+            for chave, info in list(dic.items()):
+                v = info.get("apos_V", 0)
+                p = info.get("apos_P", 0)
+                if v == 0 and p == 0:
+                    continue
+                cor_alvo = "V" if v >= p else "P"
+                
+                for c1, c2, c3 in info.get("_futuros", []):
+                    if c1 == cor_alvo or c1 == "B":
+                        info["g0"] += 1
+                    elif c2 == cor_alvo or c2 == "B":
+                        info["g1"] += 1
+                        
+                if "_futuros" in info:
+                    del info["_futuros"]
 
     def _processar_bloco_dados(self, dados, multiplicador_peso, treinamento_profundo=False):
         if not dados: return
@@ -692,7 +810,6 @@ class IAPreditivaV1:
         if comportamento == "VERMELHO": v_bonus += 12
         elif comportamento == "PRETO": p_bonus += 12
 
-        # Restauração da nomenclatura original exata semWalrus Operator
         if estabilidade == "ESTÁVEL":
             if comportamento == "VERMELHO": v_bonus += 10
             elif comportamento == "PRETO": p_bonus += 10
@@ -889,7 +1006,7 @@ class MotorNoCall:
                 return True, "Volume 2 Cap 3: Trava Número 2"
 
         posicoes_criticas_b = [5, 8, 9, 10, 11]
-        for pos in posicoes_criticas_b:
+        for pos in posicas_criticas_b:
             if sub_pol[pos] == "B":
                 return True, "Volume 2 Cap 5: Trava do Branco"
 
