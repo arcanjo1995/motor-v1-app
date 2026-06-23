@@ -810,7 +810,8 @@ class IAPreditivaV1:
         if comportamento == "VERMELHO": v_bonus += 12
         elif comportamento == "PRETO": p_bonus += 12
 
-        if stabilidade == "ESTÁVEL":
+        # CORREÇÃO DA DIGITAÇÃO: De 'stabilidade' para 'estabilidade'
+        if estabilidade == "ESTÁVEL":
             if comportamento == "VERMELHO": v_bonus += 10
             elif comportamento == "PRETO": p_bonus += 10
         elif estabilidade == "INSTÁVEL":
@@ -1123,7 +1124,7 @@ class MotorContagensProjetivas:
                     if any(sub_num[k] == 0 for k in range(i, 12)):
                         continue
                     lista_bruta.append({
-                        "direcao": "VERMELHO",
+                        "direcao": "VERVELHO",
                         "tipo_regra": f"V3_ATIVADOR_{num_atual}",
                         "origem": f"Volume 3: Contagem {num_atual}"
                     })
@@ -1309,7 +1310,7 @@ class MotorV1Completo:
                 contexto_exaustao = analise["contexto_reversao"]["exaustao"]
                 modo_mercado = analise["contexto_avancado"].get("modo_mercado", "NEUTRO")
 
-                sinal, justificativa, regla_id = JuizHierarquicoModificado.arbitrar_sinal(
+                sinal, justificativa, regra_id = JuizHierarquicoModificado.arbitrar_sinal(
                     False, "", expectativas, None, geometria,
                     (direcao_ia, conf_ia, raciocinio_ia), None, self.historico_regras,
                     modo_mercado=modo_mercado,
@@ -1477,7 +1478,7 @@ class ProcessadorTipoB:
             "regime_recencia": regime_rec,
             "motivo_real": justificativa,
             "raciocinio_trace": raciocinio_trace,
-            "decisao_final": {"sinal": sinal, "justificativa": justificativa, "regra_id": regla_id}
+            "decisao_final": {"sinal": sinal, "justificativa": justificativa, "regra_id": regra_id}
         }
 
 
