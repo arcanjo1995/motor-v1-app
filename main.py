@@ -374,7 +374,7 @@ class MotorAnalise:
         controladores = []
         retardadores = []
 
-        if geometry_mercado := geometria in ["CICLO_FECHADO_VPPV", "CICLO_FECHADO_PVVP"]:
+        if geometria in ["CICLO_FECHADO_VPPV", "CICLO_FECHADO_PVVP"]:
             controladores.append("Geometria forte")
         if expectativas:
             controladores.append("Regras posicionais ativas")
@@ -1006,7 +1006,7 @@ class MotorNoCall:
                 return True, "Volume 2 Cap 3: Trava Número 2"
 
         posicoes_criticas_b = [5, 8, 9, 10, 11]
-        for pos in posicas_criticas_b:
+        for pos in posicoes_criticas_b:
             if sub_pol[pos] == "B":
                 return True, "Volume 2 Cap 5: Trava do Branco"
 
@@ -1264,7 +1264,7 @@ class MotorV1Completo:
                 contexto_exaustao = analise["contexto_reversao"]["exaustao"]
                 modo_mercado = analise["contexto_avancado"].get("modo_mercado", "NEUTRO")
 
-                sinal, justificativa, regra_id = JuizHierarquicoModificado.arbitrar_sinal(
+                sinal, justificativa, regla_id = JuizHierarquicoModificado.arbitrar_sinal(
                     False, "", expectativas, None, geometria,
                     (direcao_ia, conf_ia, raciocinio_ia), None, self.historico_regras,
                     modo_mercado=modo_mercado,
