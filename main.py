@@ -374,7 +374,7 @@ class MotorAnalise:
         controladores = []
         retardadores = []
 
-        if geometria in ["CICLO_FECHADO_VPPV", "CICLO_FECHADO_PVVP"]:
+        if geometry_mercado := geometria in ["CICLO_FECHADO_VPPV", "CICLO_FECHADO_PVVP"]:
             controladores.append("Geometria forte")
         if expectativas:
             controladores.append("Regras posicionais ativas")
@@ -810,7 +810,7 @@ class IAPreditivaV1:
         if comportamento == "VERMELHO": v_bonus += 12
         elif comportamento == "PRETO": p_bonus += 12
 
-        if estabilidade == "ESTÁVEL":
+        if stabilidade == "ESTÁVEL":
             if comportamento == "VERMELHO": v_bonus += 10
             elif comportamento == "PRETO": p_bonus += 10
         elif estabilidade == "INSTÁVEL":
@@ -865,6 +865,51 @@ class IAPreditivaV1:
                 p_bonus += 10
             elif sub_pol[-1] == 'P' and ultimo_num in self.streak_breaker_stats.get('P', {}):
                 v_bonus += 10
+
+        # =========================================================================
+        # CONEXÃO ATIVA DO MAPEAMENTO AVANÇADO DE PADRÕES DINÂMICOS NO MOTOR DE SINAIS
+        # =========================================================================
+        if hasattr(self, 'padroes_gerais_detalhado') and self.padroes_gerais_detalhado:
+            for tam in range(3, 11):
+                if len(sub_pol) >= tam:
+                    tail_seq = sub_pol[-tam:]
+                    tail_str = "-".join(tail_seq)
+                    for chave, info in self.padroes_gerais_detalhado.items():
+                        if f"[{tail_str}]" in chave:
+                            tot_ocorr = info.get("total", 0)
+                            if tot_ocorr >= 5:
+                                v_ocorr = info.get("apos_V", 0)
+                                p_ocorr = info.get("apos_P", 0)
+                                g0 = info.get("g0", 0)
+                                g1 = info.get("g1", 0)
+                                assert_real = (g0 + g1) / tot_ocorr if tot_ocorr > 0 else 0
+                                if assert_real >= 0.55:
+                                    peso_bonus = int(assert_real * 32 * (min(tot_ocorr, 100) / 100))
+                                    if v_ocorr > p_ocorr:
+                                        v_bonus += peso_bonus
+                                    elif p_ocorr > v_ocorr:
+                                        p_bonus += peso_bonus
+
+        if hasattr(self, 'padroes_xadrez_detalhado') and self.padroes_xadrez_detalhado and len(sub_pol) >= 4:
+            tail_4 = sub_pol[-4:]
+            if all(tail_4[j] != tail_4[j-1] for j in range(1, 4)) and 'B' not in tail_4:
+                info_x = self.padroes_xadrez_detalhado.get("XADREZ_4", {})
+                if info_x and info_x.get("total", 0) >= 5:
+                    if info_x.get("apos_V", 0) > info_x.get("apos_P", 0):
+                        v_bonus += 16
+                    elif info_x.get("apos_P", 0) > info_x.get("apos_V", 0):
+                        p_bonus += 16
+
+        if hasattr(self, 'padroes_streak_detalhado') and self.padroes_streak_detalhado and len(sub_pol) >= 3:
+            tail_3 = sub_pol[-3:]
+            if len(set(tail_3)) == 1 and 'B' not in tail_3:
+                info_s = self.padroes_streak_detalhado.get("STREAK_3", {})
+                if info_s and info_s.get("total", 0) >= 5:
+                    if info_s.get("apos_V", 0) > info_s.get("apos_P", 0):
+                        v_bonus += 16
+                    elif info_s.get("apos_P", 0) > info_s.get("apos_V", 0):
+                        p_bonus += 16
+        # =========================================================================
 
         has_rec = len(self.dados_recencia) > 0
         p_trans, p_num, p_geom = (0.22 if has_rec else 0.17), (0.18 if has_rec else 0.16), 0.25
@@ -1432,7 +1477,7 @@ class ProcessadorTipoB:
             "regime_recencia": regime_rec,
             "motivo_real": justificativa,
             "raciocinio_trace": raciocinio_trace,
-            "decisao_final": {"sinal": sinal, "justificativa": justificativa, "regra_id": regra_id}
+            "decisao_final": {"sinal": sinal, "justificativa": justificativa, "regra_id": regla_id}
         }
 
 
