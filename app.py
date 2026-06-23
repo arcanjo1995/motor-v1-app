@@ -329,26 +329,26 @@ with aba_tipo_d:
                                 else:
                                     st.error("Modelo ainda não foi salvo corretamente. Use o botão 'Substituir Base de Longo Prazo'.")
 
-                        with st.expander("🌌 Mapeamento Estatístico Geral (Padrões Dinâmicos e Espelhos)", expanded=False):
-                            if ia_atual:
-                                if hasattr(ia_atual, 'padroes_gerais_detalhado') and ia_atual.padroes_gerais_detalhado:
-                                    for padrao, info in ia_atual.padroes_gerais_detalhado.items():
-                                        if info.get("total", 0) >= 5:
-                                            total = info.get("total", 0)
-                                            g0 = info.get("g0", 0)
-                                            g1 = info.get("g1", 0)
-                                            assertividade = round(((g0 + g1) / total) * 100, 1) if total > 0 else 0.0
-                                            st.markdown(f"**{padrao}** — {total}x")
-                                            st.json({
-                                                "Após → Vermelho": info.get("apos_V", 0),
-                                                "Após → Preto": info.get("apos_P", 0),
-                                                "Números que quebraram": dict(info.get("quebradores", {})),
-                                                "G0 (Acerto Direto)": g0,
-                                                "G1 (Acerto no G1)": g1,
-                                                "Assertividade Real %": assertividade
-                                            })
-                                else:
-                                    st.info("Nenhum padrão geral dinâmico ou espelho encontrado.")
+                            with st.expander("🌌 Mapeamento Estatístico Geral (Padrões Dinâmicos e Espelhos)", expanded=False):
+                                if ia_atual:
+                                    if hasattr(ia_atual, 'padroes_gerais_detalhado') and ia_atual.padroes_gerais_detalhado:
+                                        for padrao, info in ia_atual.padroes_gerais_detalhado.items():
+                                            if info.get("total", 0) >= 5:
+                                                total = info.get("total", 0)
+                                                g0 = info.get("g0", 0)
+                                                g1 = info.get("g1", 0)
+                                                assertividade = round(((g0 + g1) / total) * 100, 1) if total > 0 else 0.0
+                                                st.markdown(f"**{padrao}** — {total}x")
+                                                st.json({
+                                                    "Após → Vermelho": info.get("apos_V", 0),
+                                                    "Após → Preto": info.get("apos_P", 0),
+                                                    "Números que quebraram": dict(info.get("quebradores", {})),
+                                                    "G0 (Acerto Direto)": g0,
+                                                    "G1 (Acerto no G1)": g1,
+                                                    "Assertividade Real %": assertividade
+                                                })
+                                    else:
+                                        st.info("Nenhum padrão geral dinâmico ou espelho encontrado.")
                         else:
                             st.error("Treinamento realizado, mas falha ao salvar o modelo. Tente usar 'Substituir Base de Longo Prazo'.")
                     else:
@@ -416,7 +416,7 @@ with aba_padroes:
             with st.expander("🌌 Mapeamento Estatístico Geral (Padrões Dinâmicos e Espelhos)", expanded=False):
                 if hasattr(ia, 'padroes_gerais_detalhado') and ia.padroes_gerais_detalhado:
                     for padrao, info in ia.padroes_gerais_detalhado.items():
-                        if info.get("total", 0) >= 5: # exibe padrões com mais de 5 ocorrências
+                        if info.get("total", 0) >= 5:
                             total = info.get("total", 0)
                             g0 = info.get("g0", 0)
                             g1 = info.get("g1", 0)
