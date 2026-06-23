@@ -433,4 +433,4 @@ with aba_padroes:
                 else:
                     st.info("Sem padrões dinâmicos ou espelhos registrados.")
 
-            st.caption("Esses padrões são atualizados automaticamente ao treinar ou adicionar dados na base de longo prazo.")
+            st.caption("Esses padrões são updated automaticamente ao treinar ou adicionar dados na base de longo prazo.")
