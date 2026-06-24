@@ -13,7 +13,7 @@ from main import (
 
 st.set_page_config(page_title="MOTOR V1 - Painel Operacional", page_icon="🛡️", layout="wide")
 st.title("🛡️ Sistema de Auditoria Analítica - MOTOR V1")
-st.caption("Versão com Análise de Padrões Avançados")
+st.caption("Versão com Análise de Padrões Avançados + Arquitetura de 3 Camadas Temporais")
 
 aba_tipo_b, aba_tipo_d, aba_padroes = st.tabs([
     "🎯 TIPO B — Sequência Operacional (Sinal Real)", 
@@ -47,17 +47,33 @@ with aba_tipo_b:
                 else:
                     processador = ProcessadorTipoB(lista_numeros, NOME_BASE_DEFINITIVA)
                     resultado = processador.executar_sinal_real()
+                    
                     if "erro" in resultado:
                         st.error(resultado["erro"])
                     else:
+                        # === EXIBIÇÃO MELHORADA DO SINAL ===
                         st.success(f"**SINAL GERADO:** {resultado['sinal']}")
-                        st.write(f"**Justificativa:** {resultado['justificativa']}")
-                        st.write(f"**Confiança da IA:** {resultado['confianca_ia']}%")
+                        
+                        col1, col2 = st.columns([2, 1])
+                        with col1:
+                            st.write(f"**Justificativa:** {resultado['justificativa']}")
+                        with col2:
+                            st.metric("Confiança da IA", f"{resultado['confianca_ia']}%")
+
+                        # Raciocínio detalhado das 3 camadas
                         if resultado.get("raciocinio_final"):
-                            st.write("**Raciocínio Final:**")
-                            st.code(resultado["raciocinio_final"])
+                            st.write("**Raciocínio da IA (3 Camadas Temporais):**")
+                            st.code(resultado["raciocinio_final"], language="text")
+
                         if resultado.get("motivo_real"):
                             st.caption(f"Motivo real da decisão: {resultado['motivo_real']}")
+
+                        # Mostrar rastreamento completo das camadas (se disponível)
+                        if resultado.get("raciocinio_trace"):
+                            with st.expander("🔍 Ver rastreamento completo das camadas de análise", expanded=False):
+                                for camada in resultado["raciocinio_trace"]:
+                                    st.markdown(f"**Camada {camada.get('camada', '?')} - {camada.get('nome', '')}**")
+                                    st.json(camada)
             except Exception as e:
                 st.error(f"Erro ao processar: {e}")
 
@@ -433,4 +449,4 @@ with aba_padroes:
                 else:
                     st.info("Sem padrões dinâmicos ou espelhos registrados.")
 
-            st.caption("Esses padrões são updated automaticamente ao treinar ou adicionar dados na base de longo prazo.")
+            st.caption("Esses padrões são atualizados automaticamente ao treinar ou adicionar dados na base de longo prazo.")
