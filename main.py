@@ -549,7 +549,7 @@ class IAPreditivaV1:
             self._processar_bloco_dados(self.dados_recencia, 4, True)
 
     # ============================================================
-    # NOVOS MÉTODOS - ARQUITETURA DE 3 CAMADAS TEMPORAIS
+    # MÉTODOS CORRIGIDOS - ARQUITETURA DE 3 CAMADAS TEMPORAIS
     # ============================================================
 
     def analisar_camada_curta(self, janela=200):
@@ -584,7 +584,8 @@ class IAPreditivaV1:
         for d in ultimos:
             num = d['numero']
             if num not in contagem_numeros:
-                contagem_numeros[num] = {"V": 0, "P": 0, "total": 0}
+                # CORREÇÃO AQUI: Adicionado "B": 0 para evitar o KeyError 'B'
+                contagem_numeros[num] = {"V": 0, "P": 0, "B": 0, "total": 0}
             contagem_numeros[num][d['cor']] += 1
             contagem_numeros[num]["total"] += 1
 
@@ -1559,7 +1560,7 @@ class MotorV1Completo:
                      for k in range(idx, min(idx + 12 + salto, self.seq.total))]
             
             contexto_injecao = {
-                "regras_posicionais": expectativas,
+                "regras_posicionais": expectations,
                 "controlador_retardador": analise.get("controlador_retardador", {}),
                 "geometria": geometria
             }
