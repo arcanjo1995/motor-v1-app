@@ -151,8 +151,10 @@ def integrar_recencia_no_modelo(dados_recencia, multiplicador=5):
     else:
         ia.injetar_aprendizado_imediato(dados_recencia, multiplicador_peso=multiplicador)
 
-    ia.analise_recencia = ia.analisar_comportamento_pos_numero_recencia(dados_recencia)
-    ia.regime_recencia = analisar_regime_recencia(dados_recencia)
+    # Reajustado para mapear dados da recência curta e média consolidadas
+    dados_combinados = ia.dados_recencia_media + ia.dados_recencia_curta
+    ia.analise_recencia = ia.analisar_comportamento_pos_numero_recencia(dados_combinados)
+    ia.regime_recencia = analisar_regime_recencia(dados_combinados)
     salvar_modelo_longo_prazo(ia)
     return ia
 
@@ -397,10 +399,25 @@ class MotorAnalise:
 
 class IAPreditivaV1:
     def __init__(self, dados_longo_prazo, dados_recencia=None):
-        self.dados_longo = dados_longo_prazo
-        self.dados_recencia = dados_recencia if dados_recencia else []
+        # 1) AJUSTE: Criação das 3 camadas estruturadas de memória
+        todos_dados = (dados_longo_prazo or []) + (dados_recencia or [])
+        
+        if len(todos_dados) >= 1000:
+            self.dados_historico = todos_dados[:-1000]
+            self.dados_recencia_media = todos_dados[-1000:-200]
+            self.dados_recencia_curta = todos_dados[-200:]
+        else:
+            # Fallback para bases de dados frias/pequenas
+            corte_media = max(0, len(todos_dados) - 200)
+            self.dados_historico = []
+            self.dados_recencia_media = todos_dados[:corte_media]
+            self.dados_recencia_curta = todos_dados[corte_media:]
+
         self.modelo_transicao = defaultdict(list)
         self.modelo_numerico = defaultdict(list)
+
+        # 2) AJUSTE: Matriz Número -> Próximo Número
+        self.matriz_numero_proximo = {n: defaultdict(int) for n in range(15)}
 
         self.unidade_analise = {}
         for n in range(15):
@@ -443,6 +460,8 @@ class IAPreditivaV1:
             state['controladores_fortes'] = dict(state['controladores_fortes'])
         if 'historico_regras' in state:
             state['historico_regras'] = dict(state['historico_regras'])
+        if 'matriz_numero_proximo' in state:
+            state['matriz_numero_proximo'] = {k: dict(v) for k, v in state['matriz_numero_proximo'].items()}
             
         if 'color_ngrams' in state:
             state['color_ngrams'] = {k: dict(v) for k, v in state['color_ngrams'].items()}
@@ -459,32 +478,15 @@ class IAPreditivaV1:
                 ss[cor_k] = dict(ss[cor_k])
             state['streak_breaker_stats'] = ss
 
-        if 'padroes_xadrez_detalhado' in state:
-            px = {}
-            for k, v in state['padroes_xadrez_detalhado'].items():
-                v_copy = v.copy()
-                if 'quebradores' in v_copy:
-                    v_copy['quebradores'] = dict(v_copy['quebradores'])
-                px[k] = v_copy
-            state['padroes_xadrez_detalhado'] = px
-
-        if 'padroes_streak_detalhado' in state:
-            ps = {}
-            for k, v in state['padroes_streak_detalhado'].items():
-                v_copy = v.copy()
-                if 'quebradores' in v_copy:
-                    v_copy['quebradores'] = dict(v_copy['quebradores'])
-                ps[k] = v_copy
-            state['padroes_streak_detalhado'] = ps
-
-        if 'padroes_gerais_detalhado' in state:
-            pg = {}
-            for k, v in state['padroes_gerais_detalhado'].items():
-                v_copy = v.copy()
-                if 'quebradores' in v_copy:
-                    v_copy['quebradores'] = dict(v_copy['quebradores'])
-                pg[k] = v_copy
-            state['padroes_gerais_detalhado'] = pg
+        for key_p in ['padroes_xadrez_detalhado', 'padroes_streak_detalhado', 'padroes_gerais_detalhado']:
+            if key_p in state:
+                pd_copy = {}
+                for k, v in state[key_p].items():
+                    v_copy = v.copy()
+                    if 'quebradores' in v_copy:
+                        v_copy['quebradores'] = dict(v_copy['quebradores'])
+                    pd_copy[k] = v_copy
+                state[key_p] = pd_copy
             
         return state
 
@@ -493,6 +495,10 @@ class IAPreditivaV1:
         self.modelo_transicao = defaultdict(list, state.get('modelo_transicao', {}))
         self.modelo_numerico = defaultdict(list, state.get('modelo_numerico', {}))
         self.controladores_fortes = defaultdict(int, state.get('controladores_fortes', {}))
+        
+        self.matriz_numero_proximo = {n: defaultdict(int) for n in range(15)}
+        for k, v in state.get('matriz_numero_proximo', {}).items():
+            self.matriz_numero_proximo[int(k)] = defaultdict(int, v)
         
         self.historico_regras = defaultdict(fabrica_historico_regras_zerado)
         for k, v in state.get('historico_regras', {}).items():
@@ -514,7 +520,6 @@ class IAPreditivaV1:
             "P": defaultdict(int, s_st.get("P", {}))
         }
 
-        # ==================== CORREÇÃO ROBUSTA DE COMPATIBILIDADE ====================
         def normalizar_padrao(info):
             info = dict(info)
             info.setdefault("total", 0)
@@ -526,42 +531,30 @@ class IAPreditivaV1:
             info.setdefault("quebradores", defaultdict(int, info.get("quebradores", {})))
             return info
 
-        px_loaded = state.get('padroes_xadrez_detalhado', {})
-        self.padroes_xadrez_detalhado = defaultdict(fabrica_padrao_detalhado)
-        for k, v in px_loaded.items():
-            self.padroes_xadrez_detalhado[k] = normalizar_padrao(v)
-
-        ps_loaded = state.get('padroes_streak_detalhado', {})
-        self.padroes_streak_detalhado = defaultdict(fabrica_padrao_detalhado)
-        for k, v in ps_loaded.items():
-            self.padroes_streak_detalhado[k] = normalizar_padrao(v)
-
-        pg_loaded = state.get('padroes_gerais_detalhado', {})
-        self.padroes_gerais_detalhado = defaultdict(fabrica_padrao_detalhado)
-        for k, v in pg_loaded.items():
-            self.padroes_gerais_detalhado[k] = normalizar_padrao(v)
-        # ===================================================================
+        for kp in ['padroes_xadrez_detalhado', 'padroes_streak_detalhado', 'padroes_gerais_detalhado']:
+            loaded = state.get(kp, {})
+            setattr(self, kp, defaultdict(fabrica_padrao_detalhado))
+            target = getattr(self, kp)
+            for k, v in loaded.items():
+                target[k] = normalizar_padrao(v)
 
     def _treinar_modelo_profundo(self):
-        if self.dados_longo and len(self.dados_longo) >= 5:
-            self._processar_bloco_dados(self.dados_longo, 1, True)
-        if self.dados_recencia and len(self.dados_recencia) >= 5:
-            self._processar_bloco_dados(self.dados_recencia, 4, True)
-
-    # ============================================================
-    # MÉTODOS CORRIGIDOS - ARQUITETURA DE 3 CAMADAS TEMPORAIS
-    # ============================================================
+        if self.dados_historico and len(self.dados_historico) >= 5:
+            self._processar_bloco_dados(self.dados_historico, 1, True)
+        if self.dados_recencia_media and len(self.dados_recencia_media) >= 5:
+            self._processar_bloco_dados(self.dados_recencia_media, 3, True)
+        if self.dados_recencia_curta and len(self.dados_recencia_curta) >= 5:
+            self._processar_bloco_dados(self.dados_recencia_curta, 5, True)
 
     def analisar_camada_curta(self, janela=200):
-        if len(self.dados_recencia) < janela:
+        if len(self.dados_recencia_curta) < 15:
             return {
-                "viés": "INDEFINIDO",
-                "confianca": 0,
-                "justificativa": "Janela de recência muito pequena",
+                "viés": "INDEFINIDO", "confianca": 0,
+                "justificativa": "Janela de recência curta sem amostragem crítica",
                 "numeros_fortes": {}
             }
 
-        ultimos = self.dados_recencia[-janela:]
+        ultimos = self.dados_recencia_curta[-janela:]
         cores = [d['cor'] for d in ultimos]
         total = len(cores)
         v = cores.count('V')
@@ -602,16 +595,13 @@ class IAPreditivaV1:
             "numeros_fortes": numeros_fortes
         }
 
-    def _calcular_vies_janela(self, janela):
-        if len(self.dados_recencia) < janela:
+    def _calcular_vies_janela(self, dados_camada):
+        if not dados_camada:
             return {"viés": "INDEFINIDO", "confianca": 0}
-
-        ultimos = self.dados_recencia[-janela:]
-        cores = [d['cor'] for d in ultimos]
+        cores = [d['cor'] for d in dados_camada]
         total = len(cores)
         v = cores.count('V')
         p = cores.count('P')
-
         pct_v = (v / total) * 100
         pct_p = (p / total) * 100
 
@@ -623,39 +613,27 @@ class IAPreditivaV1:
             return {"viés": "EQUILIBRADO", "confianca": round(max(pct_v, pct_p), 1)}
 
     def analisar_camada_intermediaria(self, janela=800):
-        if len(self.dados_recencia) < janela:
-            return {
-                "status": "INSUFICIENTE",
-                "sustentacao": False,
-                "justificativa": "Janela intermediária muito pequena"
-            }
+        if not self.dados_recencia_media:
+            return {"status": "INSUFICIENTE", "sustentacao": False, "justificativa": "Sem dados médios"}
 
         curta = self.analisar_camada_curta(janela=200)
-        intermediaria = self._calcular_vies_janela(janela)
+        intermediaria = self._calcular_vies_janela(self.dados_recencia_media)
 
         if curta["viés"] == "INDEFINIDO" or intermediaria["viés"] == "INDEFINIDO":
-            return {
-                "status": "INDEFINIDO",
-                "sustentacao": False,
-                "justificativa": "Dados insuficientes para validação"
-            }
+            return {"status": "INDEFINIDO", "sustentacao": False, "justificativa": "Amostragem falha para validação"}
 
         if curta["viés"] == intermediaria["viés"] and intermediaria["confianca"] >= 54:
             return {
-                "status": "MUDANÇA SUSTENTADA",
-                "sustentacao": True,
-                "viés_curta": curta["viés"],
-                "viés_intermediario": intermediaria["viés"],
+                "status": "MUDANÇA SUSTENTADA", "sustentacao": True,
+                "viés_curta": curta["viés"], "viés_intermediario": intermediaria["viés"],
                 "confianca": min(curta["confianca"], intermediaria["confianca"]),
-                "justificativa": f"Mudança de {curta['viés']} sustentada na janela de {janela}"
+                "justificativa": f"Alteração estrutural confirmada pela Recência Média"
             }
         else:
             return {
-                "status": "MUDANÇA NÃO SUSTENTADA",
-                "sustentacao": False,
-                "viés_curta": curta["viés"],
-                "viés_intermediario": intermediaria["viés"],
-                "justificativa": "Possível ruído - mudança não confirmada na janela intermediária"
+                "status": "MUDANÇA NÃO SUSTENTADA", "sustentacao": False,
+                "viés_curta": curta["viés"], "viés_intermediario": intermediaria["viés"],
+                "justificativa": f"Incongruência detectada entre curta e média (Ruído Ativo)"
             }
 
     def analisar_camada_historica(self, padrao_ou_numero=None):
@@ -674,31 +652,10 @@ class IAPreditivaV1:
                 "relevancia": "ALTA" if assertividade >= 0.57 else "MÉDIA",
                 "ocorrencias": total,
                 "assertividade_real": round(assertividade * 100, 1),
-                "mensagem": f"Padrão encontrado no histórico com {total} ocorrências"
+                "mensagem": f"Padrão mapeado no histórico robusto com {total} ocorrências"
             }
 
-        if isinstance(padrao_ou_numero, int) and 0 <= padrao_ou_numero <= 14:
-            dados_num = self.unidade_analise.get(padrao_ou_numero, {})
-            total = dados_num.get("ocorrencias", 0)
-            if total >= 50:
-                return {
-                    "existe": True,
-                    "relevancia": "ALTA" if total >= 300 else "MÉDIA",
-                    "ocorrencias": total,
-                    "comportamento_dominante": dados_num.get("comportamento_dominante", "NEUTRO"),
-                    "mensagem": f"Número {padrao_ou_numero} com {total} aparições no histórico"
-                }
-
-        return {
-            "existe": False,
-            "relevancia": "BAIXA",
-            "ocorrencias": 0,
-            "mensagem": "Padrão/Número com amostra insuficiente ou não encontrado"
-        }
-
-    # ============================================================
-    # FIM DOS NOVOS MÉTODOS
-    # ============================================================
+        return {"existe": False, "relevancia": "BAIXA", "ocorrencias": 0, "mensagem": "Sem base de dados histórica robusta"}
 
     def mapear_padroes_avancados(self, dados):
         if not dados or len(dados) < 10:
@@ -707,7 +664,7 @@ class IAPreditivaV1:
         cores = [d['cor'] for d in dados]
         numeros = [d['numero'] for d in dados]
 
-        # 1. XADREZ_4
+        # XADREZ_4
         i = 0
         while i < len(cores) - 4:
             janela = cores[i:i+4]
@@ -718,7 +675,6 @@ class IAPreditivaV1:
                     chave = "XADREZ_4"
                     self.padroes_xadrez_detalhado[chave]["total"] += 1
                     
-                    # Acesso seguro
                     key_apos = f"apos_{proximo_cor}"
                     if key_apos not in self.padroes_xadrez_detalhado[chave]:
                         self.padroes_xadrez_detalhado[chave][key_apos] = 0
@@ -735,7 +691,7 @@ class IAPreditivaV1:
                     self.padroes_xadrez_detalhado[chave]["_futuros"].append((c1, c2, c3))
             i += 1
 
-        # 2. STREAK_3
+        # STREAK_3
         i = 0
         while i < len(cores) - 3:
             if cores[i] == cores[i+1] == cores[i+2] and cores[i] != 'B':
@@ -761,7 +717,7 @@ class IAPreditivaV1:
                     self.padroes_streak_detalhado[chave]["_futuros"].append((c1, c2, c3))
             i += 1
 
-        # 3. Padrões Gerais (3 a 10)
+        # Padrões Gerais (3 a 10)
         for tam in range(3, 11):
             i = 0
             while i <= len(cores) - tam - 1:
@@ -786,21 +742,14 @@ class IAPreditivaV1:
                 eh_espelho_normal = all(janela_cores[j] == janela_cores[tam-1-j] for j in range(tam)) and not eh_streak
                 eh_espelho_invertido = all(janela_cores[j] != janela_cores[tam-1-j] for j in range(tam)) and not eh_xadrez
                 
-                if eh_streak:
-                    tipo_prefix = f"STREAK_{tam}"
-                elif eh_xadrez:
-                    tipo_prefix = f"XADREZ_{tam}"
-                elif eh_duplo:
-                    tipo_prefix = f"DUPLO_{tam}"
-                elif eh_espelho_normal:
-                    tipo_prefix = f"ESPELHO_NORMAL_{tam}"
-                elif eh_espelho_invertido:
-                    tipo_prefix = f"ESPELHO_INVERTIDO_{tam}"
-                else:
-                    tipo_prefix = f"PADRAO_GERAL_{tam}"
+                if eh_streak: tipo_prefix = f"STREAK_{tam}"
+                elif eh_xadrez: tipo_prefix = f"XADREZ_{tam}"
+                elif eh_duplo: tipo_prefix = f"DUPLO_{tam}"
+                elif eh_espelho_normal: tipo_prefix = f"ESPELHO_NORMAL_{tam}"
+                elif eh_espelho_invertido: tipo_prefix = f"ESPELHO_INVERTIDO_{tam}"
+                else: tipo_prefix = f"PADRAO_GERAL_{tam}"
                     
                 chave = f"{tipo_prefix} [{janela_str}]"
-                
                 self.padroes_gerais_detalhado[chave]["total"] += 1
                 
                 key_apos = f"apos_{proxima_cor}"
@@ -821,10 +770,9 @@ class IAPreditivaV1:
                 if "_futuros" not in self.padroes_gerais_detalhado[chave]:
                     self.padroes_gerais_detalhado[chave]["_futuros"] = []
                 self.padroes_gerais_detalhado[chave]["_futuros"].append((c1, c2, c3))
-                
                 i += 1
 
-        # 4. Ngrams
+        # Ngrams
         for i in range(len(cores)):
             self.color_ngrams[1][cores[i]] += 1
             if i + 1 < len(cores):
@@ -832,27 +780,24 @@ class IAPreditivaV1:
             if i + 2 < len(cores):
                 self.color_ngrams[3][f"{cores[i]}-{cores[i+1]}-{cores[i+2]}"] += 1
 
-        # 5. Consolidação G0 e G1
+        # Consolidação G0 e G1
         for dic in [self.padroes_xadrez_detalhado, self.padroes_streak_detalhado, self.padroes_gerais_detalhado]:
             for chave, info in list(dic.items()):
                 v = info.get("apos_V", 0)
                 p = info.get("apos_P", 0)
-                if v == 0 and p == 0:
-                    continue
+                if v == 0 and p == 0: continue
                 cor_alvo = "V" if v >= p else "P"
                 
                 for c1, c2, c3 in info.get("_futuros", []):
-                    if c1 == cor_alvo or c1 == "B":
-                        info["g0"] += 1
-                    elif c2 == cor_alvo or c2 == "B":
-                        info["g1"] += 1
+                    if c1 == cor_alvo or c1 == "B": info["g0"] += 1
+                    elif c2 == cor_alvo or c2 == "B": info["g1"] += 1
                         
-                if "_futuros" in info:
-                    del info["_futuros"]
+                if "_futuros" in info: del info["_futuros"]
 
     def _processar_bloco_dados(self, dados, multiplicador_peso, treinamento_profundo=False):
         if not dados: return
 
+        # Mapeamento estático tradicional
         for i in range(len(dados) - 2):
             estado = (dados[i]['cor'], dados[i+1]['cor'])
             prox = dados[i+2]['cor']
@@ -861,6 +806,14 @@ class IAPreditivaV1:
                 self.modelo_transicao[estado].append(prox)
                 self.modelo_numerico[num].append(prox)
 
+        # 2) AJUSTE: Mapeamento de Transição Número -> Próximo Número
+        for i in range(len(dados) - 1):
+            num_atual = int(dados[i]['numero'])
+            num_proximo = int(dados[i+1]['numero'])
+            if 0 <= num_atual <= 14 and 0 <= num_proximo <= 14:
+                self.matriz_numero_proximo[num_atual][num_proximo] += multiplicador_peso
+
+        # Unidade de análise
         for i in range(len(dados) - 1):
             num = int(dados[i]['numero'])
             cor_post = str(dados[i+1]['cor']).upper()
@@ -911,7 +864,20 @@ class IAPreditivaV1:
         return "BAIXA"
 
     def injetar_aprendizado_imediato(self, sub_dados, multiplicador_peso=4, analise_contexto=None):
-        self.dados_recencia.extend(sub_dados)
+        # 3) AJUSTE: Limitar crescimento infinito da memória recência móvel
+        self.dados_recencia_curta.extend(sub_dados)
+        
+        # Consolidação em cascata das memórias deslizantes
+        todas_recencias = self.dados_recencia_media + self.dados_recencia_curta
+        MAX_RECENCIA = 1200
+        
+        if len(todas_recencias) > MAX_RECENCIA:
+            todas_recencias = todas_recencias[-MAX_RECENCIA:]
+            
+        # Re-fatiamento dinâmico baseado na regra de hierarquia
+        self.dados_recencia_media = todas_recencias[:-200]
+        self.dados_recencia_curta = todas_recencias[-200:]
+
         self._processar_bloco_dados(sub_dados, multiplicador_peso, True)
         if analise_contexto:
             for regra in analise_contexto.get("regras_posicionais", []):
@@ -936,12 +902,10 @@ class IAPreditivaV1:
         bonus = 0
         for padrao in self.memoria_padroes_vencedores:
             match = 0
-            if padrao.get("geometria") == analise_contexto.get("geometria"):
-                match += 8
+            if padrao.get("geometria") == analise_contexto.get("geometria"): match += 8
             comuns = set(padrao.get("regras_ativas", [])) & set([r.get("tipo_regra") for r in analise_contexto.get("regras_posicionais", [])])
             match += len(comuns) * 3
-            if match >= 12:
-                bonus += 4
+            if match >= 12: bonus += 4
         return min(bonus, 22)
 
     def predizer_proxima_casa(self, sub_num, sub_pol, analise_contexto=None):
@@ -955,78 +919,73 @@ class IAPreditivaV1:
         por_num = self.modelo_numerico.get(ultimo_num, [])
         stats = self.unidade_analise.get(ultimo_num, {"freq_v": 0, "freq_p": 0})
 
+        # Inicialização estrutural dos pesos bônus
         v_bonus = stats.get("freq_v", 0) * 3.5
         p_bonus = stats.get("freq_p", 0) * 3.5
 
+        # ============================================================
+        # 4) AJUSTE: Arquitetura Decaimento Temporal Ponderado (Matriz de Scores)
+        # ============================================================
+        def extrair_frequencias_camada(camada_dados):
+            if not camada_dados: return 0.5, 0.5
+            cores = [d['cor'] for d in camada_dados]
+            tot = len(cores)
+            return cores.count('V') / tot if tot > 0 else 0.5, cores.count('P') / tot if tot > 0 else 0.5
+
+        hist_v, hist_p = extrair_frequencias_camada(self.dados_historico)
+        media_v, media_p = extrair_frequencias_camada(self.dados_recencia_media)
+        curta_v, curta_p = extrair_frequencias_camada(self.dados_recencia_curta)
+
+        score_vermelho = (hist_v * 1) + (media_v * 3) + (curta_v * 5)
+        score_preto = (hist_p * 1) + (media_p * 3) + (curta_p * 5)
+
+        v_bonus += score_vermelho * 15
+        p_bonus += score_preto * 15
+
+        # Injetando tendências baseadas no mapeamento estático tradicional
         comportamento = stats.get("comportamento_dominante", "NEUTRO")
         estabilidade = stats.get("estabilidade", "NEUTRO")
-        enfraquecimento = stats.get("enfraquecimento", "ESTÁVEL")
-        saturacao = stats.get("saturacao", "BAIXA")
-
         if comportamento == "VERMELHO": v_bonus += 12
         elif comportamento == "PRETO": p_bonus += 12
-
         if estabilidade == "ESTÁVEL":
             if comportamento == "VERMELHO": v_bonus += 10
             elif comportamento == "PRETO": p_bonus += 10
-        elif estabilidade == "INSTÁVEL":
-            v_bonus -= 8
-            p_bonus -= 8
 
-        if enfraquecimento == "ENFRAQUECIDO":
-            v_bonus -= 10
-            p_bonus -= 10
-
-        if saturacao == "ALTA":
-            v_bonus -= 6
-            p_bonus -= 6
-
-        pos_v = stats.get("pos_numero_V", 0)
-        pos_p = stats.get("pos_numero_P", 0)
-        if pos_v + pos_p >= 5:
-            if pos_v > pos_p * 1.25: v_bonus += 14
-            elif pos_p > pos_v * 1.25: p_bonus += 14
-
-        if hasattr(self, 'analise_recencia') and self.analise_recencia:
-            if ultimo_num in self.analise_recencia:
-                info = self.analise_recencia[ultimo_num]
-                if info.get("tendencia_recente") == "FORTE":
-                    if info["cor_mais_frequente_apos"] == "VERMELHO":
-                        v_bonus += 15
-                    else:
-                        p_bonus += 15
-
-        if analise_contexto:
-            prob_streak_v = self.calcular_probabilidade_streak_empirica('V', 5)
-            prob_streak_p = self.calcular_probabilidade_streak_empirica('P', 5)
-            prob_xadrez_5 = self.calcular_probabilidade_xadrez_empirica(5)
-
-            if prob_streak_v > 2.0 or prob_streak_p > 2.0:
-                if sub_pol[-1] == 'V': p_bonus += 18
-                else: v_bonus += 18
-
-            if prob_xadrez_5 < 3.0 and analise_contexto.get("contexto_reversao", {}).get("xadrez_quebrou"):
-                if sub_pol[-1] == 'V': v_bonus += 22
-                else: p_bonus += 22
-
-        if hasattr(self, 'xadrez_stats') and self.xadrez_stats:
-            if ultimo_num in self.xadrez_stats.get('numeros_quebradores', {}):
-                if sub_pol[-1] == 'V':
-                    p_bonus += 12
+        # Mapeamento do próximo número baseado na Matriz Número -> Próximo Número
+        if ultimo_num in self.matriz_numero_proximo:
+            sub_matriz = self.matriz_numero_proximo[ultimo_num]
+            total_proximos = sum(sub_matriz.values())
+            if total_proximos > 0:
+                # Localiza se o maior padrão probabilístico de saída do número aponta para cor V ou P
+                peso_v_num = sum(sub_matriz[n] for n in range(1, 8))
+                peso_p_num = sum(sub_matriz[n] for n in range(8, 15))
+                if peso_v_num > peso_p_num:
+                    v_bonus += (peso_v_num / total_proximos) * 20
                 else:
-                    v_bonus += 12
+                    p_bonus += (peso_p_num / total_proximos) * 20
 
-        if hasattr(self, 'streak_breaker_stats'):
-            if sub_pol[-1] == 'V' and ultimo_num in self.streak_breaker_stats.get('V', {}):
-                p_bonus += 10
-            elif sub_pol[-1] == 'P' and ultimo_num in self.streak_breaker_stats.get('P', {}):
-                v_bonus += 10
+        # ============================================================
+        # 5) e 6) AJUSTE: Regra de Dominância da Recência & Filtro Anti-Ruído
+        # ============================================================
+        vies_hist = "VERMELHO" if hist_v > hist_p + 0.05 else ("PRETO" if hist_p > hist_v + 0.05 else "EQUILIBRADO")
+        vies_media = "VERMELHO" if media_v > media_p + 0.05 else ("PRETO" if media_p > media_v + 0.05 else "EQUILIBRADO")
+        vies_curta = "VERMELHO" if curta_v > curta_p + 0.05 else ("PRETO" if curta_p > curta_v + 0.05 else "EQUILIBRADO")
 
-        # =========================================================================
-        # CONEXÃO ATIVA DO MAPEAMENTO AVANÇADO DE PADRÕES DINÂMICOS
-        # =========================================================================
+        fator_anti_ruido = 1.0
+        
+        if vies_curta != "INDEFINIDO" and vies_curta != vies_hist:
+            # Amostragem mínima suficiente para consolidação da quebra de regime
+            if len(self.dados_recencia_curta) >= 15:
+                if vies_media == vies_curta:
+                    # Mudança validada por filtro de confirmação -> Recência Curta assume o comando absoluto
+                    if vies_curta == "VERMELHO": v_bonus += 45
+                    elif vies_curta == "PRETO": p_bonus += 45
+                else:
+                    # Sem confirmação da camada intermediária -> Trata o desvio como ruído volátil
+                    fator_anti_ruido = 0.45
+
+        # Processamento de padrões clássicos dinâmicos do sistema
         padroes_detectados = []
-
         if hasattr(self, 'padroes_gerais_detalhado') and self.padroes_gerais_detalhado:
             for tam in range(3, 11):
                 if len(sub_pol) >= tam:
@@ -1038,8 +997,7 @@ class IAPreditivaV1:
                             if tot_ocorr >= 5:
                                 v_ocorr = info.get("apos_V", 0)
                                 p_ocorr = info.get("apos_P", 0)
-                                g0 = info.get("g0", 0)
-                                g1 = info.get("g1", 0)
+                                g0, g1 = info.get("g0", 0), info.get("g1", 0)
                                 assert_real = (g0 + g1) / tot_ocorr if tot_ocorr > 0 else 0
                                 if assert_real >= 0.55:
                                     peso_bonus = int(assert_real * 32 * (min(tot_ocorr, 100) / 100))
@@ -1050,74 +1008,14 @@ class IAPreditivaV1:
                                         p_bonus += peso_bonus
                                         padroes_detectados.append(f"{chave} (+{peso_bonus} P)")
 
-        if hasattr(self, 'padroes_xadrez_detalhado') and self.padroes_xadrez_detalhado and len(sub_pol) >= 4:
-            tail_4 = sub_pol[-4:]
-            if all(tail_4[j] != tail_4[j-1] for j in range(1, 4)) and 'B' not in tail_4:
-                info_x = self.padroes_xadrez_detalhado.get("XADREZ_4", {})
-                if info_x and info_x.get("total", 0) >= 5:
-                    if info_x.get("apos_V", 0) > info_x.get("apos_P", 0):
-                        v_bonus += 16
-                        padroes_detectados.append("XADREZ_4 (+16 V)")
-                    elif info_x.get("apos_P", 0) > info_x.get("apos_V", 0):
-                        p_bonus += 16
-                        padroes_detectados.append("XADREZ_4 (+16 P)")
-
-        if hasattr(self, 'padroes_streak_detalhado') and self.padroes_streak_detalhado and len(sub_pol) >= 3:
-            tail_3 = sub_pol[-3:]
-            if len(set(tail_3)) == 1 and 'B' not in tail_3:
-                info_s = self.padroes_streak_detalhado.get("STREAK_3", {})
-                if info_s and info_s.get("total", 0) >= 5:
-                    if info_s.get("apos_V", 0) > info_s.get("apos_P", 0):
-                        v_bonus += 16
-                        padroes_detectados.append("STREAK_3 (+16 V)")
-                    elif info_s.get("apos_P", 0) > info_s.get("apos_V", 0):
-                        p_bonus += 16
-                        padroes_detectados.append("STREAK_3 (+16 P)")
+        str_padroes = f" | Padrões: {', '.join(padroes_detectados)}" if padroes_detectados else " | Sem Padrão Dinâmico"
         
-        str_padroes = f" | Padrões Ativos: {', '.join(padroes_detectados)}" if padroes_detectados else " | Nenhum Padrão Dinâmico"
-        # =========================================================================
+        # Ponderação final combinada com amortecimento estatístico anti-ruído
+        p_trans = 0.22 if len(self.dados_recencia_curta) > 0 else 0.17
+        p_num = 0.18 if len(self.dados_recencia_curta) > 0 else 0.16
 
-        # ============================================================
-        # SÍNTESE DAS 3 CAMADAS TEMPORAIS
-        # ============================================================
-        raciocinio_camadas = []
-
-        camada_curta = self.analisar_camada_curta(janela=200)
-        if camada_curta["viés"] == "PRETO":
-            p_bonus += camada_curta["confianca"] * 0.75
-            raciocinio_camadas.append(f"Curta: {camada_curta['justificativa']}")
-        elif camada_curta["viés"] == "VERMELHO":
-            v_bonus += camada_curta["confianca"] * 0.75
-            raciocinio_camadas.append(f"Curta: {camada_curta['justificativa']}")
-
-        camada_inter = self.analisar_camada_intermediaria(janela=800)
-        if camada_inter.get("sustentacao"):
-            raciocinio_camadas.append(f"Intermediária: {camada_inter['justificativa']}")
-            if camada_curta["viés"] == "PRETO":
-                p_bonus += 10
-            elif camada_curta["viés"] == "VERMELHO":
-                v_bonus += 10
-        elif camada_inter.get("status") == "MUDANÇA NÃO SUSTENTADA":
-            raciocinio_camadas.append(f"Intermediária: {camada_inter['justificativa']}")
-
-        contexto_historico = self.analisar_camada_historica()
-        if contexto_historico.get("relevancia") == "ALTA":
-            raciocinio_camadas.append(f"Histórico: {contexto_historico['mensagem']}")
-            if camada_curta["viés"] == "PRETO":
-                p_bonus += 6
-            elif camada_curta["viés"] == "VERMELHO":
-                v_bonus += 6
-        elif contexto_historico.get("relevancia") == "BAIXA" and contexto_historico.get("existe"):
-            raciocinio_camadas.append("Histórico: Padrão com baixa relevância estatística")
-
-        str_camadas = " | ".join(raciocinio_camadas) if raciocinio_camadas else ""
-        # ============================================================
-
-        has_rec = len(self.dados_recencia) > 0
-        p_trans, p_num, p_geom = (0.22 if has_rec else 0.17), (0.18 if has_rec else 0.16), 0.25
-
-        total_v = (trans.count('V') * p_trans) + (por_num.count('V') * p_num) + (0 * p_geom) + v_bonus
-        total_p = (trans.count('P') * p_trans) + (por_num.count('P') * p_num) + (0 * p_geom) + p_bonus
+        total_v = ((trans.count('V') * p_trans) + (por_num.count('V') * p_num) + v_bonus)
+        total_p = ((trans.count('P') * p_trans) + (por_num.count('P') * p_num) + p_bonus)
 
         if analise_contexto:
             bonus_memoria = self.calcular_bonus_memoria(analise_contexto)
@@ -1125,41 +1023,41 @@ class IAPreditivaV1:
             else: total_p += bonus_memoria
 
         if total_v + total_p == 0:
-            return "NEUTRO", 0.0, f"Sem dados suficientes{str_padroes}"
+            return "NEUTRO", 0.0, f"Amostragem insuficiente operacional{str_padroes}"
 
         prob_v = (total_v / (total_v + total_p)) * 100
         prob_p = (total_p / (total_v + total_p)) * 100
 
+        # Aplicação direta do decaimento de confiança se for detectado ruído sem suporte intermediário
         BARREIRA = 52.5
-        raciocinio_final = f"{str_camadas} {str_padroes}".strip()
+        raciocinio_final = f"Camadas Correntes [Curta: {vies_curta} | Média: {vies_media} | Hist: {vies_hist}]{str_padroes}"
 
         if prob_v >= BARREIRA and prob_v > prob_p + 4:
-            return "VERMELHO", round(prob_v, 1), f"Confluência Vermelho ({prob_v:.1f}%) | {raciocinio_final}"
+            return "VERMELHO", round(prob_v * fator_anti_ruido, 1), f"Confluência Vermelho ({prob_v:.1f}%) | {raciocinio_final}"
         elif prob_p >= BARREIRA and prob_p > prob_v + 4:
-            return "PRETO", round(prob_p, 1), f"Confluência Preto ({prob_p:.1f}%) | {raciocinio_final}"
-        return "NEUTRO", round(max(prob_v, prob_p), 1), f"Sem confluência clara | {raciocinio_final}"
+            return "PRETO", round(prob_p * fator_anti_ruido, 1), f"Confluência Preto ({prob_p:.1f}%) | {raciocinio_final}"
+        return "NEUTRO", round(max(prob_v, prob_p), 1), f"Equilíbrio ou Indeterminação Sistêmica | {raciocinio_final}"
 
     def calcular_probabilidade_streak_empirica(self, cor, k):
-        todos = (self.dados_longo or []) + (self.dados_recencia or [])
+        todos = self.dados_historico + self.dados_recencia_media + self.dados_recencia_curta
         if len(todos) < k + 1: return 0.0
         total = len(todos) - k
         count = sum(1 for i in range(total) if all(d['cor'] == cor for d in todos[i:i+k]))
         return round((count / total) * 100, 2) if total > 0 else 0.0
 
     def calcular_probabilidade_xadrez_empirica(self, k):
-        todos = (self.dados_longo or []) + (self.dados_recencia or [])
+        todos = self.dados_historico + self.dados_recencia_media + self.dados_recencia_curta
         if len(todos) < k + 1: return 0.0
         total = len(todos) - k
         count = 0
         for i in range(total):
             janela = [d['cor'] for d in todos[i:i+k]]
-            if all(janela[j] != janela[j-1] for j in range(1, len(janela))):
-                count += 1
+            if all(janela[j] != janela[j-1] for j in range(1, len(janela))): count += 1
         return round((count / total) * 100, 2) if total > 0 else 0.0
 
     def analisar_comportamento_pos_numero_recencia(self, dados_recencia):
         if not dados_recencia or len(dados_recencia) < 30:
-            return {"mensagem": "Base de recência muito pequena para análise confiável"}
+            return {"mensagem": "Amostragem em recência volátil ou insuficiente para varredura"}
 
         relatorio = {}
         contagem = {n: {"total": 0, "pos_V": 0, "pos_P": 0, "pos_B": 0} for n in range(15)}
@@ -1168,18 +1066,13 @@ class IAPreditivaV1:
             num = dados_recencia[i]['numero']
             cor_proxima = dados_recencia[i + 1]['cor']
             contagem[num]["total"] += 1
-            if cor_proxima == "V":
-                contagem[num]["pos_V"] += 1
-            elif cor_proxima == "P":
-                contagem[num]["pos_P"] += 1
-            else:
-                contagem[num]["pos_B"] += 1
+            if cor_proxima == "V": contagem[num]["pos_V"] += 1
+            elif cor_proxima == "P": contagem[num]["pos_P"] += 1
+            else: contagem[num]["pos_B"] += 1
 
         for num in range(15):
             dados = contagem[num]
-            if dados["total"] == 0:
-                continue
-
+            if dados["total"] == 0: continue
             total = dados["total"]
             cores = {"VERMELHO": dados["pos_V"], "PRETO": dados["pos_P"], "BRANCO": dados["pos_B"]}
             cor_dominante = max(cores, key=cores.get)
@@ -1191,7 +1084,6 @@ class IAPreditivaV1:
                 "frequencia_cor_dominante_%": freq,
                 "tendencia_recente": "FORTE" if freq >= 65 else ("MODERADA" if freq >= 55 else "FRACA")
             }
-
         return relatorio
 
     def analisar_comportamento_pos_numero(self):
@@ -1199,14 +1091,9 @@ class IAPreditivaV1:
         for num in range(15):
             dados = self.unidade_analise[num]
             total = dados["ocorrencias"]
-            if total == 0:
-                continue
+            if total == 0: continue
 
-            cores_pos = {
-                "VERMELHO": dados["pos_numero_V"],
-                "PRETO": dados["pos_numero_P"],
-                "BRANCO": dados["pos_numero_B"]
-            }
+            cores_pos = {"VERMELHO": dados["pos_numero_V"], "PRETO": dados["pos_numero_P"], "BRANCO": dados["pos_numero_B"]}
             cor_dominante = max(cores_pos, key=cores_pos.get)
             freq_dominante = round((cores_pos[cor_dominante] / total) * 100, 2)
 
@@ -1214,12 +1101,7 @@ class IAPreditivaV1:
             if len(ultimas) >= 8:
                 ultimas_dominantes = sum(1 for c in ultimas if c == ('V' if cor_dominante == "VERMELHO" else 'P'))
                 taxa_ultimas = ultimas_dominantes / len(ultimas)
-                if taxa_ultimas < 0.5:
-                    tendencia = "EM MUDANÇA / SATURAÇÃO POSSÍVEL"
-                elif taxa_ultimas >= 0.75:
-                    tendencia = "ESTÁVEL"
-                else:
-                    tendencia = "MODERADO"
+                tendencia = "ESTÁVEL" if taxa_ultimas >= 0.75 else ("EM MUDANÇA / SATURAÇÃO POSSÍVEL" if taxa_ultimas < 0.5 else "MODERADO")
             else:
                 tendencia = "DADOS INSUFICIENTES"
 
@@ -1241,23 +1123,19 @@ class MotorNoCall:
     def checar_no_call(sub_num, sub_pol):
         cenarios_duplas = [(7, 8), (8, 9), (9, 10), (10, 11)]
         for idx1, idx2 in cenarios_duplas:
-            if sub_num[idx1] == sub_num[idx2]:
-                return True, "Volume 2 Cap 6: Trava das Duplas Ativa"
+            if sub_num[idx1] == sub_num[idx2]: return True, "Volume 2 Cap 6: Trava das Duplas Ativa"
 
         posicoes_criticas_6 = [5, 8, 9, 10, 11]
         for pos in posicoes_criticas_6:
-            if sub_num[pos] == 6:
-                return True, "Volume 2 Cap 4: Trava Número 6 (Posição de No Call Ativa)"
+            if sub_num[pos] == 6: return True, "Volume 2 Cap 4: Trava Número 6 (Posição de No Call Ativa)"
 
         posicoes_criticas_2 = [8, 9, 10, 11]
         for pos in posicoes_criticas_2:
-            if sub_num[pos] == 2:
-                return True, "Volume 2 Cap 3: Trava Número 2"
+            if sub_num[pos] == 2: return True, "Volume 2 Cap 3: Trava Número 2"
 
         posicoes_criticas_b = [5, 8, 9, 10, 11]
         for pos in posicoes_criticas_b:
-            if sub_pol[pos] == "B":
-                return True, "Volume 2 Cap 5: Trava do Branco"
+            if sub_pol[pos] == "B": return True, "Volume 2 Cap 5: Trava do Branco"
 
         return False, "Evento Neutro Operacional"
 
@@ -1266,50 +1144,32 @@ class JuizHierarquicoModificado:
     @staticmethod
     def arbitrar_sinal(no_call_ativo, motivo_nc, expectations, inclinacao_num, geometria_mercado, 
                        previsao_ia, status_inversao, historico_regras,
-                       modo_mercado="NEUTRO", 
-                       streak_atual=0, xadrez_len=0, xadrez_quebrou=False,
+                       modo_mercado="NEUTRO", streak_atual=0, xadrez_len=0, xadrez_quebrou=False,
                        contexto_exaustao=False, sintese_evidencias=None):
         
-        if no_call_ativo:
-            return "NO CALL", motivo_nc, "SISTEMA_TRAVADO"
-
+        if no_call_ativo: return "NO CALL", motivo_nc, "SISTEMA_TRAVADO"
         direcao_ia, confianca_ia, raciocinio_ia = previsao_ia
 
-        tem_inversao_final = any(
-            "ESPELHO_INVERSO" in e.get("tipo_regra", "") or 
-            "INVERSAO_FORTE" in e.get("tipo_regra", "")
-            for e in expectations
-        )
+        tem_inversao_final = any("ESPELHO_INVERSO" in e.get("tipo_regra", "") or "INVERSAO_FORTE" in e.get("tipo_regra", "") for e in expectations)
 
         if expectations:
             count_v = sum(1 for item in expectations if item["direcao"] == "VERMELHO")
             count_p = sum(1 for item in expectations if item["direcao"] == "PRETO")
+            if tem_inversao_final: return "PRETO", "Inversão forte no fechamento (Espelho/Inversão)", "INVERSAO_FINAL"
+            if count_v > count_p: return "VERMELHO", "Regra posicional forte ativa", "REGRA_POSICIONAL"
+            elif count_p > count_v: return "PRETO", "Regra posicional forte ativa", "REGRA_POSICIONAL"
 
-            if tem_inversao_final:
-                return "PRETO", "Inversão forte no fechamento (Espelho/Inversão)", "INVERSAO_FINAL"
+        if geometria_mercado == "CICLO_FECHADO_VPPV": return "PRETO", "Geometria VPPV (Padrão forte)", "GEOMETRIA_FORTE"
+        if geometria_mercado == "CICLO_FECHADO_PVVP": return "VERMELHO", "Geometria PVVP (Padrão forte)", "GEOMETRIA_FORTE"
 
-            if count_v > count_p:
-                return "VERMELHO", "Regra posicional forte ativa", "REGRA_POSICIONAL"
-            elif count_p > count_v:
-                return "PRETO", "Regra posicional forte ativa", "REGRA_POSICIONAL"
-
-        if geometria_mercado == "CICLO_FECHADO_VPPV":
-            return "PRETO", "Geometria VPPV (Padrão forte)", "GEOMETRIA_FORTE"
-        if geometria_mercado == "CICLO_FECHADO_PVVP":
-            return "VERMELHO", "Geometria PVVP (Padrão forte)", "GEOMETRIA_FORTE"
-
-        if direcao_ia != "NEUTRO":
-            return direcao_ia, f"IA Preditiva ({confianca_ia:.1f}%) [{raciocinio_ia}]", "IA_PREDITIVA"
+        if direcao_ia != "NEUTRO": return direcao_ia, f"IA Preditiva ({confianca_ia:.1f}%) [{raciocinio_ia}]", "IA_PREDITIVA"
 
         if expectations:
             count_v = sum(1 for item in expectations if item["direcao"] == "VERMELHO")
             count_p = sum(1 for item in expectations if item["direcao"] == "PRETO")
-            if count_v >= count_p:
-                return "VERMELHO", "Fallback por regras", "FALLBACK_REGRA"
-            else:
-                return "PRETO", "Fallback por regras", "FALLBACK_REGRA"
+            return "VERMELHO" if count_v >= count_p else "PRETO", "Fallback por regras", "FALLBACK_REGRA"
 
-        return "VERMELHO", "Fallback padrão do systema", "FALLBACK_PADRAO"
+        return "VERMELHO", "Fallback padrão do sistema", "FALLBACK_PADRAO"
 
 
 class MotorContagensProjetivas:
@@ -1324,51 +1184,30 @@ class MotorContagensProjetivas:
                 passo = REGRAS_PROJECAO[num_atual]
                 alvo_idx = i + passo
                 if alvo_idx == 11 or alvo_idx == 12:
-                    if any(sub_num[k] == 0 for k in range(i, 12)):
-                        continue
-                    lista_bruta.append({
-                        "direcao": "VERMELHO",
-                        "tipo_regra": f"V3_ATIVADOR_{num_atual}",
-                        "origem": f"Volume 3: Contagem {num_atual}"
-                    })
+                    if any(sub_num[k] == 0 for k in range(i, 12)): continue
+                    lista_bruta.append({"direcao": "VERMELHO", "tipo_regra": f"V3_ATIVADOR_{num_atual}", "origem": f"Volume 3: Contagem {num_atual}"})
 
         par_fechamento = (sub_num[10], sub_num[11])
         continuidade_preta_validas = [(8,9), (9,10), (10,11), (11,12), (12,13), (13,14), (14,13), (13,12), (12,11), (11,10)]
         continuidade_vermelha_validas = [(1,2), (2,3), (3,4), (4,5), (5,6), (6,7), (7,6), (6,5), (5,4), (4,3)]
 
-        if par_fechamento in continuidade_preta_validas:
-            lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V2_CONTINUIDADE_PRETA", "origem": "Volume 2"})
-        elif par_fechamento in continuidade_vermelha_validas:
-            lista_bruta.append({"direcao": "VERMELHO", "tipo_regra": "V2_CONTINUIDADE_VERMELHA", "origem": "Volume 2"})
+        if par_fechamento in continuidade_preta_validas: lista_bruta.append({"direcao": "PRETO", "tipo_regra": "V2_CONTINUIDADE_PRETA", "origem": "Volume 2"})
+        elif par_fechamento in continuidade_vermelha_validas: lista_bruta.append({"direcao": "VERMELHO", "tipo_regra": "V2_CONTINUIDADE_VERMELHA", "origem": "Volume 2"})
 
         if sub_num[11] in [3, 4, 5] and sub_pol[10] == sub_pol[11]:
-            direcao = "VERMELHO" if sub_pol[11] == "V" else "PRETO"
-            lista_bruta.append({
-                "direcao": direcao,
-                "tipo_regra": "ASSUNCAO_CONTAGEM_FINAL",
-                "origem": "Assunção de contagem no fechamento da janela"
-            })
+            lista_bruta.append({"direcao": "VERMELHO" if sub_pol[11] == "V" else "PRETO", "tipo_regra": "ASSUNCAO_CONTAGEM_FINAL", "origem": "Assunção de contagem no fechamento da janela"})
 
         if len(sub_pol) >= 5:
             final = "".join(sub_pol[-5:])
             padroes_inversao = ["VPVPV", "PVPVP", "VPPVP", "PVVPV", "VPVPP", "PVPPV"]
             for padrao in padroes_inversao:
                 if padrao in final:
-                    direcao_inversao = "PRETO" if sub_pol[-1] == "V" else "VERMELHO"
-                    lista_bruta.append({
-                        "direcao": direcao_inversao,
-                        "tipo_regra": "ESPELHO_INVERSO_FINAL",
-                        "origem": f"Padrão de inversão detectado ({padrao})"
-                    })
+                    lista_bruta.append({"direcao": "PRETO" if sub_pol[-1] == "V" else "VERMELHO", "tipo_regra": "ESPELHO_INVERSO_FINAL", "origem": f"Padrão de inversão detectado ({padrao})"})
                     break
 
         if len(sub_pol) >= 3:
             if sub_pol[-3] == sub_pol[-2] and sub_pol[-1] != sub_pol[-2]:
-                lista_bruta.append({
-                    "direcao": "NEUTRO",
-                    "tipo_regra": "INVERSAO_FORTE_FINAL",
-                    "origem": "Inversão clara na última posição após repetição"
-                })
+                lista_bruta.append({"direcao": "NEUTRO", "tipo_regra": "INVERSAO_FORTE_FINAL", "origem": "Inversão clara na última posição após repetição"})
 
         return lista_bruta
 
@@ -1398,8 +1237,7 @@ class LeitorXLS:
         self.caminho = caminho_arquivo
 
     def ler_e_validar(self):
-        if not os.path.exists(self.caminho):
-            return None
+        if not os.path.exists(self.caminho): return None
         try:
             df = pd.read_excel(self.caminho)
             df.columns = [str(col).strip().lower() for col in df.columns]
@@ -1409,37 +1247,27 @@ class LeitorXLS:
                 if possible in df.columns:
                     col_num = possible
                     break
-            
             if col_num is None:
                 for col in df.columns:
                     if df[col].dtype in ['int64', 'float64']:
                         col_num = col
                         break
-            
-            if col_num is None:
-                return None
+            if col_num is None: return None
 
             df = df.rename(columns={col_num: 'numero'})
             df = df.iloc[::-1].reset_index(drop=True)
-            
-            if len(df) < 5:
-                return None
+            if len(df) < 5: return None
 
             dados = []
             for _, row in df.iterrows():
                 try:
                     num = int(float(row['numero']))
-                    if num == 0:
-                        cor = 'B'
-                    elif 1 <= num <= 7:
-                        cor = 'V'
-                    elif 8 <= num <= 14:
-                        cor = 'P'
-                    else:
-                        continue
+                    if num == 0: cor = 'B'
+                    elif 1 <= num <= 7: cor = 'V'
+                    elif 8 <= num <= 14: cor = 'P'
+                    else: continue
                     dados.append({"numero": num, "cor": cor})
-                except:
-                    continue
+                except: continue
             return dados if len(dados) >= 5 else None
         except Exception as e:
             print(f"[LeitorXLS] Erro: {e}")
@@ -1466,10 +1294,8 @@ class MotorV1Completo:
         else:
             base_recencia = None
             if os.path.exists("base_recencia_ativa.xlsx"):
-                try:
-                    base_recencia = LeitorXLS("base_recencia_ativa.xlsx").ler_e_validar()
-                except:
-                    pass
+                try: base_recencia = LeitorXLS("base_recencia_ativa.xlsx").ler_e_validar()
+                except: pass
             dados_consolidados = self.dados_curto + (base_recencia or [])
             self.ia = IAPreditivaV1(self.dados_longo, dados_consolidados)
 
@@ -1491,22 +1317,14 @@ class MotorV1Completo:
                 sinal = "NO CALL"
                 justificativa = analise["no_call"]["motivo"]
                 regra_id = "SISTEMA_TRAVADO"
-                direcao_ia = "NEUTRO"
-                conf_ia = 0.0
-                raciocinio_ia = analise["no_call"]["motivo"]
                 expectativas = []
                 geometria = analise.get("geometria", "ESTÁVEL")
-                streak = 0
-                xadrez_len = 0
-                xadrez_quebrou = False
-                contexto_exaustao = False
+                streak, xadrez_len, xadrez_quebrou, contexto_exaustao = 0, 0, False, False
                 modo_mercado = "NEUTRO"
             else:
                 geometria = analise["geometria"]
                 expectativas = analise["regras_posicionais"]
-                direcao_ia = analise["ia"]["direcao"]
-                conf_ia = analise["ia"]["confianca"]
-                raciocinio_ia = analise["ia"]["raciocinio"]
+                direcao_ia, conf_ia, raciocinio_ia = analise["ia"]["direcao"], analise["ia"]["confianca"], analise["ia"]["raciocinio"]
                 streak = analise["contexto_reversao"]["streak"]
                 xadrez_len = analise["contexto_reversao"]["xadrez_len"]
                 xadrez_quebrou = analise["contexto_reversao"]["xadrez_quebrou"]
@@ -1516,11 +1334,8 @@ class MotorV1Completo:
                 sinal, justificativa, regra_id = JuizHierarquicoModificado.arbitrar_sinal(
                     False, "", expectativas, None, geometria,
                     (direcao_ia, conf_ia, raciocinio_ia), None, self.historico_regras,
-                    modo_mercado=modo_mercado,
-                    streak_atual=streak,
-                    xadrez_len=xadrez_len,
-                    xadrez_quebrou=xadrez_quebrou,
-                    contexto_exaustao=contexto_exaustao
+                    modo_mercado=modo_mercado, streak_atual=streak, xadrez_len=xadrez_len,
+                    xadrez_quebrou=xadrez_quebrou, contexto_exaustao=contexto_exaustao
                 )
 
             correcoes = self.seq.polaridades[idx+12 : idx+15]
@@ -1543,8 +1358,7 @@ class MotorV1Completo:
 
             if classificacao in ["G0", "G1"]:
                 contexto_analise = {
-                    "geometria": geometria,
-                    "regras_posicionais": expectativas,
+                    "geometria": geometria, "regras_posicionais": expectativas,
                     "controlador_retardador": analise.get("controlador_retardador", {}),
                     "contexto_avancado": {"modo_mercado": modo_mercado}
                 }
@@ -1552,18 +1366,10 @@ class MotorV1Completo:
 
             if regra_id not in ["NENHUMA", "SISTEMA_TRAVADO"]:
                 self.historico_regras[regra_id]["total"] += 1
-                if classificacao in ["G0", "G1"]:
-                    self.historico_regras[regra_id]["acertos"] += 1
+                if classificacao in ["G0", "G1"]: self.historico_regras[regra_id]["acertos"] += 1
 
-            bloco = [{"numero": self.seq.numerica[k], "cor": self.seq.polaridades[k]} 
-                     for k in range(idx, min(idx + 12 + salto, self.seq.total))]
-            
-            # CORREÇÃO AQUI: Mudado de 'expectations' para 'expectativas'
-            contexto_injecao = {
-                "regras_posicionais": expectativas,
-                "controlador_retardador": analise.get("controlador_retardador", {}),
-                "geometria": geometria
-            }
+            bloco = [{"numero": self.seq.numerica[k], "cor": self.seq.polaridades[k]} for k in range(idx, min(idx + 12 + salto, self.seq.total))]
+            contexto_injecao = {"regras_posicionais": expectativas, "controlador_retardador": analise.get("controlador_retardador", {}), "geometria": geometria}
             self.ia.injetar_aprendizado_imediato(bloco, 4, contexto_injecao)
 
             memorias.append(f"Janela {len(memorias)+1}: {sub_num} -> {sinal} | {justificativa} | {classificacao}")
@@ -1573,25 +1379,14 @@ class MotorV1Completo:
         total_com_sinal = stats.get("G0",0) + stats.get("G1",0) + stats.get("G2",0) + stats.get("FALHA",0)
         denom = total_com_sinal if total_com_sinal > 0 else 1
 
-        output = "[MEMÓRIA DE CÁLCULO DAS JANELAS MÓVEIS]\n"
-        output += "\n".join(memorias) + "\n\n"
-        output += "[RESULTADO FINAL TIPO D]\n"
-        output += f"CRONOLOGIA VALIDADA: {self.seq.total} Resultados\n"
-        output += f"TOTAL DE JANELAS AUDITADAS: {len(memorias)}\n"
-        output += f" - Taxa G0: {stats.get('G0',0)} Ocorrências ({(stats.get('G0',0)/denom)*100:.2f}%)\n"
-        output += f" - Taxa G1: {stats.get('G1',0)} Ocorrências ({(stats.get('G1',0)/denom)*100:.2f}%)\n"
-        output += f" - Taxa G2: {stats.get('G2',0)} Ocorrências ({(stats.get('G2',0)/denom)*100:.2f}%)\n"
-        output += f" - Taxa de Falha: {stats.get('FALHA',0)} Ocorrências ({(stats.get('FALHA',0)/denom)*100:.2f}%)\n"
-        output += f" - Taxa de NO CALL: {stats.get('NO CALL',0)} Ocorrências\n\n"
-
-        if stats.get("FALHA", 0) >= 25:
-            condicao = "MERCADO EM DEGRADAÇÃO"
-        elif stats.get("G0", 0) >= 50:
-            condicao = "MERCADO PAGADOR"
-        else:
-            condicao = "MERCADO INSTÁVEL"
-        output += f"ESTADO ATUAL DO MERCADO: {condicao}\n"
-
+        output = "[MEMÓRIA DE CÁLCULO DAS JANELAS MÓVEIS]\n" + "\n".join(memorias) + "\n\n[RESULTADO FINAL TIPO D]\n"
+        output += f"CRONOLOGIA VALIDADA: {self.seq.total} Resultados\nTOTAL DE JANELAS AUDITADAS: {len(memorias)}\n"
+        output += f" - Taxa G0: {stats.get('G0',0)} ({(stats.get('G0',0)/denom)*100:.2f}%)\n"
+        output += f" - Taxa G1: {stats.get('G1',0)} ({(stats.get('G1',0)/denom)*100:.2f}%)\n"
+        output += f" - Taxa G2: {stats.get('G2',0)} ({(stats.get('G2',0)/denom)*100:.2f}%)\n"
+        output += f" - Taxa de Falha: {stats.get('FALHA',0)} ({(stats.get('FALHA',0)/denom)*100:.2f}%)\n"
+        output += f" - Taxa de NO CALL: {stats.get('NO CALL',0)}\n\n"
+        output += f"ESTADO ATUAL DO MERCADO: {'MERCADO EM DEGRADAÇÃO' if stats.get('FALHA', 0) >= 25 else ('MERCADO PAGADOR' if stats.get('G0', 0) >= 50 else 'MERCADO INSTÁVEL')}\n"
         return output
 
 
@@ -1602,14 +1397,11 @@ class ProcessadorTipoB:
         self.polaridades = ['B' if n == 0 else ('V' if 1 <= n <= 7 else 'P') for n in sequencia_12_numeros]
 
     def executar_sinal_real(self):
-        if len(self.entrada) != 12:
-            return {"erro": "Necessário exatamente 12 números"}
-
+        if len(self.entrada) != 12: return {"erro": "Necessário exatamente 12 números"}
         ia = carregar_modelo_longo_prazo()
         if ia is None:
             base = LeitorXLS(self.caminho_base).ler_e_validar()
-            if not base:
-                return {"erro": "Base de dados não encontrada"}
+            if not base: return {"erro": "Base de dados não encontrada"}
             ia = IAPreditivaV1(base, None)
 
         regime_rec = None
@@ -1620,62 +1412,33 @@ class ProcessadorTipoB:
                 regime_rec = ia.regime_recencia
 
         analise = MotorAnalise.analisar_janela(self.entrada, self.polaridades, ia)
-
-        nc_ativo = analise["no_call"]["ativo"]
-        motivo_nc = analise["no_call"]["motivo"]
-        geometria = analise["geometria"]
-        expectativas = analise["regras_posicionais"]
+        nc_ativo, motivo_nc = analise["no_call"]["ativo"], analise["no_call"]["motivo"]
+        geometria, expectativas = analise["geometria"], analise["regras_posicionais"]
         direcao_ia = analise["ia"]["direcao"] if not nc_ativo else "NEUTRO"
         conf_ia = analise["ia"]["confianca"] if not nc_ativo else 0.0
         raciocinio_ia = analise["ia"]["raciocinio"] if not nc_ativo else motivo_nc
         streak = analise["contexto_reversao"]["streak"]
-        xadrez_len = analise["contexto_reversao"]["xadrez_len"]
-        xadrez_quebrou = analise["contexto_reversao"]["xadrez_quebrou"]
-        contexto_exaustao = analise["contexto_reversao"]["exaustao"]
-        modo_mercado = analise["contexto_avancado"].get("modo_mercado", "NEUTRO")
-
         raciocinio_trace = analise["camadas"]
 
         if nc_ativo:
-            return {
-                "sinal": "NO CALL",
-                "justificativa": motivo_nc,
-                "no_call": True,
-                "regime_recencia": regime_rec,
-                "motivo_real": f"NO CALL pelo MotorNoCall: {motivo_nc}"
-            }
+            return {"sinal": "NO CALL", "justificativa": motivo_nc, "no_call": True, "regime_recencia": regime_rec, "motivo_real": f"NO CALL: {motivo_nc}"}
 
-        sinal = direcao_ia
-        justificativa = f"IA Preditiva com todo aprendizado embutido ({conf_ia:.1f}%)"
-        regra_id = "IA_ENRIQUECIDA_PADROES_RECENCIA"
-
+        sinal, justificativa, regra_id = direcao_ia, f"IA Preditiva com todo aprendizado embutido ({conf_ia:.1f}%)", "IA_ENRIQUECIDA_PADROES_RECENCIA"
         if streak >= 7:
-            sinal = "NO CALL"
-            justificativa = f"Veto de segurança por streak extremo ({streak}x) - proteção do sistema"
-            regra_id = "VETO_STREAK_EXTREMO"
+            sinal, justificativa, regra_id = "NO CALL", f"Veto de segurança por streak extremo ({streak}x)", "VETO_STREAK_EXTREMO"
 
         return {
-            "sinal": sinal,
-            "justificativa": justificativa,
-            "confianca_ia": round(conf_ia, 2),
-            "no_call": False,
-            "regime_recencia": regime_rec,
-            "motivo_real": justificativa,
-            "raciocinio_trace": raciocinio_trace,
-            "raciocinio_final": raciocinio_ia,
-            "decisao_final": {"sinal": sinal, "justificativa": justificativa, "regra_id": regra_id}
+            "sinal": sinal, "justificativa": justificativa, "confianca_ia": round(conf_ia, 2), "no_call": False, "regime_recencia": regime_rec,
+            "motivo_real": justificativa, "raciocinio_trace": raciocinio_trace, "raciocinio_final": raciocinio_ia, "decisao_final": {"sinal": sinal, "justificativa": justificativa, "regra_id": regra_id}
         }
 
 
 class EngineMatematicoAvancado:
     @staticmethod
     def calcular_raridade_sequencia(sub_pol):
-        if not sub_pol:
-            return {"streak": 0, "probabilidade": 100.0, "status": "SEM DADOS"}
-        
+        if not sub_pol: return {"streak": 0, "probabilidade": 100.0, "status": "SEM DADOS"}
         ultima_cor = sub_pol[-1]
-        if ultima_cor not in ['V', 'P']:
-            return {"streak": 0, "probabilidade": 100.0, "status": "BRANCO NO FECHAMENTO"}
+        if ultima_cor not in ['V', 'P']: return {"streak": 0, "probabilidade": 100.0, "status": "BRANCO NO FECHAMENTO"}
         
         streak = 0
         for cor in reversed(sub_pol):
@@ -1683,23 +1446,16 @@ class EngineMatematicoAvancado:
             else: break
         
         probabilidade_sequencia = ((7 / 15) ** streak) * 100
-        status = "SATURAÇÃO CRÍTICA (Risco Elevado de Inversão)" if streak >= 5 else \
-                 ("DESVIO PADRÃO EM CURSO" if streak >= 3 else "ESTRUTURA DENTRO DA NORMALIDADE")
-        
         return {
-            "streak": streak,
-            "cor_sequencia": "VERMELHO" if ultima_cor == 'V' else "PRETO",
-            "probabilidade": round(probabilidade_sequencia, 2),
-            "status": status
+            "streak": streak, "cor_sequencia": "VERMELHO" if ultima_cor == 'V' else "PRETO", "probabilidade": round(probabilidade_sequencia, 2),
+            "status": "SATURAÇÃO CRÍTICA (Risco Elevado de Inversão)" if streak >= 5 else ("DESVIO PADRÃO EM CURSO" if streak >= 3 else "ESTRUTURA DENTRO DA NORMALIDADE")
         }
 
     @staticmethod
     def calcular_vies_surfe(caminho_base, janela=100):
         leitor = LeitorXLS(caminho_base)
         dados = leitor.ler_e_validar()
-        if not dados:
-            return {"vies": "INDISPONÍVEL", "desvio_v": 0.0, "desvio_p": 0.0, 
-                    "frequencia_v": 46.67, "frequencia_p": 46.67, "frequencia_b": 6.67}
+        if not dados: return {"vies": "INDISPONÍVEL", "desvio_v": 0.0, "desvio_p": 0.0, "frequencia_v": 46.67, "frequencia_p": 46.67, "frequencia_b": 6.67}
         
         ultimos = dados[-janela:]
         v = sum(1 for d in ultimos if d['cor'] == 'V')
@@ -1710,33 +1466,15 @@ class EngineMatematicoAvancado:
         pct_p = (p / len(ultimos)) * 100
         pct_b = (b / len(ultimos)) * 100
         
-        desvio_v = round(pct_v - 46.67, 2)
-        desvio_p = round(pct_p - 46.67, 2)
-        
-        vies = "SURFE DE MACROFREQUÊNCIA: VIÁS PARA VERMELHO ATIVO" if pct_v >= 53.0 else \
-               ("SURFE DE MACROFREQUÊNCIA: VIÁS PARA PRETO ATIVO" if pct_p >= 53.0 else "MACROANÁLISE EQUILIBRADA")
-        
         return {
-            "frequencia_v": round(pct_v, 2),
-            "frequencia_p": round(pct_p, 2),
-            "frequencia_b": round(pct_b, 2),
-            "desvio_v": desvio_v,
-            "desvio_p": desvio_p,
-            "vies": vies
+            "frequencia_v": round(pct_v, 2), "frequencia_p": round(pct_p, 2), "frequencia_b": round(pct_b, 2), "desvio_v": round(pct_v - 46.67, 2), "desvio_p": round(pct_p - 46.67, 2),
+            "vies": "SURFE DE MACROFREQUÊNCIA: VIÁS PARA VERMELHO ATIVO" if pct_v >= 53.0 else ("SURFE DE MACROFREQUÊNCIA: VIÁS PARA PRETO ATIVO" if pct_p >= 53.0 else "MACROANÁLISE EQUILIBRADA")
         }
 
     @staticmethod
     def simular_split_stake_cobertura(stake_principal=10.0):
         stake_branco_ideal = round(stake_principal / 7.0, 2)
-        stake_branco_conservador = round(stake_principal / 10.0, 2)
-        custo_total = stake_principal + stake_branco_ideal
-        lucro_liquido = round((stake_branco_ideal * 14) - custo_total, 2)
-        
         return {
-            "stake_cor": stake_principal,
-            "cobertura_b_ideal_1_7": stake_branco_ideal,
-            "cobertura_b_matematica_1_10": stake_branco_conservador,
-            "lucro_liquido_se_der_branco": lucro_liquido,
-            "custo_total_operacao": round(custo_total, 2),
-            "house_edge_estatico": "-6.67%"
+            "stake_cor": stake_principal, "cobertura_b_ideal_1_7": stake_branco_ideal, "cobertura_b_matematica_1_10": round(stake_principal / 10.0, 2),
+            "lucro_liquido_se_der_branco": round((stake_branco_ideal * 14) - (stake_principal + stake_branco_ideal), 2), "custo_total_operacao": round(stake_principal + stake_branco_ideal, 2), "house_edge_estatico": "-6.67%"
         }
