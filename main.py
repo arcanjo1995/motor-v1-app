@@ -559,6 +559,165 @@ class IAPreditivaV1:
         if self.dados_recencia and len(self.dados_recencia) >= 5:
             self._processar_bloco_dados(self.dados_recencia, 4, True)
 
+    # ============================================================
+    # NOVOS MÉTODOS - ARQUITETURA DE 3 CAMADAS TEMPORAIS
+    # ============================================================
+
+    def analisar_camada_curta(self, janela=200):
+        """Camada Operacional - O que o mercado está fazendo AGORA (principal geradora de viés)"""
+        if len(self.dados_recencia) < janela:
+            return {
+                "viés": "INDEFINIDO",
+                "confianca": 0,
+                "justificativa": "Janela de recência muito pequena",
+                "numeros_fortes": {}
+            }
+
+        ultimos = self.dados_recencia[-janela:]
+        cores = [d['cor'] for d in ultimos]
+        total = len(cores)
+        v = cores.count('V')
+        p = cores.count('P')
+
+        pct_v = (v / total) * 100
+        pct_p = (p / total) * 100
+
+        if pct_v >= 55:
+            viés = "VERMELHO"
+            confianca = round(pct_v, 1)
+        elif pct_p >= 55:
+            viés = "PRETO"
+            confianca = round(pct_p, 1)
+        else:
+            viés = "EQUILIBRADO"
+            confianca = round(max(pct_v, pct_p), 1)
+
+        # Números com viés forte na janela curta
+        contagem_numeros = {}
+        for d in ultimos:
+            num = d['numero']
+            if num not in contagem_numeros:
+                contagem_numeros[num] = {"V": 0, "P": 0, "total": 0}
+            contagem_numeros[num][d['cor']] += 1
+            contagem_numeros[num]["total"] += 1
+
+        numeros_fortes = {}
+        for num, dados in contagem_numeros.items():
+            if dados["total"] >= 5:
+                pct = (dados.get(viés[0] if viés != "EQUILIBRADO" else "V", 0) / dados["total"]) * 100
+                if pct >= 58:
+                    numeros_fortes[num] = round(pct, 1)
+
+        return {
+            "viés": viés,
+            "confianca": confianca,
+            "justificativa": f"Últimas {janela}: {viés} com {confianca}% de dominância",
+            "numeros_fortes": numeros_fortes
+        }
+
+    def _calcular_vies_janela(self, janela):
+        """Método auxiliar para calcular viés de uma janela específica"""
+        if len(self.dados_recencia) < janela:
+            return {"viés": "INDEFINIDO", "confianca": 0}
+
+        ultimos = self.dados_recencia[-janela:]
+        cores = [d['cor'] for d in ultimos]
+        total = len(cores)
+        v = cores.count('V')
+        p = cores.count('P')
+
+        pct_v = (v / total) * 100
+        pct_p = (p / total) * 100
+
+        if pct_v >= 55:
+            return {"viés": "VERMELHO", "confianca": round(pct_v, 1)}
+        elif pct_p >= 55:
+            return {"viés": "PRETO", "confianca": round(pct_p, 1)}
+        else:
+            return {"viés": "EQUILIBRADO", "confianca": round(max(pct_v, pct_p), 1)}
+
+    def analisar_camada_intermediaria(self, janela=800):
+        """Camada Auditora - Verifica se a mudança da recência curta é sustentada"""
+        if len(self.dados_recencia) < janela:
+            return {
+                "status": "INSUFICIENTE",
+                "sustentacao": False,
+                "justificativa": "Janela intermediária muito pequena"
+            }
+
+        curta = self.analisar_camada_curta(janela=200)
+        intermediaria = self._calcular_vies_janela(janela)
+
+        if curta["viés"] == "INDEFINIDO" or intermediaria["viés"] == "INDEFINIDO":
+            return {
+                "status": "INDEFINIDO",
+                "sustentacao": False,
+                "justificativa": "Dados insuficientes para validação"
+            }
+
+        if curta["viés"] == intermediaria["viés"] and intermediaria["confianca"] >= 54:
+            return {
+                "status": "MUDANÇA SUSTENTADA",
+                "sustentacao": True,
+                "viés_curta": curta["viés"],
+                "viés_intermediario": intermediaria["viés"],
+                "confianca": min(curta["confianca"], intermediaria["confianca"]),
+                "justificativa": f"Mudança de {curta['viés']} sustentada na janela de {janela}"
+            }
+        else:
+            return {
+                "status": "MUDANÇA NÃO SUSTENTADA",
+                "sustentacao": False,
+                "viés_curta": curta["viés"],
+                "viés_intermediario": intermediaria["viés"],
+                "justificativa": "Possível ruído - mudança não confirmada na janela intermediária"
+            }
+
+    def analisar_camada_historica(self, padrao_ou_numero=None):
+        """Camada de Memória - Valida relevância estatística do padrão ou número"""
+        if padrao_ou_numero is None:
+            return {"existe": False, "relevancia": "BAIXA", "mensagem": "Nenhum padrão informado"}
+
+        # Tenta buscar em padrões gerais primeiro
+        info = self.padroes_gerais_detalhado.get(padrao_ou_numero)
+        if info and info.get("total", 0) >= 20:
+            total = info.get("total", 0)
+            g0 = info.get("g0", 0)
+            g1 = info.get("g1", 0)
+            assertividade = (g0 + g1) / total if total > 0 else 0
+
+            return {
+                "existe": True,
+                "relevancia": "ALTA" if assertividade >= 0.57 else "MÉDIA",
+                "ocorrencias": total,
+                "assertividade_real": round(assertividade * 100, 1),
+                "mensagem": f"Padrão encontrado no histórico com {total} ocorrências"
+            }
+
+        # Se for número, usa análise de comportamento pos-número
+        if isinstance(padrao_ou_numero, int) and 0 <= padrao_ou_numero <= 14:
+            dados_num = self.unidade_analise.get(padrao_ou_numero, {})
+            total = dados_num.get("ocorrencias", 0)
+            if total >= 50:
+                return {
+                    "existe": True,
+                    "relevancia": "ALTA" if total >= 300 else "MÉDIA",
+                    "ocorrencias": total,
+                    "comportamento_dominante": dados_num.get("comportamento_dominante", "NEUTRO"),
+                    "mensagem": f"Número {padrao_ou_numero} com {total} aparições no histórico"
+                }
+
+        return {
+            "existe": False,
+            "relevancia": "BAIXA",
+            "ocorrencias": 0,
+            "mensagem": "Padrão/Número com amostra insuficiente ou não encontrado"
+        }
+
+    # ============================================================
+    # FIM DOS NOVOS MÉTODOS
+    # ============================================================
+
     def mapear_padroes_avancados(self, dados):
         if not dados or len(dados) < 10:
             return
@@ -921,6 +1080,45 @@ class IAPreditivaV1:
         str_padroes = f" | Padrões Ativos: {', '.join(padroes_detectados)}" if padroes_detectados else " | Nenhum Padrão Dinâmico"
         # =========================================================================
 
+        # ============================================================
+        # SÍNTESE DAS 3 CAMADAS TEMPORAIS (NOVA LÓGICA)
+        # ============================================================
+        raciocinio_camadas = []
+
+        # 1. Camada Curta (principal)
+        camada_curta = self.analisar_camada_curta(janela=200)
+        if camada_curta["viés"] == "PRETO":
+            p_bonus += camada_curta["confianca"] * 0.75
+            raciocinio_camadas.append(f"Curta: {camada_curta['justificativa']}")
+        elif camada_curta["viés"] == "VERMELHO":
+            v_bonus += camada_curta["confianca"] * 0.75
+            raciocinio_camadas.append(f"Curta: {camada_curta['justificativa']}")
+
+        # 2. Camada Intermediária (auditoria de sustentação)
+        camada_inter = self.analisar_camada_intermediaria(janela=800)
+        if camada_inter.get("sustentacao"):
+            raciocinio_camadas.append(f"Intermediária: {camada_inter['justificativa']}")
+            if camada_curta["viés"] == "PRETO":
+                p_bonus += 10
+            elif camada_curta["viés"] == "VERMELHO":
+                v_bonus += 10
+        elif camada_inter.get("status") == "MUDANÇA NÃO SUSTENTADA":
+            raciocinio_camadas.append(f"Intermediária: {camada_inter['justificativa']}")
+
+        # 3. Camada Histórica (validação de relevância)
+        contexto_historico = self.analisar_camada_historica()
+        if contexto_historico.get("relevancia") == "ALTA":
+            raciocinio_camadas.append(f"Histórico: {contexto_historico['mensagem']}")
+            if camada_curta["viés"] == "PRETO":
+                p_bonus += 6
+            elif camada_curta["viés"] == "VERMELHO":
+                v_bonus += 6
+        elif contexto_historico.get("relevancia") == "BAIXA" and contexto_historico.get("existe"):
+            raciocinio_camadas.append("Histórico: Padrão com baixa relevância estatística")
+
+        str_camadas = " | ".join(raciocinio_camadas) if raciocinio_camadas else ""
+        # ============================================================
+
         has_rec = len(self.dados_recencia) > 0
         p_trans, p_num, p_geom = (0.22 if has_rec else 0.17), (0.18 if has_rec else 0.16), 0.25
 
@@ -939,11 +1137,13 @@ class IAPreditivaV1:
         prob_p = (total_p / (total_v + total_p)) * 100
 
         BARREIRA = 52.5
+        raciocinio_final = f"{str_camadas} {str_padroes}".strip()
+
         if prob_v >= BARREIRA and prob_v > prob_p + 4:
-            return "VERMELHO", round(prob_v, 1), f"Confluência Vermelho ({prob_v:.1f}%){str_padroes}"
+            return "VERMELHO", round(prob_v, 1), f"Confluência Vermelho ({prob_v:.1f}%) | {raciocinio_final}"
         elif prob_p >= BARREIRA and prob_p > prob_v + 4:
-            return "PRETO", round(prob_p, 1), f"Confluência Preto ({prob_p:.1f}%){str_padroes}"
-        return "NEUTRO", round(max(prob_v, prob_p), 1), f"Sem confluência clara{str_padroes}"
+            return "PRETO", round(prob_p, 1), f"Confluência Preto ({prob_p:.1f}%) | {raciocinio_final}"
+        return "NEUTRO", round(max(prob_v, prob_p), 1), f"Sem confluência clara | {raciocinio_final}"
 
     def calcular_probabilidade_streak_empirica(self, cor, k):
         todos = (self.dados_longo or []) + (self.dados_recencia or [])
