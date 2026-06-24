@@ -584,7 +584,6 @@ class IAPreditivaV1:
         for d in ultimos:
             num = d['numero']
             if num not in contagem_numeros:
-                # CORREÇÃO AQUI: Adicionado "B": 0 para evitar o KeyError 'B'
                 contagem_numeros[num] = {"V": 0, "P": 0, "B": 0, "total": 0}
             contagem_numeros[num][d['cor']] += 1
             contagem_numeros[num]["total"] += 1
@@ -1310,7 +1309,7 @@ class JuizHierarquicoModificado:
             else:
                 return "PRETO", "Fallback por regras", "FALLBACK_REGRA"
 
-        return "VERMELHO", "Fallback padrão do sistema", "FALLBACK_PADRAO"
+        return "VERMELHO", "Fallback padrão do systema", "FALLBACK_PADRAO"
 
 
 class MotorContagensProjetivas:
@@ -1559,8 +1558,9 @@ class MotorV1Completo:
             bloco = [{"numero": self.seq.numerica[k], "cor": self.seq.polaridades[k]} 
                      for k in range(idx, min(idx + 12 + salto, self.seq.total))]
             
+            # CORREÇÃO AQUI: Mudado de 'expectations' para 'expectativas'
             contexto_injecao = {
-                "regras_posicionais": expectations,
+                "regras_posicionais": expectativas,
                 "controlador_retardador": analise.get("controlador_retardador", {}),
                 "geometria": geometria
             }
