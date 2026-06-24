@@ -514,44 +514,33 @@ class IAPreditivaV1:
             "P": defaultdict(int, s_st.get("P", {}))
         }
 
+        # ==================== CORREÇÃO ROBUSTA DE COMPATIBILIDADE ====================
+        def normalizar_padrao(info):
+            info = dict(info)
+            info.setdefault("total", 0)
+            info.setdefault("apos_V", 0)
+            info.setdefault("apos_P", 0)
+            info.setdefault("apos_B", 0)
+            info.setdefault("g0", 0)
+            info.setdefault("g1", 0)
+            info.setdefault("quebradores", defaultdict(int, info.get("quebradores", {})))
+            return info
+
         px_loaded = state.get('padroes_xadrez_detalhado', {})
         self.padroes_xadrez_detalhado = defaultdict(fabrica_padrao_detalhado)
         for k, v in px_loaded.items():
-            self.padroes_xadrez_detalhado[k] = {
-                "total": v.get("total", 0),
-                "apos_V": v.get("apos_V", 0),
-                "apos_P": v.get("apos_P", 0),
-                "apos_B": v.get("apos_B", 0),
-                "quebradores": defaultdict(int, v.get("quebradores", {})),
-                "g0": v.get("g0", 0),
-                "g1": v.get("g1", 0)
-            }
+            self.padroes_xadrez_detalhado[k] = normalizar_padrao(v)
 
         ps_loaded = state.get('padroes_streak_detalhado', {})
         self.padroes_streak_detalhado = defaultdict(fabrica_padrao_detalhado)
         for k, v in ps_loaded.items():
-            self.padroes_streak_detalhado[k] = {
-                "total": v.get("total", 0),
-                "apos_V": v.get("apos_V", 0),
-                "apos_P": v.get("apos_P", 0),
-                "apos_B": v.get("apos_B", 0),
-                "quebradores": defaultdict(int, v.get("quebradores", {})),
-                "g0": v.get("g0", 0),
-                "g1": v.get("g1", 0)
-            }
+            self.padroes_streak_detalhado[k] = normalizar_padrao(v)
 
         pg_loaded = state.get('padroes_gerais_detalhado', {})
         self.padroes_gerais_detalhado = defaultdict(fabrica_padrao_detalhado)
         for k, v in pg_loaded.items():
-            self.padroes_gerais_detalhado[k] = {
-                "total": v.get("total", 0),
-                "apos_V": v.get("apos_V", 0),
-                "apos_P": v.get("apos_P", 0),
-                "apos_B": v.get("apos_B", 0),
-                "quebradores": defaultdict(int, v.get("quebradores", {})),
-                "g0": v.get("g0", 0),
-                "g1": v.get("g1", 0)
-            }
+            self.padroes_gerais_detalhado[k] = normalizar_padrao(v)
+        # ===================================================================
 
     def _treinar_modelo_profundo(self):
         if self.dados_longo and len(self.dados_longo) >= 5:
@@ -564,7 +553,6 @@ class IAPreditivaV1:
     # ============================================================
 
     def analisar_camada_curta(self, janela=200):
-        """Camada Operacional - O que o mercado está fazendo AGORA (principal geradora de viés)"""
         if len(self.dados_recencia) < janela:
             return {
                 "viés": "INDEFINIDO",
@@ -592,7 +580,6 @@ class IAPreditivaV1:
             viés = "EQUILIBRADO"
             confianca = round(max(pct_v, pct_p), 1)
 
-        # Números com viés forte na janela curta
         contagem_numeros = {}
         for d in ultimos:
             num = d['numero']
@@ -616,7 +603,6 @@ class IAPreditivaV1:
         }
 
     def _calcular_vies_janela(self, janela):
-        """Método auxiliar para calcular viés de uma janela específica"""
         if len(self.dados_recencia) < janela:
             return {"viés": "INDEFINIDO", "confianca": 0}
 
@@ -637,7 +623,6 @@ class IAPreditivaV1:
             return {"viés": "EQUILIBRADO", "confianca": round(max(pct_v, pct_p), 1)}
 
     def analisar_camada_intermediaria(self, janela=800):
-        """Camada Auditora - Verifica se a mudança da recência curta é sustentada"""
         if len(self.dados_recencia) < janela:
             return {
                 "status": "INSUFICIENTE",
@@ -674,11 +659,9 @@ class IAPreditivaV1:
             }
 
     def analisar_camada_historica(self, padrao_ou_numero=None):
-        """Camada de Memória - Valida relevância estatística do padrão ou número"""
         if padrao_ou_numero is None:
             return {"existe": False, "relevancia": "BAIXA", "mensagem": "Nenhum padrão informado"}
 
-        # Tenta buscar em padrões gerais primeiro
         info = self.padroes_gerais_detalhado.get(padrao_ou_numero)
         if info and info.get("total", 0) >= 20:
             total = info.get("total", 0)
@@ -694,7 +677,6 @@ class IAPreditivaV1:
                 "mensagem": f"Padrão encontrado no histórico com {total} ocorrências"
             }
 
-        # Se for número, usa análise de comportamento pos-número
         if isinstance(padrao_ou_numero, int) and 0 <= padrao_ou_numero <= 14:
             dados_num = self.unidade_analise.get(padrao_ou_numero, {})
             total = dados_num.get("ocorrencias", 0)
@@ -735,7 +717,13 @@ class IAPreditivaV1:
                     num_quebra = numeros[i+3]
                     chave = "XADREZ_4"
                     self.padroes_xadrez_detalhado[chave]["total"] += 1
-                    self.padroes_xadrez_detalhado[chave][f"apos_{proximo_cor}"] += 1
+                    
+                    # Acesso seguro
+                    key_apos = f"apos_{proximo_cor}"
+                    if key_apos not in self.padroes_xadrez_detalhado[chave]:
+                        self.padroes_xadrez_detalhado[chave][key_apos] = 0
+                    self.padroes_xadrez_detalhado[chave][key_apos] += 1
+                    
                     if proximo_cor != janela[-1]:
                         self.padroes_xadrez_detalhado[chave]["quebradores"][num_quebra] += 1
                     
@@ -756,7 +744,12 @@ class IAPreditivaV1:
                     num_quebra = numeros[i+3]
                     chave = "STREAK_3"
                     self.padroes_streak_detalhado[chave]["total"] += 1
-                    self.padroes_streak_detalhado[chave][f"apos_{proximo_cor}"] += 1
+                    
+                    key_apos = f"apos_{proximo_cor}"
+                    if key_apos not in self.padroes_streak_detalhado[chave]:
+                        self.padroes_streak_detalhado[chave][key_apos] = 0
+                    self.padroes_streak_detalhado[chave][key_apos] += 1
+                    
                     if proximo_cor != cores[i]:
                         self.padroes_streak_detalhado[chave]["quebradores"][num_quebra] += 1
                     
@@ -809,7 +802,11 @@ class IAPreditivaV1:
                 chave = f"{tipo_prefix} [{janela_str}]"
                 
                 self.padroes_gerais_detalhado[chave]["total"] += 1
-                self.padroes_gerais_detalhado[chave][f"apos_{proxima_cor}"] += 1
+                
+                key_apos = f"apos_{proxima_cor}"
+                if key_apos not in self.padroes_gerais_detalhado[chave]:
+                    self.padroes_gerais_detalhado[chave][key_apos] = 0
+                self.padroes_gerais_detalhado[chave][key_apos] += 1
                 
                 if eh_streak and proxima_cor != janela_cores[-1]:
                     self.padroes_gerais_detalhado[chave]["quebradores"][num_quebra] += 1
@@ -1081,11 +1078,10 @@ class IAPreditivaV1:
         # =========================================================================
 
         # ============================================================
-        # SÍNTESE DAS 3 CAMADAS TEMPORAIS (NOVA LÓGICA)
+        # SÍNTESE DAS 3 CAMADAS TEMPORAIS
         # ============================================================
         raciocinio_camadas = []
 
-        # 1. Camada Curta (principal)
         camada_curta = self.analisar_camada_curta(janela=200)
         if camada_curta["viés"] == "PRETO":
             p_bonus += camada_curta["confianca"] * 0.75
@@ -1094,7 +1090,6 @@ class IAPreditivaV1:
             v_bonus += camada_curta["confianca"] * 0.75
             raciocinio_camadas.append(f"Curta: {camada_curta['justificativa']}")
 
-        # 2. Camada Intermediária (auditoria de sustentação)
         camada_inter = self.analisar_camada_intermediaria(janela=800)
         if camada_inter.get("sustentacao"):
             raciocinio_camadas.append(f"Intermediária: {camada_inter['justificativa']}")
@@ -1105,7 +1100,6 @@ class IAPreditivaV1:
         elif camada_inter.get("status") == "MUDANÇA NÃO SUSTENTADA":
             raciocinio_camadas.append(f"Intermediária: {camada_inter['justificativa']}")
 
-        # 3. Camada Histórica (validação de relevância)
         contexto_historico = self.analisar_camada_historica()
         if contexto_historico.get("relevancia") == "ALTA":
             raciocinio_camadas.append(f"Histórico: {contexto_historico['mensagem']}")
@@ -1650,16 +1644,10 @@ class ProcessadorTipoB:
                 "motivo_real": f"NO CALL pelo MotorNoCall: {motivo_nc}"
             }
 
-        # ============================================================
-        # LÓGICA REFACTORIZADA - IA como cérebro central
-        # Todo o aprendizado (padrões dinâmicos + recência + assertividade real)
-        # já está embutido na predição da IA via predizer_proxima_casa
-        # ============================================================
         sinal = direcao_ia
         justificativa = f"IA Preditiva com todo aprendizado embutido ({conf_ia:.1f}%)"
         regra_id = "IA_ENRIQUECIDA_PADROES_RECENCIA"
 
-        # Veto de segurança EXTREMO (streak >= 7)
         if streak >= 7:
             sinal = "NO CALL"
             justificativa = f"Veto de segurança por streak extremo ({streak}x) - proteção do sistema"
