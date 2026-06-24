@@ -8,8 +8,7 @@ from main import (
     integrar_recencia_no_modelo,
     adicionar_a_base_longo_prazo,
     carregar_modelo_longo_prazo,
-    salvar_modelo_longo_prazo,
-    analisar_regime_recencia
+    salvar_modelo_longo_prazo
 )
 
 st.set_page_config(page_title="MOTOR V1 - Painel Operacional", page_icon="🛡️", layout="wide")
@@ -52,6 +51,7 @@ with aba_tipo_b:
                     if "erro" in resultado:
                         st.error(resultado["erro"])
                     else:
+                        # === EXIBIÇÃO MELHORADA DO SINAL ===
                         st.success(f"**SINAL GERADO:** {resultado['sinal']}")
                         
                         col1, col2 = st.columns([2, 1])
@@ -60,6 +60,7 @@ with aba_tipo_b:
                         with col2:
                             st.metric("Confiança da IA", f"{resultado['confianca_ia']}%")
 
+                        # Raciocínio detalhado das 3 camadas
                         if resultado.get("raciocinio_final"):
                             st.write("**Raciocínio da IA (3 Camadas Temporais):**")
                             st.code(resultado["raciocinio_final"], language="text")
@@ -67,6 +68,7 @@ with aba_tipo_b:
                         if resultado.get("motivo_real"):
                             st.caption(f"Motivo real da decisão: {resultado['motivo_real']}")
 
+                        # Mostrar rastreamento completo das camadas (se disponível)
                         if resultado.get("raciocinio_trace"):
                             with st.expander("🔍 Ver rastreamento completo das camadas de análise", expanded=False):
                                 for camada in resultado["raciocinio_trace"]:
@@ -108,50 +110,29 @@ with aba_tipo_d:
         with col3:
             adicionar_base = st.button("➕ Adicionar à Base de Longo Prazo")
 
-        # ============================================================
-        # 1. INICIAR AUDITORIA DE RECÊNCIA (CORRIGIDO)
-        # ============================================================
+        # 1. INICIAR AUDITORIA DE RECÊNCIA
         if rodar_auditoria:
-            with open(caminho_temp, "wb") as f:
-                f.write(arquivo_upload.getbuffer())
+            with open(caminho_temp, "wb") as f: f.write(arquivo_upload.getbuffer())
+            if os.path.exists(NOME_RECENCIA_ATIVA): os.remove(NOME_RECENCIA_ATIVA)
+            with open(NOME_RECENCIA_ATIVA, "wb") as f: f.write(arquivo_upload.getbuffer())
 
-            if os.path.exists(NOME_RECENCIA_ATIVA):
-                os.remove(NOME_RECENCIA_ATIVA)
-            with open(NOME_RECENCIA_ATIVA, "wb") as f:
-                f.write(arquivo_upload.getbuffer())
-
-            leitor_recencia = LeitorXLS(caminho_temp)
-            dados_recencia = leitor_recencia.ler_e_validar()
-
-            if dados_recencia:
-                # Carrega a base de longo prazo completa
-                dados_longa = []
-                if os.path.exists(NOME_BASE_DEFINITIVA):
-                    try:
-                        dados_longa = LeitorXLS(NOME_BASE_DEFINITIVA).ler_e_validar() or []
-                    except:
-                        dados_longa = []
-
-                # Cria o motor com a base longa + injeta a recência
-                if dados_longa:
-                    motor = MotorV1Completo(dados_longa)
-                    motor.ia.injetar_aprendizado_imediato(dados_recencia, multiplicador_peso=6)
-                    motor.ia.analise_recencia = motor.ia.analisar_comportamento_pos_numero_recencia(dados_recencia)
-                    motor.ia.regime_recencia = analisar_regime_recencia(dados_recencia)
-                else:
-                    motor = MotorV1Completo(dados_recencia)
-
+            leitor = LeitorXLS(caminho_temp)
+            dados = leitor.ler_e_validar()
+            
+            if dados:
+                ia = integrar_recencia_no_modelo(dados, multiplicador=5)
+                motor = MotorV1Completo(dados)
                 output_d = motor.processar_auditoria()
+                
+                st.success("✅ Auditoria de Recência realizada e integrada!")
 
-                st.success("✅ Auditoria de Recência realizada com a base de longo prazo + recência injetada!")
-
-                if hasattr(motor.ia, 'analise_recencia') and motor.ia.analise_recencia:
+                if hasattr(ia, 'analise_recencia') and ia.analise_recencia:
                     with st.expander("🔬 Análise de Comportamento na RECÊNCIA (pós-número)", expanded=False):
-                        st.json(motor.ia.analise_recencia)
+                        st.json(ia.analise_recencia)
 
                 memoria_d = output_d.split("[RESULTADO FINAL TIPO D]")[0]
                 resultado_d = "[RESULTADO FINAL TIPO D]" + output_d.split("[RESULTADO FINAL TIPO D]")[1]
-
+                
                 st.write("---")
                 st.subheader("📋 Histórico das Janelas Móveis")
                 st.text_area("Processamento em Saltos", value=memoria_d, height=200)
@@ -159,9 +140,8 @@ with aba_tipo_d:
                 st.code(resultado_d, language="text")
             else:
                 st.error("IMPOSSÍVEL CALCULAR - Estrutura fora do padrão do Volume 8.")
-
-            if os.path.exists(caminho_temp):
-                os.remove(caminho_temp)
+            
+            if os.path.exists(caminho_temp): os.remove(caminho_temp)
 
         # 2. SUBSTITUIR BASE DE LONGO PRAZO
         if salvar_como_base:
@@ -174,6 +154,7 @@ with aba_tipo_d:
                 if dados:
                     relatorio = treinar_base_longo_prazo_com_janelas(dados)
                     
+                    # === FALLBACK DE SALVAMENTO ===
                     if not relatorio.get("modelo_salvo_com_sucesso", False):
                         try:
                             ia_para_salvar = relatorio.get("ia_treinada")
@@ -182,6 +163,7 @@ with aba_tipo_d:
                                     relatorio["modelo_salvo_com_sucesso"] = True
                         except:
                             pass
+                    # ================================
                     
                     if relatorio.get("sucesso"):
                         if relatorio.get("modelo_salvo_com_sucesso"):
