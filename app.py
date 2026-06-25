@@ -85,10 +85,7 @@ with aba_tipo_b:
                 if len(lista_numeros) != 12:
                     st.error("Erro operacional: São necessários exatamente 12 números para a análise de janela.")
                 else:
-                    # Geração do sinal pelo motor unificado
                     resultado = motor.gerar_sinal_tipo_b(lista_numeros)
-                    
-                    # Dedução das polaridades para cálculos matemáticos paralelos
                     polaridades = ['B' if n == 0 else ('V' if 1 <= n <= 7 else 'P') for n in lista_numeros]
 
                     st.write("---")
@@ -109,19 +106,16 @@ with aba_tipo_b:
                         st.write(f"**Direcionamento Técnico:** {resultado.get('justificativa')}")
                         st.write(f"**Confiança Intrínseca da IA Preditiva:** {resultado.get('confianca_ia')}%")
 
-                    # Exibição do Regime de Recência Ativo
                     if resultado.get("regime_recencia"):
                         with st.expander("📊 Regime de Recência Proporcional (Filtro Dinâmico)", expanded=True):
                             st.json(resultado["regime_recencia"])
 
-                    # Análise matemática de raridade instantânea da sequência atual
                     raridade_atual = EngineMatematicoAvancado.calcular_raridade_sequencia(polaridades)
                     with st.expander("🧮 Análise de Raridade da Janela Atual", expanded=False):
                         st.write(f"**Streak Atual Detectado:** {raridade_atual.get('streak')}x da cor {raridade_atual.get('cor_sequencia')}")
                         st.write(f"**Probabilidade Teórica de Continuação:** {raridade_atual.get('probabilidade')}%")
                         st.info(f"**Status Estrutural:** {raridade_atual.get('status')}")
 
-                    # Raciocínio por Camadas (Trace Completo do Sistema)
                     if resultado.get("raciocinio_trace"):
                         with st.expander("🔍 Auditoria de Raciocínio por Camadas (Decisão Hierárquica)", expanded=False):
                             for camada in resultado["raciocinio_trace"]:
@@ -168,7 +162,6 @@ with aba_tipo_d:
                     with st.expander("📊 Relatório de Análise do Regime Injetado", expanded=True):
                         st.json(resultado["regime_recencia"])
 
-                # Executa a auditoria retroativa com simulação de janelas móveis baseada no MotorV1Completo
                 with st.spinner("Simulando auditoria cronológica das janelas móveis..."):
                     motor_antigo = MotorV1Completo(dados)
                     output = motor_antigo.processar_auditoria()
@@ -217,7 +210,6 @@ with aba_padroes:
         else:
             st.success("Modelo de Longo Prazo extraído com sucesso da memória persistente!")
 
-            # SUB-ABA 1: XADREZ
             with st.expander("♟️ Padrões de Alternância Contínua (Xadrez)", expanded=False):
                 if hasattr(ia, 'padroes_xadrez_detalhado') and ia.padroes_xadrez_detalhado:
                     contagem_padroes = 0
@@ -231,7 +223,6 @@ with aba_padroes:
                 else:
                     st.info("Nenhum padrão estrutural de xadrez catalogado no modelo.")
 
-            # SUB-ABA 2: STREAK
             with st.expander("🔥 Padrões de Repetição Seguidda (Streak)", expanded=False):
                 if hasattr(ia, 'padroes_streak_detalhado') and ia.padroes_streak_detalhado:
                     contagem_streaks = 0
@@ -245,7 +236,6 @@ with aba_padroes:
                 else:
                     st.info("Nenhum padrão estrutural de streak catalogado no modelo.")
 
-            # SUB-ABA 3: GERAIS E ESPELHOS
             with st.expander("🌌 Padrões Complexos, Duplos e Espelhamentos", expanded=False):
                 if hasattr(ia, 'padroes_gerais_detalhado') and ia.padroes_gerais_detalhado:
                     contagem_gerais = 0
@@ -259,7 +249,6 @@ with aba_padroes:
                 else:
                     st.info("Nenhum padrão estrutural complexo catalogado no modelo.")
 
-            # SUB-ABA 4: COMPORTAMENTO PÓS-NÚMERO (ALINHADO COM FUNÇÃO DA IA)
             with st.expander("🔢 Distribuição Estatística de Comportamento Pós-Número (0 a 14)", expanded=False):
                 if hasattr(ia, 'analisar_comportamento_pos_numero'):
                     with st.spinner("Compilando relatórios probabilísticos por número individual..."):
@@ -290,7 +279,6 @@ with aba_matematica:
     st.header("🧮 Engine Matemático Avançado e Gestão de Risco")
     st.caption("Cálculos analíticos de macrofrequências e simulação de aporte financeiro.")
 
-    # 1. Macrofrequência / Viés de Surfe
     st.subheader("🌊 Análise de Macrofrequência (Surfe de Viés)")
     if not os.path.exists(NOME_BASE_DEFINITIVA):
         st.warning(f"O arquivo base `{NOME_BASE_DEFINITIVA}` não foi localizado para o cálculo de desvio padrão acumulado.")
@@ -308,7 +296,6 @@ with aba_matematica:
 
     st.markdown("---")
 
-    # 2. Gestão de Risco e Distribuição de Stakes (Split Stake)
     st.subheader("💰 Simulador de Cobertura e Divisão de Aportes (Split Stake)")
     st.caption("Cálculo exato das frações de capital de cobertura com base na margem matemática estática.")
     
