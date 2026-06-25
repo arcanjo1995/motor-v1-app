@@ -1,31 +1,17 @@
 import streamlit as st
 import os
 
-from main import LeitorXLS, MotorV1Completo, adicionar_a_base_longo_prazo, carregar_modelo_longo_prazo
+from main import (
+    LeitorXLS,
+    MotorV1Completo,
+    adicionar_a_base_longo_prazo,
+    carregar_modelo_longo_prazo
+)
 from main import motor_unificado
 
-if "motor_v1" not in st.session_state:
-    st.session_state.motor_v1 = motor_unificado
-    with st.spinner("🛡️ Carregando Motor Unificado V1..."):
-        st.session_state.motor_v1.carregar_tudo()
-    st.success("Motor Unificado V1 carregado com sucesso!")
-
-motor = st.session_state.motor_v1
-
-st.set_page_config(page_title="MOTOR V1", page_icon="🛡️", layout="wide")
-st.title("🛡️ MOTOR V1 - Sistema de Sinais")
-st.caption("Base Longa + Recência com prioridade")
-
-aba_tipo_b, aba_tipo_d, aba_padroes = st.tabs([
-    "🎯 TIPO B — Sinal Real",
-    "📊 TIPO D — Auditoria",
-    "📈 Padrões"
-])
 # ============================================================
-# MOTOR UNIFICADO (vem do próprio main.py)
+# INICIALIZAÇÃO DO MOTOR UNIFICADO
 # ============================================================
-from main import motor_unificado
-
 if "motor_v1" not in st.session_state:
     st.session_state.motor_v1 = motor_unificado
     with st.spinner("🛡️ Carregando Motor Unificado V1 (Base Longa + Recência)..."):
@@ -38,7 +24,7 @@ motor = st.session_state.motor_v1
 # CONFIGURAÇÃO DA PÁGINA
 # ============================================================
 st.set_page_config(page_title="MOTOR V1", page_icon="🛡️", layout="wide")
-st.title("🛡️ MOTOR V1 - Sistema de Sinais")
+st.title("🛡️ MOTOR V1 - Sistema de Sinais e Auditoria")
 st.caption("Base Longa + Recência com prioridade | Mão Fixa")
 
 aba_tipo_b, aba_tipo_d, aba_padroes = st.tabs([
@@ -120,7 +106,6 @@ with aba_tipo_d:
                     with st.expander("📊 Regime Atual do Mercado (Recência)", expanded=True):
                         st.json(resultado["regime_recencia"])
 
-                # Gera relatório de janelas
                 motor_antigo = MotorV1Completo(dados)
                 output = motor_antigo.processar_auditoria()
                 st.text_area("Resultado da Auditoria", output, height=350)
