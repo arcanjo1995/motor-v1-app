@@ -553,7 +553,7 @@ class IAPreditivaV1:
         for num, dados in contagem_numeros.items():
             if dados["total"] >= 5:
                 pct = (dados.get(viés[0] if viés != "EQUILIBRADO" else "V", 0) / dados["total"]) * 100
-                if pct >= 58: numeros_fortes[num] = round(pct, 1)
+                if pct >= 58: numeros_fortes[str(num)] = round(pct, 1)
 
         return {
             "viés": viés, "confianca": confianca,
@@ -779,7 +779,6 @@ class IAPreditivaV1:
         return "BAIXA"
 
     def injetar_aprendizado_imediato(self, sub_dados, multiplicador_peso=4, analise_contexto=None):
-        # LIMITAR CRESCIMENTO DA RECÊNCIA (Teto deslizante estável de 500 rodadas)
         self.dados_recencia.extend(sub_dados)
         MAX_RECENCIA = 500
         if len(self.dados_recencia) > MAX_RECENCIA:
@@ -824,7 +823,6 @@ class IAPreditivaV1:
         v_bonus = stats.get("freq_v", 0) * 3.5
         p_bonus = stats.get("freq_p", 0) * 3.5
 
-        # RECÊNCIA PASSA A COMANDAR: Arquitetura Ponderada (Peso 1 vs Peso 5)
         def extrair_vies_puro(dados_lista):
             if not dados_lista: return 0.5, 0.5
             c_list = [d['cor'] for d in dados_lista]
@@ -839,7 +837,6 @@ class IAPreditivaV1:
         v_bonus += score_vermelho * 18
         p_bonus += score_preto * 18
 
-        # Injeção probabilística baseada na transição da Matriz Número -> Próximo Número
         if ultimo_num in self.matriz_numero_proximo:
             sub_matriz = self.matriz_numero_proximo[ultimo_num]
             total_proximos = sum(sub_matriz.values())
@@ -849,36 +846,26 @@ class IAPreditivaV1:
                 v_bonus += p_v_num * 25
                 p_bonus += p_p_num * 25
 
-        # Comportamentos estatísticos estruturais
         comportamento = stats.get("comportamento_dominante", "NEUTRO")
         if comportamento == "VERMELHO": v_bonus += 12
         elif comportamento == "PRETO": p_bonus += 12
 
-        # REGRA DE PREVALÊNCIA DA RECÊNCIA E FILTRO ANTI-RUÍDO
         vies_longo = "VERMELHO" if hist_v > hist_p + 0.03 else ("PRETO" if hist_p > hist_v + 0.03 else "EQUILIBRADO")
-        
-        # Recência Curta (últimas 150 rodadas dentro da auditoria)
         curta_rec_dados = self.dados_recencia[-150:] if len(self.dados_recencia) > 150 else self.dados_recencia
         c_v, c_p = extrair_vies_puro(curta_rec_dados)
         vies_curto = "VERMELHO" if c_v > c_p + 0.03 else ("PRETO" if c_p > c_v + 0.03 else "EQUILIBRADO")
-        
-        # Recência Média/Global de auditoria
         vies_recencia_total = "VERMELHO" if rec_v > rec_p + 0.03 else ("PRETO" if rec_p > rec_v + 0.03 else "EQUILIBRADO")
 
         fator_anti_ruido = 1.0
 
-        # Amostragem suficiente para comandar
         if len(self.dados_recencia) >= 15:
             if vies_curto != "EQUILIBRADO" and vies_curto != vies_longo:
                 if vies_recencia_total == vies_curto:
-                    # Mudança validada: Recência Média confirma a Recência Curta
                     if vies_curto == "VERMELHO": v_bonus += 40
                     elif vies_curto == "PRETO": p_bonus += 40
                 else:
-                    # Ruído detectado: Mudança sem sustentação macro na auditoria
                     fator_anti_ruido = 0.50
 
-        # Mapeamento dinâmico de padrões executando sobre a janela de 12 números
         padroes_detectados = []
         if hasattr(self, 'padroes_gerais_detalhado') and self.padroes_gerais_detalhado:
             for tam in range(3, 11):
@@ -963,7 +950,8 @@ class IAPreditivaV1:
             cores = {"VERMELHO": dados["pos_V"], "PRETO": dados["pos_P"], "BRANCO": dados["pos_B"]}
             cor_dominante = max(cores, key=cores.get)
             freq = round((cores[cor_dominante] / total) * 100, 2)
-            relatorio[num] = {
+            # CORREÇÃO AQUI: Forçar string para evitar quebra do JSON render do Streamlit
+            relatorio[str(num)] = {
                 "total_aparicoes_recencia": total, "cor_mais_frequente_apos": cor_dominante,
                 "frequencia_cor_dominante_%": freq, "tendencia_recente": "FORTE" if freq >= 65 else ("MODERADA" if freq >= 55 else "FRACA")
             }
@@ -986,7 +974,8 @@ class IAPreditivaV1:
             else:
                 tendencia = "DADOS INSUFICIENTES"
 
-            relatorio[num] = {
+            # CORREÇÃO AQUI: Forçar string para imunização do Streamlit JSON
+            relatorio[str(num)] = {
                 "total_aparicoes": total, "cor_mais_frequente_apos": cor_dominante, "frequencia_cor_dominante_%": freq_dominante,
                 "distribuicao_pos": cores_pos, "comportamento_dominante": dados["comportamento_dominante"],
                 "estabilidade": dados["estabilidade"], "saturacao": dados["saturacao"], "tendencia_recente": tendencia
@@ -1023,7 +1012,13 @@ class JuizHierarquicoModificado:
                        contexto_exaustao=False, sintese_evidencias=None):
         
         if no_call_ativo: return "NO CALL", motivo_nc, "SISTEMA_TRAVADO"
+        
+        # CORREÇÃO ARQUITETURAL CRÍTICA: A IA (Enriquecida com 20k + Recência) passa a ter PRIORIDADE MÁXIMA.
+        # As regras posicionais fixas estáticas viram FALLBACK (só entram se a IA estiver em NEUTRO).
         direcao_ia, confianca_ia, raciocinio_ia = previsao_ia
+        if direcao_ia != "NEUTRO": 
+            return direcao_ia, f"IA Preditiva ({confianca_ia:.1f}%) [{raciocinio_ia}]", "IA_PREDITIVA"
+
         tem_inversao_final = any("ESPELHO_INVERSO" in e.get("tipo_regra", "") or "INVERSAO_FORTE" in e.get("tipo_regra", "") for e in expectations)
 
         if expectations:
@@ -1035,7 +1030,6 @@ class JuizHierarquicoModificado:
 
         if geometria_mercado == "CICLO_FECHADO_VPPV": return "PRETO", "Geometria VPPV (Padrão forte)", "GEOMETRIA_FORTE"
         if geometria_mercado == "CICLO_FECHADO_PVVP": return "VERMELHO", "Geometria PVVP (Padrão forte)", "GEOMETRIA_FORTE"
-        if direcao_ia != "NEUTRO": return direcao_ia, f"IA Preditiva ({confianca_ia:.1f}%) [{raciocinio_ia}]", "IA_PREDITIVA"
 
         if expectations:
             count_v = sum(1 for item in expectations if item["direcao"] == "VERMELHO")
@@ -1148,14 +1142,13 @@ class MotorV1Completo:
     def __init__(self, lista_dados_xls, ia_existente=None):
         self.seq = SequenciaOperacional(lista_dados_xls)
         
-        # CORREÇÃO CRÍTICA AQUI: O motor de auditoria agora busca ativamente a inteligência de 20.000 rodadas pré-salva
         if ia_existente is not None:
             self.ia = ia_existente
         else:
             ia_salva = carregar_modelo_longo_prazo()
             if ia_salva is not None:
                 self.ia = copy.deepcopy(ia_salva)
-                self.ia.dados_recencia = [] # Limpa a linha de recência para que o arquivo de auditoria construa a nova tendência do zero
+                self.ia.dados_recencia = [] 
             else:
                 self.ia = IAPreditivaV1([], [])
 
@@ -1248,93 +1241,3 @@ class MotorV1Completo:
         output += f" - Taxa de NO CALL: {stats.get('NO CALL',0)}\n\n"
         output += f"ESTADO ATUAL DO MERCADO: {'MERCADO EM DEGRADAÇÃO' if stats.get('FALHA', 0) >= 25 else ('MERCADO PAGADOR' if stats.get('G0', 0) >= 50 else 'MERCADO INSTÁVEL')}\n"
         return output
-
-
-class ProcessadorTipoB:
-    def __init__(self, sequencia_12_numeros, caminho_base_dados):
-        self.entrada = sequencia_12_numeros
-        self.caminho_base = caminho_base_dados
-        self.polaridades = ['B' if n == 0 else ('V' if 1 <= n <= 7 else 'P') for n in sequencia_12_numeros]
-
-    def executar_sinal_real(self):
-        if len(self.entrada) != 12: return {"erro": "Necessário exatamente 12 números"}
-        ia = carregar_modelo_longo_prazo()
-        if ia is None:
-            base = LeitorXLS(self.caminho_base).ler_e_validar()
-            if not base: return {"erro": "Base de dados não encontrada"}
-            ia = IAPreditivaV1(base, None)
-
-        regime_rec = None
-        if os.path.exists("base_recencia_ativa.xlsx"):
-            base_rec = LeitorXLS("base_recencia_ativa.xlsx").ler_e_validar()
-            if base_rec:
-                ia = integrar_recencia_no_modelo(base_rec, 5)
-                regime_rec = ia.regime_recencia
-
-        analise = MotorAnalise.analisar_janela(self.entrada, self.polaridades, ia)
-        nc_ativo, motivo_nc = analise["no_call"]["ativo"], analise["no_call"]["motivo"]
-        geometria, expectativas = analise["geometria"], analise["regras_posicionais"]
-        direcao_ia = analise["ia"]["direcao"] if not nc_ativo else "NEUTRO"
-        conf_ia = analise["ia"]["confianca"] if not nc_ativo else 0.0
-        raciocinio_ia = analise["ia"]["raciocinio"] if not nc_ativo else motivo_nc
-        streak = analise["contexto_reversao"]["streak"]
-        raciocinio_trace = analise["camadas"]
-
-        if nc_ativo:
-            return {"sinal": "NO CALL", "justificativa": motivo_nc, "no_call": True, "regime_recencia": regime_rec, "motivo_real": f"NO CALL: {motivo_nc}"}
-
-        sinal, justificativa, regra_id = direcao_ia, f"IA Preditiva com todo aprendizado embutido ({conf_ia:.1f}%)", "IA_ENRIQUECIDA_PADROES_RECENCIA"
-        if streak >= 7:
-            sinal, justificativa, regra_id = "NO CALL", f"Veto de segurança por streak extremo ({streak}x)", "VETO_STREAK_EXTREMO"
-
-        return {
-            "sinal": sinal, "justificativa": justificativa, "confianca_ia": round(conf_ia, 2), "no_call": False, "regime_recencia": regime_rec,
-            "motivo_real": justificativa, "raciocinio_trace": raciocinio_trace, "raciocinio_final": raciocinio_ia, "decisao_final": {"sinal": sinal, "justificativa": justificativa, "regra_id": regra_id}
-        }
-
-
-class EngineMatematicoAvancado:
-    @staticmethod
-    def calcular_raridade_sequencia(sub_pol):
-        if not sub_pol: return {"streak": 0, "probabilidade": 100.0, "status": "SEM DADOS"}
-        ultima_cor = sub_pol[-1]
-        if ultima_cor not in ['V', 'P']: return {"streak": 0, "probabilidade": 100.0, "status": "BRANCO NO FECHAMENTO"}
-        
-        streak = 0
-        for cor in reversed(sub_pol):
-            if cor == ultima_cor: streak += 1
-            else: break
-        
-        probabilidade_sequencia = ((7 / 15) ** streak) * 100
-        return {
-            "streak": streak, "cor_sequencia": "VERMELHO" if ultima_cor == 'V' else "PRETO", "probabilidade": round(probabilidade_sequencia, 2),
-            "status": "SATURAÇÃO CRÍTICA (Risco Elevado de Inversão)" if streak >= 5 else ("DESVIO PADRÃO EM CURSO" if streak >= 3 else "ESTRUTURA DENTRO DA NORMALIDADE")
-        }
-
-    @staticmethod
-    def calcular_vies_surfe(caminho_base, janela=100):
-        leitor = LeitorXLS(caminho_base)
-        dados = leitor.ler_e_validar()
-        if not dados: return {"vies": "INDISPONÍVEL", "desvio_v": 0.0, "desvio_p": 0.0, "frequencia_v": 46.67, "frequencia_p": 46.67, "frequencia_b": 6.67}
-        
-        ultimos = dados[-janela:]
-        v = sum(1 for d in ultimos if d['cor'] == 'V')
-        p = sum(1 for d in ultimos if d['cor'] == 'P')
-        b = sum(1 for d in ultimos if d['cor'] == 'B')
-        
-        pct_v = (v / len(ultimos)) * 100
-        pct_p = (p / len(ultimos)) * 100
-        pct_b = (b / len(ultimos)) * 100
-        
-        return {
-            "frequencia_v": round(pct_v, 2), "frequencia_p": round(pct_p, 2), "frequencia_b": round(pct_b, 2), "desvio_v": round(pct_v - 46.67, 2), "desvio_p": round(pct_p - 46.67, 2),
-            "vies": "SURFE DE MACROFREQUÊNCIA: VIÁS PARA VERMELHO ATIVO" if pct_v >= 53.0 else ("SURFE DE MACROFREQUÊNCIA: VIÁS PARA PRETO ATIVO" if pct_p >= 53.0 else "MACROANÁLISE EQUILIBRADA")
-        }
-
-    @staticmethod
-    def simular_split_stake_cobertura(stake_principal=10.0):
-        stake_branco_ideal = round(stake_principal / 7.0, 2)
-        return {
-            "stake_cor": stake_principal, "cobertura_b_ideal_1_7": stake_branco_ideal, "cobertura_b_matematica_1_10": round(stake_principal / 10.0, 2),
-            "lucro_liquido_se_der_branco": round((stake_branco_ideal * 14) - (stake_principal + stake_branco_ideal), 2), "custo_total_operacao": round(stake_principal + stake_branco_ideal, 2), "house_edge_estatico": "-6.67%"
-        }
