@@ -6,6 +6,7 @@ import json
 from datetime import datetime
 import time
 import tempfile
+import copy
 
 NOME_BASE_DEFINITIVA = "resultados_blaze.xlsx"
 
@@ -518,7 +519,6 @@ class IAPreditivaV1:
             self._processar_bloco_dados(self.dados_recencia, 4, True)
 
     def analisar_camada_curta(self, janela=200):
-        # Varredura do comportamento operacional da recência ativa
         if not self.dados_recencia:
             return {"viés": "INDEFINIDO", "confianca": 0, "justificativa": "Sem dados de recência ativos", "numeros_fortes": {}}
 
@@ -573,11 +573,9 @@ class IAPreditivaV1:
         return {"viés": "EQUILIBRADO", "confianca": round(max(pct_v, pct_p), 1)}
 
     def analisar_camada_intermediaria(self, janela=800):
-        # 6) FILTRO ANTI-RUÍDO: Recência Média validando a Recência Curta
         if len(self.dados_recencia) < 100:
             return {"status": "INSUFICIENTE", "sustentacao": False, "justificativa": "Base de recência muito estreita"}
 
-        # Separação interna da auditoria para validação de ruído
         curta_dados = self.dados_recencia[-200:]
         media_dados = self.dados_recencia[:-200] if len(self.dados_recencia) > 200 else self.dados_recencia
 
@@ -727,7 +725,7 @@ class IAPreditivaV1:
                 self.modelo_transicao[estado].append(prox)
                 self.modelo_numerico[num].append(prox)
 
-        # 2) TREINAMENTO DA MATRIZ NÚMERO -> PRÓXIMO NÚMERO
+        # TREINAMENTO DA MATRIZ NÚMERO -> PRÓXIMO NÚMERO
         for i in range(len(dados) - 1):
             num_atual = int(dados[i]['numero'])
             num_proximo = int(dados[i+1]['numero'])
@@ -781,7 +779,7 @@ class IAPreditivaV1:
         return "BAIXA"
 
     def injetar_aprendizado_imediato(self, sub_dados, multiplicador_peso=4, analise_contexto=None):
-        # 3) LIMITAR CRESCIMENTO DA RECÊNCIA (Teto deslizante estável de 500 rodadas)
+        # LIMITAR CRESCIMENTO DA RECÊNCIA (Teto deslizante estável de 500 rodadas)
         self.dados_recencia.extend(sub_dados)
         MAX_RECENCIA = 500
         if len(self.dados_recencia) > MAX_RECENCIA:
@@ -826,9 +824,7 @@ class IAPreditivaV1:
         v_bonus = stats.get("freq_v", 0) * 3.5
         p_bonus = stats.get("freq_p", 0) * 3.5
 
-        # ============================================================
-        # 4) RECÊNCIA PASSA A COMANDAR: Arquitetura Ponderada (Peso 1 vs Peso 5)
-        # ============================================================
+        # RECÊNCIA PASSA A COMANDAR: Arquitetura Ponderada (Peso 1 vs Peso 5)
         def extrair_vies_puro(dados_lista):
             if not dados_lista: return 0.5, 0.5
             c_list = [d['cor'] for d in dados_lista]
@@ -858,9 +854,7 @@ class IAPreditivaV1:
         if comportamento == "VERMELHO": v_bonus += 12
         elif comportamento == "PRETO": p_bonus += 12
 
-        # ============================================================
-        # 5) e 6) REGRA DE PREVALÊNCIA DA RECÊNCIA E FILTRO ANTI-RUÍDO
-        # ============================================================
+        # REGRA DE PREVALÊNCIA DA RECÊNCIA E FILTRO ANTI-RUÍDO
         vies_longo = "VERMELHO" if hist_v > hist_p + 0.03 else ("PRETO" if hist_p > hist_v + 0.03 else "EQUILIBRADO")
         
         # Recência Curta (últimas 150 rodadas dentro da auditoria)
@@ -985,10 +979,10 @@ class IAPreditivaV1:
             cor_dominante = max(cores_pos, key=cores_pos.get)
             freq_dominante = round((cores_pos[cor_dominante] / total) * 100, 2)
 
-            ultimas = dados["ultimas_cores"]
-            if len(ultimas) >= 8:
-                ultimas_dominantes = sum(1 for c in ultimas if c == ('V' if cor_dominante == "VERMELHO" else 'P'))
-                tendencia = "ESTÁVEL" if (ultimas_dominantes / len(ultimas)) >= 0.75 else ("EM MUDANÇA / SATURAÇÃO POSSÍVEL" if (ultimas_dominantes / len(ultimas)) < 0.5 else "MODERADO")
+            grid_ultimas = dados["ultimas_cores"]
+            if len(grid_ultimas) >= 8:
+                ultimas_dominantes = sum(1 for c in grid_ultimas if c == ('V' if cor_dominante == "VERMELHO" else 'P'))
+                tendencia = "ESTÁVEL" if (ultimas_dominantes / len(grid_ultimas)) >= 0.75 else ("EM MUDANÇA / SATURAÇÃO POSSÍVEL" if (ultimas_dominantes / len(grid_ultimas)) < 0.5 else "MODERADO")
             else:
                 tendencia = "DADOS INSUFICIENTES"
 
@@ -1153,19 +1147,17 @@ class SequenciaOperacional:
 class MotorV1Completo:
     def __init__(self, lista_dados_xls, ia_existente=None):
         self.seq = SequenciaOperacional(lista_dados_xls)
-        corte = max(0, len(lista_dados_xls) - 150)
-        self.dados_longo = lista_dados_xls[:corte]
-        self.dados_curto = lista_dados_xls[corte:]
-
+        
+        # CORREÇÃO CRÍTICA AQUI: O motor de auditoria agora busca ativamente a inteligência de 20.000 rodadas pré-salva
         if ia_existente is not None:
             self.ia = ia_existente
         else:
-            base_recencia = None
-            if os.path.exists("base_recencia_ativa.xlsx"):
-                try: base_recencia = LeitorXLS("base_recencia_ativa.xlsx").ler_e_validar()
-                except: pass
-            dados_consolidados = self.dados_curto + (base_recencia or [])
-            self.ia = IAPreditivaV1(self.dados_longo, dados_consolidados)
+            ia_salva = carregar_modelo_longo_prazo()
+            if ia_salva is not None:
+                self.ia = copy.deepcopy(ia_salva)
+                self.ia.dados_recencia = [] # Limpa a linha de recência para que o arquivo de auditoria construa a nova tendência do zero
+            else:
+                self.ia = IAPreditivaV1([], [])
 
         self.historico_regras = defaultdict(fabrica_historico_regras_auditado)
         self.stats = {"G0": 0, "G1": 0, "G2": 0, "FALHA": 0, "NO CALL": 0}
