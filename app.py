@@ -107,7 +107,6 @@ with aba_tipo_d:
         with col3:
             adicionar_base = st.button("➕ Adicionar à Base de Longo Prazo")
 
-        # 1. INICIAR AUDITORIA DE RECÊNCIA (FIX: Inversão de ordem para usar base de longo prazo)
         if rodar_auditoria:
             with open(caminho_temp, "wb") as f: f.write(arquivo_upload.getbuffer())
             if os.path.exists(NOME_RECENCIA_ATIVA): os.remove(NOME_RECENCIA_ATIVA)
@@ -117,11 +116,8 @@ with aba_tipo_d:
             dados = leitor.ler_e_validar()
             
             if dados:
-                # Primeiro: Roda a simulação de auditoria usando as 20k rodadas fixas do modelo de longo prazo
                 motor = MotorV1Completo(dados)
                 output_d = motor.processar_auditoria()
-                
-                # Segundo: Só após a auditoria, consolida e salva os dados na recência de produção para os sinais reais
                 ia = integrar_recencia_no_modelo(dados, multiplicador=5)
                 
                 st.success("✅ Auditoria de Recência realizada utilizando a inteligência de Longo Prazo!")
@@ -143,7 +139,6 @@ with aba_tipo_d:
             
             if os.path.exists(caminho_temp): os.remove(caminho_temp)
 
-        # 2. SUBSTITUIR BASE DE LONGO PRAZO
         if salvar_como_base:
             with open(caminho_temp, "wb") as f: f.write(arquivo_upload.getbuffer())
             try:
@@ -205,7 +200,7 @@ with aba_tipo_d:
                                             st.json({
                                                 "Após → Vermelho": info.get("apos_V", 0),
                                                 "Após → Preto": info.get("apos_P", 0),
-                                                "Números que trollam": dict(info.get("quebradores", {})),
+                                                "Números que trollam": {str(num_k): qtd_v for num_k, qtd_v in info.get("quebradores", {}).items()},
                                                 "G0": g0, "G1": g1, "Assertividade %": assertividade
                                             })
                                 else:
@@ -223,7 +218,7 @@ with aba_tipo_d:
                                             st.json({
                                                 "Após → Vermelho": info.get("apos_V", 0),
                                                 "Após → Preto": info.get("apos_P", 0),
-                                                "Números que trollam": dict(info.get("quebradores", {})),
+                                                "Números que trollam": {str(num_k): qtd_v for num_k, qtd_v in info.get("quebradores", {}).items()},
                                                 "G0": g0, "G1": g1, "Assertividade %": assertividade
                                             })
                                 else:
@@ -244,7 +239,7 @@ with aba_tipo_d:
                                             st.json({
                                                 "Após → Vermelho": info.get("apos_V", 0),
                                                 "Após → Preto": info.get("apos_P", 0),
-                                                "Números que quebraram": dict(info.get("quebradores", {})),
+                                                "Números que quebraram": {str(num_k): qtd_v for num_k, qtd_v in info.get("quebradores", {}).items()},
                                                 "G0 (Acerto Direto)": g0, "G1 (Acerto no G1)": g1, "Assertividade Real %": assertividade
                                             })
                                 else:
@@ -257,7 +252,6 @@ with aba_tipo_d:
                 st.error(f"Erro ao salvar e treinar base: {e}")
             if os.path.exists(caminho_temp): os.remove(caminho_temp)
 
-        # 3. ADICIONAR À BASE DE LONGO PRAZO
         if adicionar_base:
             with open(caminho_temp, "wb") as f: f.write(arquivo_upload.getbuffer())
             try:
@@ -306,7 +300,7 @@ with aba_tipo_d:
                                                 st.json({
                                                     "Após → Vermelho": info.get("apos_V", 0),
                                                     "Após → Preto": info.get("apos_P", 0),
-                                                    "Números que trollam": dict(info.get("quebradores", {})),
+                                                    "Números que trollam": {str(num_k): qtd_v for num_k, qtd_v in info.get("quebradores", {}).items()},
                                                     "G0": g0, "G1": g1, "Assertividade %": assertividade
                                                 })
                                     else:
@@ -324,7 +318,7 @@ with aba_tipo_d:
                                                 st.json({
                                                     "Após → Vermelho": info.get("apos_V", 0),
                                                     "Após → Preto": info.get("apos_P", 0),
-                                                    "Números que trollam": dict(info.get("quebradores", {})),
+                                                    "Números que trollam": {str(num_k): qtd_v for num_k, qtd_v in info.get("quebradores", {}).items()},
                                                     "G0": g0, "G1": g1, "Assertividade %": assertividade
                                                 })
                                     else:
@@ -345,7 +339,7 @@ with aba_tipo_d:
                                                 st.json({
                                                     "Após → Vermelho": info.get("apos_V", 0),
                                                     "Após → Preto": info.get("apos_P", 0),
-                                                    "Números que quebraram": dict(info.get("quebradores", {})),
+                                                    "Números que quebraram": {str(num_k): qtd_v for num_k, qtd_v in info.get("quebradores", {}).items()},
                                                     "G0 (Acerto Direto)": g0, "G1 (Acerto no G1)": g1, "Assertividade Real %": assertividade
                                                 })
                                     else:
@@ -386,7 +380,7 @@ with aba_padroes:
                             st.json({
                                 "Após → Vermelho": info.get("apos_V", 0),
                                 "Após → Preto": info.get("apos_P", 0),
-                                "Números que trollam": dict(info.get("quebradores", {})),
+                                "Números que trollam": {str(num_k): qtd_v for num_k, qtd_v in info.get("quebradores", {}).items()},
                                 "G0": g0, "G1": g1, "Assertividade %": assertividade
                             })
                 else:
@@ -404,7 +398,7 @@ with aba_padroes:
                             st.json({
                                 "Após → Vermelho": info.get("apos_V", 0),
                                 "Após → Preto": info.get("apos_P", 0),
-                                "Números que trollam": dict(info.get("quebradores", {})),
+                                "Números que trollam": {str(num_k): qtd_v for num_k, qtd_v in info.get("quebradores", {}).items()},
                                 "G0": g0, "G1": g1, "Assertividade %": assertividade
                             })
                 else:
@@ -422,10 +416,10 @@ with aba_padroes:
                             st.json({
                                 "Após → Vermelho": info.get("apos_V", 0),
                                 "Após → Preto": info.get("apos_P", 0),
-                                "Números que quebraram": dict(info.get("quebradores", {})),
+                                "Números que quebraram": {str(num_k): qtd_v for num_k, qtd_v in info.get("quebradores", {}).items()},
                                 "G0 (Acerto Direto)": g0, "G1 (Acerto no G1)": g1, "Assertividade Real %": assertividade
                             })
                 else:
                     st.info("Sem padrões dinâmicos ou espelhos registrados.")
 
-            st.caption("Esses padrões são atualizados automaticamente ao treinar ou adicionar dados na base de longo prazo.")
+            st.caption("Esses padrões são updated automaticamente ao treinar ou adicionar dados na base de longo prazo.")
