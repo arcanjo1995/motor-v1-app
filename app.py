@@ -1,18 +1,26 @@
-"""
-MOTOR V1 - Painel Operacional
-Versão compatível com o main.py atual (Motor Unificado embutido)
-"""
-
 import streamlit as st
 import os
 
-from main import (
-    LeitorXLS,
-    MotorV1Completo,
-    adicionar_a_base_longo_prazo,
-    carregar_modelo_longo_prazo
-)
+from main import LeitorXLS, MotorV1Completo, adicionar_a_base_longo_prazo, carregar_modelo_longo_prazo
+from main import motor_unificado
 
+if "motor_v1" not in st.session_state:
+    st.session_state.motor_v1 = motor_unificado
+    with st.spinner("🛡️ Carregando Motor Unificado V1..."):
+        st.session_state.motor_v1.carregar_tudo()
+    st.success("Motor Unificado V1 carregado com sucesso!")
+
+motor = st.session_state.motor_v1
+
+st.set_page_config(page_title="MOTOR V1", page_icon="🛡️", layout="wide")
+st.title("🛡️ MOTOR V1 - Sistema de Sinais")
+st.caption("Base Longa + Recência com prioridade")
+
+aba_tipo_b, aba_tipo_d, aba_padroes = st.tabs([
+    "🎯 TIPO B — Sinal Real",
+    "📊 TIPO D — Auditoria",
+    "📈 Padrões"
+])
 # ============================================================
 # MOTOR UNIFICADO (vem do próprio main.py)
 # ============================================================
