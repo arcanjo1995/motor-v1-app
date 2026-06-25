@@ -1078,6 +1078,24 @@ class MotorV1Completo:
         idx = 0
         memorias = []
         stats = {"G0": 0, "G1": 0, "G2": 0, "FALHA": 0, "NO CALL": 0}
+        def processar_auditoria(self):
+    idx = 0
+    memorias = []
+    stats = {"G0": 0, "G1": 0, "G2": 0, "FALHA": 0, "NO CALL": 0}
+
+    while idx + 12 < self.seq.total:
+        sub_num = self.seq.numerica[idx:idx+12]
+        sub_pol = self.seq.polaridades[idx:idx+12]
+
+        analise = MotorAnalise.analisar_janela(sub_num, sub_pol, self.ia)
+
+        **regra_id = "NENHUMA"**   # ← ADICIONE ESTA LINHA AQUI
+
+        if analise["no_call"]["ativo"]:
+            sinal = "NO CALL"
+            justificativa = analise["no_call"]["motivo"]
+            regra_id = "SISTEMA_TRAVADO"
+            ...
         while idx + 12 < self.seq.total:
             sub_num = self.seq.numerica[idx:idx+12]
             sub_pol = self.seq.polaridades[idx:idx+12]
