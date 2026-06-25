@@ -51,7 +51,6 @@ with aba_tipo_b:
                     if "erro" in resultado:
                         st.error(resultado["erro"])
                     else:
-                        # === EXIBIÇÃO MELHORADA DO SINAL ===
                         st.success(f"**SINAL GERADO:** {resultado['sinal']}")
                         
                         col1, col2 = st.columns([2, 1])
@@ -60,7 +59,6 @@ with aba_tipo_b:
                         with col2:
                             st.metric("Confiança da IA", f"{resultado['confianca_ia']}%")
 
-                        # Raciocínio detalhado das 3 camadas
                         if resultado.get("raciocinio_final"):
                             st.write("**Raciocínio da IA (3 Camadas Temporais):**")
                             st.code(resultado["raciocinio_final"], language="text")
@@ -68,7 +66,6 @@ with aba_tipo_b:
                         if resultado.get("motivo_real"):
                             st.caption(f"Motivo real da decisão: {resultado['motivo_real']}")
 
-                        # Mostrar rastreamento completo das camadas (se disponível)
                         if resultado.get("raciocinio_trace"):
                             with st.expander("🔍 Ver rastreamento completo das camadas de análise", expanded=False):
                                 for camada in resultado["raciocinio_trace"]:
@@ -110,7 +107,7 @@ with aba_tipo_d:
         with col3:
             adicionar_base = st.button("➕ Adicionar à Base de Longo Prazo")
 
-        # 1. INICIAR AUDITORIA DE RECÊNCIA
+        # 1. INICIAR AUDITORIA DE RECÊNCIA (FIX: Inversão de ordem para usar base de longo prazo)
         if rodar_auditoria:
             with open(caminho_temp, "wb") as f: f.write(arquivo_upload.getbuffer())
             if os.path.exists(NOME_RECENCIA_ATIVA): os.remove(NOME_RECENCIA_ATIVA)
@@ -120,11 +117,14 @@ with aba_tipo_d:
             dados = leitor.ler_e_validar()
             
             if dados:
-                ia = integrar_recencia_no_modelo(dados, multiplicador=5)
+                # Primeiro: Roda a simulação de auditoria usando as 20k rodadas fixas do modelo de longo prazo
                 motor = MotorV1Completo(dados)
                 output_d = motor.processar_auditoria()
                 
-                st.success("✅ Auditoria de Recência realizada e integrada!")
+                # Segundo: Só após a auditoria, consolida e salva os dados na recência de produção para os sinais reais
+                ia = integrar_recencia_no_modelo(dados, multiplicador=5)
+                
+                st.success("✅ Auditoria de Recência realizada utilizando a inteligência de Longo Prazo!")
 
                 if hasattr(ia, 'analise_recencia') and ia.analise_recencia:
                     with st.expander("🔬 Análise de Comportamento na RECÊNCIA (pós-número)", expanded=False):
@@ -154,16 +154,13 @@ with aba_tipo_d:
                 if dados:
                     relatorio = treinar_base_longo_prazo_com_janelas(dados)
                     
-                    # === FALLBACK DE SALVAMENTO ===
                     if not relatorio.get("modelo_salvo_com_sucesso", False):
                         try:
                             ia_para_salvar = relatorio.get("ia_treinada")
-                            if ia_para_salvar:
-                                if salvar_modelo_longo_prazo(ia_para_salvar):
-                                    relatorio["modelo_salvo_com_sucesso"] = True
+                            if ia_para_salvar and salvar_modelo_longo_prazo(ia_para_salvar):
+                                relatorio["modelo_salvo_com_sucesso"] = True
                         except:
                             pass
-                    # ================================
                     
                     if relatorio.get("sucesso"):
                         if relatorio.get("modelo_salvo_com_sucesso"):
@@ -209,9 +206,7 @@ with aba_tipo_d:
                                                 "Após → Vermelho": info.get("apos_V", 0),
                                                 "Após → Preto": info.get("apos_P", 0),
                                                 "Números que trollam": dict(info.get("quebradores", {})),
-                                                "G0": g0,
-                                                "G1": g1,
-                                                "Assertividade %": assertividade
+                                                "G0": g0, "G1": g1, "Assertividade %": assertividade
                                             })
                                 else:
                                     st.info("Nenhum padrão de Xadrez relevante encontrado.")
@@ -229,9 +224,7 @@ with aba_tipo_d:
                                                 "Após → Vermelho": info.get("apos_V", 0),
                                                 "Após → Preto": info.get("apos_P", 0),
                                                 "Números que trollam": dict(info.get("quebradores", {})),
-                                                "G0": g0,
-                                                "G1": g1,
-                                                "Assertividade %": assertividade
+                                                "G0": g0, "G1": g1, "Assertividade %": assertividade
                                             })
                                 else:
                                     st.info("Nenhum padrão de Streak relevante encontrado.")
@@ -252,9 +245,7 @@ with aba_tipo_d:
                                                 "Após → Vermelho": info.get("apos_V", 0),
                                                 "Após → Preto": info.get("apos_P", 0),
                                                 "Números que quebraram": dict(info.get("quebradores", {})),
-                                                "G0 (Acerto Direto)": g0,
-                                                "G1 (Acerto no G1)": g1,
-                                                "Assertividade Real %": assertividade
+                                                "G0 (Acerto Direto)": g0, "G1 (Acerto no G1)": g1, "Assertividade Real %": assertividade
                                             })
                                 else:
                                     st.info("Nenhum padrão geral dinâmico ou espelho encontrado.")
@@ -316,9 +307,7 @@ with aba_tipo_d:
                                                     "Após → Vermelho": info.get("apos_V", 0),
                                                     "Após → Preto": info.get("apos_P", 0),
                                                     "Números que trollam": dict(info.get("quebradores", {})),
-                                                    "G0": g0,
-                                                    "G1": g1,
-                                                    "Assertividade %": assertividade
+                                                    "G0": g0, "G1": g1, "Assertividade %": assertividade
                                                 })
                                     else:
                                         st.info("Nenhum padrão de Xadrez relevante encontrado.")
@@ -336,9 +325,7 @@ with aba_tipo_d:
                                                     "Após → Vermelho": info.get("apos_V", 0),
                                                     "Após → Preto": info.get("apos_P", 0),
                                                     "Números que trollam": dict(info.get("quebradores", {})),
-                                                    "G0": g0,
-                                                    "G1": g1,
-                                                    "Assertividade %": assertividade
+                                                    "G0": g0, "G1": g1, "Assertividade %": assertividade
                                                 })
                                     else:
                                         st.info("Nenhum padrão de Streak relevante encontrado.")
@@ -359,9 +346,7 @@ with aba_tipo_d:
                                                     "Após → Vermelho": info.get("apos_V", 0),
                                                     "Após → Preto": info.get("apos_P", 0),
                                                     "Números que quebraram": dict(info.get("quebradores", {})),
-                                                    "G0 (Acerto Direto)": g0,
-                                                    "G1 (Acerto no G1)": g1,
-                                                    "Assertividade Real %": assertividade
+                                                    "G0 (Acerto Direto)": g0, "G1 (Acerto no G1)": g1, "Assertividade Real %": assertividade
                                                 })
                                     else:
                                         st.info("Nenhum padrão geral dinâmico ou espelho encontrado.")
@@ -402,9 +387,7 @@ with aba_padroes:
                                 "Após → Vermelho": info.get("apos_V", 0),
                                 "Após → Preto": info.get("apos_P", 0),
                                 "Números que trollam": dict(info.get("quebradores", {})),
-                                "G0": g0,
-                                "G1": g1,
-                                "Assertividade %": assertividade
+                                "G0": g0, "G1": g1, "Assertividade %": assertividade
                             })
                 else:
                     st.info("Sem padrões de Xadrez registrados.")
@@ -422,9 +405,7 @@ with aba_padroes:
                                 "Após → Vermelho": info.get("apos_V", 0),
                                 "Após → Preto": info.get("apos_P", 0),
                                 "Números que trollam": dict(info.get("quebradores", {})),
-                                "G0": g0,
-                                "G1": g1,
-                                "Assertividade %": assertividade
+                                "G0": g0, "G1": g1, "Assertividade %": assertividade
                             })
                 else:
                     st.info("Sem padrões de Streak registrados.")
@@ -442,9 +423,7 @@ with aba_padroes:
                                 "Após → Vermelho": info.get("apos_V", 0),
                                 "Após → Preto": info.get("apos_P", 0),
                                 "Números que quebraram": dict(info.get("quebradores", {})),
-                                "G0 (Acerto Direto)": g0,
-                                "G1 (Acerto no G1)": g1,
-                                "Assertividade Real %": assertividade
+                                "G0 (Acerto Direto)": g0, "G1 (Acerto no G1)": g1, "Assertividade Real %": assertividade
                             })
                 else:
                     st.info("Sem padrões dinâmicos ou espelhos registrados.")
