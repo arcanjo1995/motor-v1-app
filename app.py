@@ -1,20 +1,18 @@
 import streamlit as st
 import os
 
-from main import (
-    LeitorXLS,
-    MotorV1Completo,
-    adicionar_a_base_longo_prazo,
-    carregar_modelo_longo_prazo
-)
+from main import LeitorXLS
+from main import MotorV1Completo
+from main import adicionar_a_base_longo_prazo
+from main import carregar_modelo_longo_prazo
 from main import motor_unificado
 
 # ============================================================
-# INICIALIZAÇÃO DO MOTOR UNIFICADO
+# INICIALIZAÇÃO DO MOTOR
 # ============================================================
 if "motor_v1" not in st.session_state:
     st.session_state.motor_v1 = motor_unificado
-    with st.spinner("🛡️ Carregando Motor Unificado V1 (Base Longa + Recência)..."):
+    with st.spinner("🛡️ Carregando Motor Unificado V1..."):
         st.session_state.motor_v1.carregar_tudo()
     st.success("Motor Unificado V1 carregado com sucesso!")
 
@@ -24,13 +22,13 @@ motor = st.session_state.motor_v1
 # CONFIGURAÇÃO DA PÁGINA
 # ============================================================
 st.set_page_config(page_title="MOTOR V1", page_icon="🛡️", layout="wide")
-st.title("🛡️ MOTOR V1 - Sistema de Sinais e Auditoria")
-st.caption("Base Longa + Recência com prioridade | Mão Fixa")
+st.title("🛡️ MOTOR V1 - Sistema de Sinais")
+st.caption("Base Longa + Recência com prioridade")
 
 aba_tipo_b, aba_tipo_d, aba_padroes = st.tabs([
     "🎯 TIPO B — Sinal Real",
-    "📊 TIPO D — Auditoria e Treinamento",
-    "📈 Padrões Avançados"
+    "📊 TIPO D — Auditoria",
+    "📈 Padrões"
 ])
 
 # =========================================================================
@@ -38,11 +36,11 @@ aba_tipo_b, aba_tipo_d, aba_padroes = st.tabs([
 # =========================================================================
 with aba_tipo_b:
     st.header("🎯 TIPO B - Gerar Sinal com Motor Unificado")
-    st.info("O sinal usa todo o conhecimento. A **Recência fala mais alto** quando o regime está confiante (≥ 55%).")
+    st.info("Recência tem prioridade quando o regime está confiante (≥ 55%).")
 
     entrada_numeros = st.text_input(
         "Digite os 12 números separados por vírgula:",
-        placeholder="Exemplo: 2,11,14,4,9,12,12,7,3,9,5,12"
+        placeholder="Ex: 2,11,14,4,9,12,12,7,3,9,5,12"
     )
 
     if st.button("🚀 Executar e Gerar Sinal"):
@@ -95,42 +93,35 @@ with aba_tipo_d:
         with col3:
             btn_adicionar = st.button("➕ Adicionar à Base de Longo Prazo")
 
-        # 1. AUDITORIA DE RECÊNCIA
         if btn_recencia:
             dados = LeitorXLS(caminho_temp).ler_e_validar()
             if dados and len(dados) >= 20:
                 resultado = motor.processar_recencia(dados)
-                st.success("✅ Recência injetada com **prioridade** no Motor Unificado!")
+                st.success("✅ Recência injetada com prioridade!")
 
                 if resultado.get("regime_recencia"):
-                    with st.expander("📊 Regime Atual do Mercado (Recência)", expanded=True):
+                    with st.expander("📊 Regime de Recência"):
                         st.json(resultado["regime_recencia"])
 
                 motor_antigo = MotorV1Completo(dados)
                 output = motor_antigo.processar_auditoria()
                 st.text_area("Resultado da Auditoria", output, height=350)
             else:
-                st.error("Base de recência muito pequena ou inválida.")
+                st.error("Base de recência muito pequena.")
 
-        # 2. SUBSTITUIR BASE DE LONGO PRAZO
         if btn_substituir:
             dados = LeitorXLS(caminho_temp).ler_e_validar()
             if dados:
                 rel = motor.absorver_base_longa(dados)
                 if rel.get("sucesso"):
                     st.success("✅ Base de Longo Prazo absorvida com sucesso!")
-                else:
-                    st.error("Erro ao absorver a base.")
 
-        # 3. ADICIONAR À BASE DE LONGO PRAZO
         if btn_adicionar:
             dados = LeitorXLS(caminho_temp).ler_e_validar()
             if dados:
                 rel = adicionar_a_base_longo_prazo(dados)
                 if rel.get("sucesso"):
                     st.success("✅ Dados adicionados com sucesso!")
-                else:
-                    st.warning(rel.get("mensagem", "Erro ao adicionar."))
 
         if os.path.exists(caminho_temp):
             os.remove(caminho_temp)
@@ -144,9 +135,9 @@ with aba_padroes:
     if st.button("🔄 Carregar Padrões do Modelo"):
         ia = carregar_modelo_longo_prazo()
         if ia is None:
-            st.warning("Nenhum modelo encontrado. Treine uma base primeiro.")
+            st.warning("Nenhum modelo encontrado.")
         else:
-            st.success("Modelo carregado com sucesso!")
+            st.success("Modelo carregado!")
 
             with st.expander("♟️ Padrões de Xadrez", expanded=False):
                 if hasattr(ia, 'padroes_xadrez_detalhado') and ia.padroes_xadrez_detalhado:
