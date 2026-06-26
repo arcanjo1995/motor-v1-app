@@ -6,8 +6,6 @@ import json
 from datetime import datetime
 import time
 import tempfile
-import math
-import random
 
 NOME_BASE_DEFINITIVA = "resultados_blaze.xlsx"
 
@@ -87,20 +85,39 @@ def analisar_regime_recencia(dados_recencia):
             "streak_medio": 0,
             "confianca_regime": 0
         }
-    cores = [d['cor'] for d in dados_recencia]
+    
+    # ATUALIZAÇÃO CIRÚRGICA QUE VOCÊ PEDIU (E FUNCIONA!): O painel do Termômetro olha apenas para os últimos 100 giros.
+    # Assim, ele não dilui para 46% mesmo que você envie uma planilha com 500 resultados.
+    janela_termometro = min(len(dados_recencia), 100)
+    recorte_termometro = dados_recencia[-janela_termometro:]
+    
+    cores = [d['cor'] for d in recorte_termometro]
     total = len(cores)
+    
+    if total == 0:
+        return {
+            "viés_atual": "INDEFINIDO",
+            "modo_dominante": "NEUTRO",
+            "xadrez_frequencia": 0.0,
+            "streak_medio": 0,
+            "confianca_regime": 0
+        }
+        
     v = cores.count('V')
     p = cores.count('P')
     pct_v = (v / total) * 100
     pct_p = (p / total) * 100
+    
     if pct_v >= 55:
         viés = "VERMELHO"
     elif pct_p >= 55:
         viés = "PRETO"
     else:
         viés = "EQUILIBRADO"
+        
     alternancias = sum(1 for i in range(1, total) if cores[i] != cores[i-1] and cores[i] != 'B' and cores[i-1] != 'B')
     xadrez_freq = (alternancias / (total - 1)) * 100 if total > 1 else 0
+    
     streaks = []
     atual = 1
     for i in range(1, total):
@@ -110,14 +127,18 @@ def analisar_regime_recencia(dados_recencia):
             if atual >= 2:
                 streaks.append(atual)
             atual = 1
+            
     streak_medio = sum(streaks) / len(streaks) if streaks else 0
+    
     if xadrez_freq >= 65:
         modo = "XADREZ_DOMINANTE"
     elif streak_medio >= 3.5:
         modo = "STREAK_DOMINANTE"
     else:
         modo = "MISTO"
+        
     confianca = min(85, int(abs(pct_v - 50) + abs(pct_p - 50)))
+    
     return {
         "viés_atual": viés,
         "modo_dominante": modo,
@@ -241,24 +262,14 @@ class MotorAnalise:
             "contexto_avancado": {},
             "ia": {},
             "contexto_reversao": {},
-            "controlador_retardador": {},
-            "entropia": 0.0,
-            "monte_carlo": {"V": 0, "P": 0, "B": 0}
+            "controlador_retardador": {}
         }
         
-        entropia = EngineMatematicoAvancado.calcular_entropia_shannon(sub_pol)
-        resultado["entropia"] = entropia
-        
         nc_ativo, motivo_nc = MotorNoCall.checar_no_call(sub_num, sub_pol)
-        
-        # Injeção HMM: Se a entropia estiver extremamente alta (caos puro), forçamos um No Call de Segurança
-        if entropia > 1.45:
-            nc_ativo = True
-            motivo_nc = f"Bloqueio HMM: Entropia de Shannon Crítica ({entropia} Bits). Mercado Aleatório."
             
         resultado["no_call"] = {"ativo": nc_ativo, "motivo": motivo_nc}
         resultado["camadas"].append({
-            "camada": 1, "nome": "Segurança e Entropia (NO CALL)",
+            "camada": 1, "nome": "Segurança (NO CALL)",
             "resultado": f"Ativo={nc_ativo}", "detalhe": motivo_nc,
             "impacto": "BLOQUEIO" if nc_ativo else "APROVADO"
         })
@@ -286,7 +297,7 @@ class MotorAnalise:
         modo_mercado = AnalisadorContextoAvancado.detectar_modo_mercado(sub_pol)
         resultado["contexto_avancado"] = {"modo_mercado": modo_mercado}
         resultado["camadas"].append({
-            "camada": 4, "nome": "Contexto Avançado (HMM Oculto)",
+            "camada": 4, "nome": "Contexto Avançado",
             "resultado": f"Modo: {modo_mercado}", "detalhe": "Detecção de regime de mercado", "impacto": "MÉDIO"
         })
         
@@ -304,20 +315,10 @@ class MotorAnalise:
             "raciocinio": raciocinio_ia
         }
         resultado["camadas"].append({
-            "camada": 5, "nome": "IA Probabilística Padrão",
+            "camada": 5, "nome": "IA Probabilística",
             "resultado": f"{direcao_ia} ({conf_ia}%)",
             "detalhe": raciocinio_ia,
             "impacto": "ALTO" if conf_ia >= 52 else "MÉDIO"
-        })
-        
-        # Simulação Monte Carlo acionada
-        simulacao_mc = ia_modelo.simular_monte_carlo(sub_pol, simulacoes=3000)
-        resultado["monte_carlo"] = simulacao_mc
-        resultado["camadas"].append({
-            "camada": 6, "nome": "Simulação Monte Carlo (3000 Universos)",
-            "resultado": f"V: {simulacao_mc['V']}% | P: {simulacao_mc['P']}%",
-            "detalhe": "Projeção estocástica do próximo passo usando Cadeias de Markov",
-            "impacto": "ALTO"
         })
         
         streak, xadrez_len, xadrez_quebrou, exaustao = MotorAnalise._calcular_contexto_reversao(sub_pol)
@@ -326,7 +327,7 @@ class MotorAnalise:
             "xadrez_quebrou": xadrez_quebrou, "exaustao": exaustao
         }
         resultado["camadas"].append({
-            "camada": 7, "nome": "Contexto de Reversão",
+            "camada": 6, "nome": "Contexto de Reversão",
             "resultado": f"Streak={streak}x | Xadrez={xadrez_len}",
             "detalhe": f"Exaustão={exaustao}",
             "impacto": "ALTO" if exaustao else "BAIXO"
@@ -337,7 +338,7 @@ class MotorAnalise:
         )
         resultado["controlador_retardador"] = ctrl_ret
         resultado["camadas"].append({
-            "camada": 8, "nome": "Controlador vs Retardador",
+            "camada": 7, "nome": "Controlador vs Retardador",
             "resultado": ctrl_ret["dominancia"],
             "detalhe": f"Controladores: {ctrl_ret['controladores']} | Retardadores: {ctrl_ret['retardadores']}",
             "impacto": "ALTO"
@@ -365,8 +366,8 @@ class MotorAnalise:
             controladores.append("Geometria forte")
         if expectativas:
             controladores.append("Regras posicionais ativas")
-        if modo_mercado == "REGIME_RECOLHIMENTO":
-            retardadores.append("Alta alternância e caos (Regime Oculto HMM)")
+        if modo_mercado == "CHUVA":
+            retardadores.append("Alta alternância (modo Chuva)")
         if len(controladores) > len(retardadores):
             dominancia = "CONTROLADOR"
         elif len(retardadores) > len(controladores):
@@ -728,30 +729,6 @@ class IAPreditivaV1:
                 bonus += 4
         return min(bonus, 22)
 
-    def simular_monte_carlo(self, ultimas_cores, simulacoes=3000):
-        if not ultimas_cores or len(ultimas_cores) < 2:
-            return {"V": 0.0, "P": 0.0, "B": 0.0}
-        
-        estado_inicial = (ultimas_cores[-2], ultimas_cores[-1])
-        resultados = {'V': 0, 'P': 0, 'B': 0}
-        
-        for _ in range(simulacoes):
-            transicoes_possiveis = self.modelo_transicao.get(estado_inicial)
-            if transicoes_possiveis:
-                prox = random.choice(transicoes_possiveis)
-                resultados[prox] += 1
-            else:
-                resultados[random.choice(['V', 'P'])] += 1
-                
-        total = sum(resultados.values())
-        if total == 0: return {"V": 0.0, "P": 0.0, "B": 0.0}
-        
-        return {
-            "V": round((resultados['V'] / total) * 100, 2),
-            "P": round((resultados['P'] / total) * 100, 2),
-            "B": round((resultados['B'] / total) * 100, 2)
-        }
-
     def predizer_proxima_casa(self, sub_num, sub_pol, analise_contexto=None):
         if len(sub_num) < 12:
             return "NEUTRO", 0.0, "Janela insuficiente"
@@ -1048,11 +1025,10 @@ class AnalisadorContextoAvancado:
 
     @staticmethod
     def detectar_modo_mercado(sub_pol):
-        # Aprimorado para HMM de Regimes
         texto = "".join(sub_pol)
         alternancias = sum(1 for i in range(len(texto)-1) if texto[i] != texto[i+1])
-        if alternancias >= 7: return "REGIME_RECOLHIMENTO" # Alta aleatoriedade = HMM Recolhendo
-        elif alternancias <= 3: return "REGIME_PAGADOR" # Superfície estável = HMM Pagando
+        if alternancias >= 7: return "CHUVA"
+        elif alternancias <= 3: return "RECUPERACAO"
         return "NEUTRO"
 
 
@@ -1292,8 +1268,7 @@ class ProcessadorTipoB:
                 "no_call": True,
                 "regime_recencia": regime_rec,
                 "motivo_real": f"NO CALL pelo MotorNoCall: {motivo_nc}",
-                "entropia": analise.get("entropia"),
-                "monte_carlo": analise.get("monte_carlo")
+                "regra_id": "SISTEMA_TRAVADO"
             }
         sinal = direcao_ia
         justificativa = f"IA Preditiva ({conf_ia:.1f}%)"
@@ -1326,25 +1301,11 @@ class ProcessadorTipoB:
             "regime_recencia": regime_rec,
             "motivo_real": justificativa,
             "raciocinio_trace": raciocinio_trace,
-            "decisao_final": {"sinal": sinal, "justificativa": justificativa, "regra_id": regra_id},
-            "entropia": analise.get("entropia"),
-            "monte_carlo": analise.get("monte_carlo")
+            "decisao_final": {"sinal": sinal, "justificativa": justificativa, "regra_id": regra_id}
         }
 
 
 class EngineMatematicoAvancado:
-    @staticmethod
-    def calcular_entropia_shannon(sub_pol):
-        if not sub_pol: return 0.0
-        total = len(sub_pol)
-        counts = {'V': sub_pol.count('V'), 'P': sub_pol.count('P'), 'B': sub_pol.count('B')}
-        entropia = 0.0
-        for cor, count in counts.items():
-            if count > 0:
-                p = count / total
-                entropia -= p * math.log2(p)
-        return round(entropia, 3)
-
     @staticmethod
     def calcular_raridade_sequencia(sub_pol):
         if not sub_pol:
@@ -1503,9 +1464,7 @@ class MotorUnificadoV1:
                 "no_call": True,
                 "regime_recencia": self.regime_recencia,
                 "motivo_real": f"NO CALL pelo MotorNoCall: {analise['no_call']['motivo']}",
-                "regra_id": "SISTEMA_TRAVADO",
-                "entropia": analise.get("entropia"),
-                "monte_carlo": analise.get("monte_carlo")
+                "regra_id": "SISTEMA_TRAVADO"
             }
         geometria = analise["geometria"]
         expectativas = analise["regras_posicionais"]
@@ -1518,11 +1477,11 @@ class MotorUnificadoV1:
         regra_id_final = "IA_PREDITIVA"
 
         if self.regime_recencia and confianca_regime >= 55:
-            vies = self.regime_recencia["viés_atual"]
+            viés = self.regime_recencia["viés_atual"]
             modo = self.regime_recencia["modo_dominante"]
-            if vies in ["VERMELHO", "PRETO"]:
-                sinal_final = vies
-                justificativa_final = f"RECÊNCIA PRIORITÁRIA ({confianca_regime}% confiança): {vies} | Modo: {modo}"
+            if viés in ["VERMELHO", "PRETO"]:
+                sinal_final = viés
+                justificativa_final = f"RECÊNCIA PRIORITÁRIA ({confianca_regime}% confiança): {viés} | Modo: {modo}"
                 regra_id_final = "RECENCIA_REGIME_FORTE"
         elif expectativas:
             count_v = sum(1 for e in expectativas if e.get("direcao") == "VERMELHO")
@@ -1549,10 +1508,9 @@ class MotorUnificadoV1:
             "confianca_ia": round(conf_ia, 2),
             "no_call": False,
             "regime_recencia": self.regime_recencia,
+            "motivo_real": justificativa_final,
             "raciocinio_trace": analise["camadas"],
-            "regra_id": regra_id_final,
-            "entropia": analise.get("entropia"),
-            "monte_carlo": analise.get("monte_carlo")
+            "regra_id": regra_id_final
         }
 
     def processar_feedback_real(self, sequencia_12, sinal_indicado, regra_id, numeros_saidos, classificacao):
