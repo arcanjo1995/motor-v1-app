@@ -1212,7 +1212,7 @@ class ProcessadorTipoB:
         if os.path.exists("base_recencia_ativa.xlsx"):
             base_rec = LeitorXLS("base_recencia_ativa.xlsx").ler_e_validar()
             if base_rec:
-                ia = integrar_recencia_no_modelo(base_rec, 5)
+                ia = integrating_recencia_no_modelo(base_rec, 5)
                 regime_rec = ia.regime_recencia
         analise = MotorAnalise.analisar_janela(self.entrada, self.polaridades, ia)
         nc_ativo = analise["no_call"]["ativo"]
