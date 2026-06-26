@@ -1078,28 +1078,14 @@ class MotorV1Completo:
         idx = 0
         memorias = []
         stats = {"G0": 0, "G1": 0, "G2": 0, "FALHA": 0, "NO CALL": 0}
-        def processar_auditoria(self):
-    idx = 0
-    memorias = []
-    stats = {"G0": 0, "G1": 0, "G2": 0, "FALHA": 0, "NO CALL": 0}
 
-    while idx + 12 < self.seq.total:
-        sub_num = self.seq.numerica[idx:idx+12]
-        sub_pol = self.seq.polaridades[idx:idx+12]
-
-        analise = MotorAnalise.analisar_janela(sub_num, sub_pol, self.ia)
-
-        **regra_id = "NENHUMA"**   # ← ADICIONE ESTA LINHA AQUI
-
-        if analise["no_call"]["ativo"]:
-            sinal = "NO CALL"
-            justificativa = analise["no_call"]["motivo"]
-            regra_id = "SISTEMA_TRAVADO"
-            ...
         while idx + 12 < self.seq.total:
             sub_num = self.seq.numerica[idx:idx+12]
             sub_pol = self.seq.polaridades[idx:idx+12]
             analise = MotorAnalise.analisar_janela(sub_num, sub_pol, self.ia)
+
+            regra_id = "NENHUMA"
+
             if analise["no_call"]["ativo"]:
                 sinal = "NO CALL"
                 justificativa = analise["no_call"]["motivo"]
@@ -1125,7 +1111,8 @@ class MotorV1Completo:
                 xadrez_quebrou = analise["contexto_reversao"]["xadrez_quebrou"]
                 contexto_exaustao = analise["contexto_reversao"]["exaustao"]
                 modo_mercado = analise["contexto_avancado"].get("modo_mercado", "NEUTRO")
-                sinal, justificativa, regla_id = JuizHierarquicoModificado.arbitrar_sinal(
+                
+                sinal, justificativa, regra_id = JuizHierarquicoModificado.arbitrar_sinal(
                     False, "", expectativas, None, geometria,
                     (direcao_ia, conf_ia, raciocinio_ia), None, self.historico_regras,
                     modo_mercado=modo_mercado,
@@ -1134,9 +1121,11 @@ class MotorV1Completo:
                     xadrez_quebrou=xadrez_quebrou,
                     contexto_exaustao=contexto_exaustao
                 )
+
             correcoes = self.seq.polaridades[idx+12 : idx+15]
             classificacao = "FALHA"
             salto = 3
+
             if sinal == "NO CALL":
                 classificacao = "NO CALL RESPEITADO"
                 stats["NO CALL"] += 1
@@ -1148,7 +1137,9 @@ class MotorV1Completo:
                         classificacao = f"G{g}"
                         salto = g + 1
                         break
+
             stats[classificacao] = stats.get(classificacao, 0) + 1
+
             if classificacao in ["G0", "G1"]:
                 contexto_analise = {
                     "geometria": geometria,
@@ -1157,12 +1148,15 @@ class MotorV1Completo:
                     "contexto_avancado": {"modo_mercado": modo_mercado}
                 }
                 self.ia.registrar_padrao_vencedor(contexto_analise, classificacao)
+
             if regra_id not in ["NENHUMA", "SISTEMA_TRAVADO"]:
                 self.historico_regras[regra_id]["total"] += 1
                 if classificacao in ["G0", "G1"]:
                     self.historico_regras[regra_id]["acertos"] += 1
+
             bloco = [{"numero": self.seq.numerica[k], "cor": self.seq.polaridades[k]} 
                      for k in range(idx, min(idx + 12 + salto, self.seq.total))]
+            
             contexto_injecao = {
                 "regras_posicionais": expectativas,
                 "controlador_retardador": analise.get("controlador_retardador", {}),
@@ -1170,10 +1164,13 @@ class MotorV1Completo:
             }
             self.ia.injetar_aprendizado_imediato(bloco, 4, contexto_injecao)
             memorias.append(f"Janela {len(memorias)+1}: {sub_num} -> {sinal} | {justificativa} | {classificacao}")
+            
             idx += 12 + salto
+
         self.stats = stats
         total_com_sinal = stats.get("G0",0) + stats.get("G1",0) + stats.get("G2",0) + stats.get("FALHA",0)
         denom = total_com_sinal if total_com_sinal > 0 else 1
+        
         output = "[MEMÓRIA DE CÁLCULO DAS JANELAS MÓVEIS]\n"
         output += "\n".join(memorias) + "\n\n"
         output += "[RESULTADO FINAL TIPO D]\n"
@@ -1184,12 +1181,14 @@ class MotorV1Completo:
         output += f" - Taxa G2: {stats.get('G2',0)} Ocorrências ({(stats.get('G2',0)/denom)*100:.2f}%)\n"
         output += f" - Taxa de Falha: {stats.get('FALHA',0)} Ocorrências ({(stats.get('FALHA',0)/denom)*100:.2f}%)\n"
         output += f" - Taxa de NO CALL: {stats.get('NO CALL',0)} Ocorrências\n\n"
+        
         if stats.get("FALHA", 0) >= 25:
             condicao = "MERCADO EM DEGRADAÇÃO"
         elif stats.get("G0", 0) >= 50:
             condicao = "MERCADO PAGADOR"
         else:
             condicao = "MERCADO INSTÁVEL"
+            
         output += f"ESTADO ATUAL DO MERCADO: {condicao}\n"
         return output
 
