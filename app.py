@@ -56,8 +56,9 @@ if status_motor.get("ultima_atualizacao"):
 st.title("🛡️ MOTOR V1 - Sistema de Sinais")
 st.caption("Arquitetura Unificada: Base de Longo Prazo integrada à Recência Dinâmica com Prioridade de Filtros")
 
-aba_tipo_b, aba_tipo_d, aba_padroes, aba_matematica = st.tabs([
+aba_tipo_b, aba_feedback, aba_tipo_d, aba_padroes, aba_matematica = st.tabs([
     "🎯 TIPO B — Sinal Real",
+    "✅ Feedback e Correção",
     "📊 TIPO D — Auditoria",
     "📈 Padrões Aprendidos",
     "🧮 Cálculos Matemáticos Avançados"
@@ -126,6 +127,60 @@ with aba_tipo_b:
                                 st.markdown("---")
             except Exception as e:
                 st.error(f"Erro crítico no processamento dos dados digitados: {e}")
+
+# =========================================================================
+# ABA FEEDBACK — CORREÇÃO E ABSORÇÃO DE SINAL
+# =========================================================================
+with aba_feedback:
+    st.header("✅ Feedback e Correção de Sinal")
+    st.caption("Insira os números reais que saíram na roleta após a indicação do sinal. O motor irá absorver esses resultados e recalculará as probabilidades ativas de acordo com o resultado obtido.")
+
+    col_f1, col_f2 = st.columns(2)
+    with col_f1:
+        entrada_feedback = st.text_input(
+            "Números que saíram (separados por vírgula):",
+            placeholder="Ex: 14, 0, 5",
+            key="input_feedback"
+        )
+    with col_f2:
+        resultado_feedback = st.selectbox(
+            "Qual foi o resultado final da operação?",
+            ["G0 (Acerto de primeira)", "G1 (Acerto no 1º Gale)", "G2 (Acerto no 2º Gale)", "LOSS / FALHA"]
+        )
+
+    if st.button("💾 Absorver Resultados no Motor", key="btn_absorver_feedback"):
+        if not entrada_feedback:
+            st.error("Por favor, insira os números que saíram na operação.")
+        else:
+            try:
+                lista_nums_feedback = [int(x.strip()) for x in entrada_feedback.split(",")]
+                dados_novos = []
+                for n in lista_nums_feedback:
+                    if n == 0:
+                        cor = 'B'
+                    elif 1 <= n <= 7:
+                        cor = 'V'
+                    elif 8 <= n <= 14:
+                        cor = 'P'
+                    else:
+                        st.warning(f"Número inválido detectado e ignorado: {n}")
+                        continue
+                    dados_novos.append({"numero": n, "cor": cor})
+                
+                if dados_novos:
+                    with st.spinner("Absorvendo novos dados e reajustando a inteligência do motor..."):
+                        rel = adicionar_a_base_longo_prazo(dados_novos)
+                        motor.carregar_tudo() # Atualiza o motor em memória com os novos aprendizados
+                    
+                    if rel.get("sucesso"):
+                        st.success(f"✅ Sucesso! {len(dados_novos)} novo(s) número(s) foram injetados na memória do Motor V1.")
+                        st.info(f"Registro Operacional Salvo: '{resultado_feedback}'. As matrizes e os padrões foram atualizados.")
+                    else:
+                        st.error(f"Erro ao absorver os dados: {rel.get('mensagem')}")
+            except ValueError:
+                st.error("Por favor, insira apenas números válidos separados por vírgula.")
+            except Exception as e:
+                st.error(f"Erro crítico no processamento do feedback: {e}")
 
 # =========================================================================
 # ABA TIPO D — AUDITORIA E TREINAMENTO
