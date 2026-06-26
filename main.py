@@ -967,6 +967,7 @@ class MotorContagensProjetivas:
                         "direcao": direcao_inversao,
                         "tipo_regra": "ESPELHO_INVERSO_FINAL",
                         "origem": f"Padrão de inversão detectado ({padrao})"
+                    })
                     break
         if len(sub_pol) >= 3:
             if sub_pol[-3] == sub_pol[-2] and sub_pol[-1] != sub_pol[-2]:
@@ -1535,5 +1536,15 @@ class MotorUnificadoV1:
         self.carregar_tudo()
         
         return rel
+
+    def status(self):
+        return {
+            "ia_carregada": self.ia is not None,
+            "base_longa_carregada": self.base_longa_carregada,
+            "recencia_injetada": self.recencia_injetada,
+            "regime_recencia": self.regime_recencia,
+            "ultima_atualizacao": self.ultima_atualizacao.isoformat() if self.ultima_atualizacao else None
+        }
+
 
 motor_unificado = MotorUnificadoV1()
