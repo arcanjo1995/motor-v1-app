@@ -967,7 +967,6 @@ class MotorContagensProjetivas:
                         "direcao": direcao_inversao,
                         "tipo_regra": "ESPELHO_INVERSO_FINAL",
                         "origem": f"Padrão de inversão detectado ({padrao})"
-                    })
                     break
         if len(sub_pol) >= 3:
             if sub_pol[-3] == sub_pol[-2] and sub_pol[-1] != sub_pol[-2]:
@@ -1212,7 +1211,7 @@ class ProcessadorTipoB:
         if os.path.exists("base_recencia_ativa.xlsx"):
             base_rec = LeitorXLS("base_recencia_ativa.xlsx").ler_e_validar()
             if base_rec:
-                ia = integrating_recencia_no_modelo(base_rec, 5)
+                ia = integrar_recencia_no_modelo(base_rec, 5)
                 regime_rec = ia.regime_recencia
         analise = MotorAnalise.analisar_janela(self.entrada, self.polaridades, ia)
         nc_ativo = analise["no_call"]["ativo"]
@@ -1429,7 +1428,8 @@ class MotorUnificadoV1:
                 "justificativa": analise["no_call"]["motivo"],
                 "no_call": True,
                 "regime_recencia": self.regime_recencia,
-                "motivo_real": f"NO CALL pelo MotorNoCall: {analise['no_call']['motivo']}"
+                "motivo_real": f"NO CALL pelo MotorNoCall: {analise['no_call']['motivo']}",
+                "regra_id": "SISTEMA_TRAVADO"
             }
         geometria = analise["geometria"]
         expectativas = analise["regras_posicionais"]
@@ -1439,43 +1439,101 @@ class MotorUnificadoV1:
         confianca_regime = self.regime_recencia.get("confianca_regime", 0) if self.regime_recencia else 0
         sinal_final = direcao_ia
         justificativa_final = f"IA Preditiva Longo Prazo ({conf_ia:.1f}%)"
+        regra_id_final = "IA_PREDITIVA"
+
         if self.regime_recencia and confianca_regime >= 55:
             vies = self.regime_recencia["viés_atual"]
             modo = self.regime_recencia["modo_dominante"]
             if vies in ["VERMELHO", "PRETO"]:
                 sinal_final = vies
                 justificativa_final = f"RECÊNCIA PRIORITÁRIA ({confianca_regime}% confiança): {vies} | Modo: {modo}"
+                regra_id_final = "RECENCIA_REGIME_FORTE"
         elif expectativas:
             count_v = sum(1 for e in expectativas if e.get("direcao") == "VERMELHO")
             count_p = sum(1 for e in expectativas if e.get("direcao") == "PRETO")
             if count_v > count_p:
                 sinal_final = "VERMELHO"
+                regra_id_final = "REGRA_POSICIONAL"
             elif count_p > count_v:
                 sinal_final = "PRETO"
+                regra_id_final = "REGRA_POSICIONAL"
         if geometria == "CICLO_FECHADO_VPPV":
             sinal_final = "PRETO"
+            regra_id_final = "GEOMETRIA_FORTE"
         elif geometria == "CICLO_FECHADO_PVVP":
             sinal_final = "VERMELHO"
+            regra_id_final = "GEOMETRIA_FORTE"
         if sinal_final != "NO CALL" and streak >= 6:
             sinal_final = "NO CALL"
             justificativa_final = f"Veto de streak {streak}x (segurança)"
+            regra_id_final = "VETO_STREAK"
         return {
             "sinal": sinal_final,
             "justificativa": justificativa_final,
             "confianca_ia": round(conf_ia, 2),
             "no_call": False,
             "regime_recencia": self.regime_recencia,
-            "raciocinio_trace": analise["camadas"]
+            "raciocinio_trace": analise["camadas"],
+            "regra_id": regra_id_final
         }
 
-    def status(self):
-        return {
-            "ia_carregada": self.ia is not None,
-            "base_longa_carregada": self.base_longa_carregada,
-            "recencia_injetada": self.recencia_injetada,
-            "regime_recencia": self.regime_recencia,
-            "ultima_atualizacao": self.ultima_atualizacao.isoformat() if self.ultima_atualizacao else None
-        }
+    def processar_feedback_real(self, sequencia_12, sinal_indicado, regra_id, numeros_saidos, classificacao):
+        if self.ia is None:
+            self.carregar_tudo()
 
+        # 1. Recuperar contexto do sinal gerado
+        polaridades = ['B' if n == 0 else ('V' if 1 <= n <= 7 else 'P') for n in sequencia_12]
+        analise = MotorAnalise.analisar_janela(sequencia_12, polaridades, self.ia)
+        
+        modo_mercado = analise.get("contexto_avancado", {}).get("modo_mercado", "NEUTRO")
+        geometria = analise.get("geometria", "ESTÁVEL")
+        expectativas = analise.get("regras_posicionais", [])
+        
+        # 2. Formatar classificação
+        classificacao_limpa = classificacao.split(" ")[0].upper()
+        if "LOSS" in classificacao_limpa or "FALHA" in classificacao_limpa:
+            classificacao_limpa = "FALHA"
+            
+        # 3. Reforço no Modelo (Reinforcement Learning)
+        contexto_analise = {
+            "geometria": geometria,
+            "regras_posicionais": expectativas,
+            "controlador_retardador": analise.get("controlador_retardador", {}),
+            "contexto_avancado": {"modo_mercado": modo_mercado}
+        }
+        
+        if classificacao_limpa in ["G0", "G1"]:
+            self.ia.registrar_padrao_vencedor(contexto_analise, classificacao_limpa)
+            
+        if regra_id and regra_id not in ["NENHUMA", "SISTEMA_TRAVADO"]:
+            self.ia.historico_regras[regra_id]["total"] += 1
+            if classificacao_limpa in ["G0", "G1", "G2"]: 
+                self.ia.historico_regras[regra_id]["acertos"] += 1
+                
+        # 4. Injeção direta de recência e curto prazo
+        dados_novos = []
+        for n in numeros_saidos:
+            if n == 0: cor = 'B'
+            elif 1 <= n <= 7: cor = 'V'
+            elif 8 <= n <= 14: cor = 'P'
+            else: continue
+            dados_novos.append({"numero": n, "cor": cor})
+            
+        contexto_injecao = {
+            "regras_posicionais": expectativas,
+            "controlador_retardador": analise.get("controlador_retardador", {}),
+            "geometria": geometria
+        }
+        
+        # Injeta aprendizado forte (peso 4) para as memórias imediatas
+        self.ia.injetar_aprendizado_imediato(dados_novos, 4, contexto_injecao)
+        
+        # 5. Salvar na base de dados longa e recalcular cadeias de longo prazo
+        rel = adicionar_a_base_longo_prazo(dados_novos)
+        
+        # 6. Recarregar e salvar modelo atualizado
+        self.carregar_tudo()
+        
+        return rel
 
 motor_unificado = MotorUnificadoV1()
