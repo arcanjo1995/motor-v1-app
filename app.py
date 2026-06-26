@@ -89,6 +89,14 @@ with aba_tipo_b:
                     resultado = motor.gerar_sinal_tipo_b(lista_numeros)
                     polaridades = ['B' if n == 0 else ('V' if 1 <= n <= 7 else 'P') for n in lista_numeros]
 
+                    # SALVA O CONTEXTO DA JOGADA PARA A ABA DE FEEDBACK
+                    st.session_state.ultimo_sinal = {
+                        "sequencia": lista_numeros,
+                        "sinal": resultado.get("sinal", "NEUTRO"),
+                        "justificativa": resultado.get("justificativa", ""),
+                        "regra_id": resultado.get("regra_id", "DESCONHECIDO")
+                    }
+
                     st.write("---")
                     st.subheader("🔮 CARD DE DECISÃO OPERACIONAL")
 
@@ -129,11 +137,16 @@ with aba_tipo_b:
                 st.error(f"Erro crítico no processamento dos dados digitados: {e}")
 
 # =========================================================================
-# ABA FEEDBACK — CORREÇÃO E ABSORÇÃO DE SINAL
+# ABA FEEDBACK — CORREÇÃO E ABSORÇÃO DE SINAL (REINFORCEMENT LEARNING)
 # =========================================================================
 with aba_feedback:
     st.header("✅ Feedback e Correção de Sinal")
-    st.caption("Insira os números reais que saíram na roleta após a indicação do sinal. O motor irá absorver esses resultados e recalculará as probabilidades ativas de acordo com o resultado obtido.")
+    st.caption("Insira os números reais que saíram na roleta após a indicação do sinal. O motor irá absorver o contexto exato (estado, ação e recompensa) e recalculará as probabilidades ativas via Aprendizado por Reforço.")
+
+    if "ultimo_sinal" in st.session_state:
+        st.info(f"📍 **Último Contexto Analisado:** Sequência `{st.session_state.ultimo_sinal['sequencia']}` ➔ Sinal Indicado: **{st.session_state.ultimo_sinal['sinal']}**")
+    else:
+        st.warning("⚠️ Nenhum sinal foi gerado nesta sessão ainda. Para um aprendizado profundo, gere o sinal primeiro na aba 'TIPO B' antes de dar o feedback.")
 
     col_f1, col_f2 = st.columns(2)
     with col_f1:
@@ -154,29 +167,35 @@ with aba_feedback:
         else:
             try:
                 lista_nums_feedback = [int(x.strip()) for x in entrada_feedback.split(",")]
-                dados_novos = []
-                for n in lista_nums_feedback:
-                    if n == 0:
-                        cor = 'B'
-                    elif 1 <= n <= 7:
-                        cor = 'V'
-                    elif 8 <= n <= 14:
-                        cor = 'P'
-                    else:
-                        st.warning(f"Número inválido detectado e ignorado: {n}")
-                        continue
-                    dados_novos.append({"numero": n, "cor": cor})
                 
-                if dados_novos:
-                    with st.spinner("Absorvendo novos dados e reajustando a inteligência do motor..."):
-                        rel = adicionar_a_base_longo_prazo(dados_novos)
-                        motor.carregar_tudo() # Atualiza o motor em memória com os novos aprendizados
-                    
-                    if rel.get("sucesso"):
-                        st.success(f"✅ Sucesso! {len(dados_novos)} novo(s) número(s) foram injetados na memória do Motor V1.")
-                        st.info(f"Registro Operacional Salvo: '{resultado_feedback}'. As matrizes e os padrões foram atualizados.")
+                with st.spinner("Absorvendo contexto, ação e recompensa na rede neural..."):
+                    if "ultimo_sinal" in st.session_state:
+                        # PROCESSO COMPLETO DE REINFORCEMENT LEARNING
+                        rel = motor.processar_feedback_real(
+                            sequencia_12=st.session_state.ultimo_sinal["sequencia"],
+                            sinal_indicado=st.session_state.ultimo_sinal["sinal"],
+                            regra_id=st.session_state.ultimo_sinal["regra_id"],
+                            numeros_saidos=lista_nums_feedback,
+                            classificacao=resultado_feedback
+                        )
                     else:
-                        st.error(f"Erro ao absorver os dados: {rel.get('mensagem')}")
+                        # FALLBACK (Injeta apenas os números se o usuário pulou a ABA Tipo B)
+                        dados_novos = []
+                        for n in lista_nums_feedback:
+                            cor = 'B' if n == 0 else ('V' if 1 <= n <= 7 else 'P')
+                            dados_novos.append({"numero": n, "cor": cor})
+                        rel = adicionar_a_base_longo_prazo(dados_novos)
+                        motor.carregar_tudo()
+                    
+                    if rel and rel.get("sucesso"):
+                        st.success(f"✅ Sucesso! O contexto completo da operação e os novos números foram injetados na memória do Motor V1.")
+                        st.info(f"Registro Operacional Salvo: '{resultado_feedback}'. As matrizes de transição e o aprendizado das regras foram atualizados.")
+                        
+                        # Limpa o contexto da memória após absorver, para não duplicar o erro
+                        if "ultimo_sinal" in st.session_state:
+                            del st.session_state["ultimo_sinal"]
+                    else:
+                        st.error(f"Erro ao absorver os dados: {rel.get('mensagem') if rel else 'Falha desconhecida'}")
             except ValueError:
                 st.error("Por favor, insira apenas números válidos separados por vírgula.")
             except Exception as e:
@@ -367,3 +386,4 @@ with aba_matematica:
     with col_s3:
         st.metric(label="Lucro Líquido Real (Se bater o Branco)", value=f"R$ {simulacao_stake.get('lucro_liquido_se_der_branco'):.2f}")
         st.metric(label="House Edge Mapeado", value=simulacao_stake.get("house_edge_estatico"))
+
