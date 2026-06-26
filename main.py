@@ -6,6 +6,8 @@ import json
 from datetime import datetime
 import time
 import tempfile
+import math
+import random
 
 NOME_BASE_DEFINITIVA = "resultados_blaze.xlsx"
 
@@ -239,17 +241,31 @@ class MotorAnalise:
             "contexto_avancado": {},
             "ia": {},
             "contexto_reversao": {},
-            "controlador_retardador": {}
+            "controlador_retardador": {},
+            "entropia": 0.0,
+            "monte_carlo": {"V": 0, "P": 0, "B": 0}
         }
+        
+        entropia = EngineMatematicoAvancado.calcular_entropia_shannon(sub_pol)
+        resultado["entropia"] = entropia
+        
         nc_ativo, motivo_nc = MotorNoCall.checar_no_call(sub_num, sub_pol)
+        
+        # Injeção HMM: Se a entropia estiver extremamente alta (caos puro), forçamos um No Call de Segurança
+        if entropia > 1.45:
+            nc_ativo = True
+            motivo_nc = f"Bloqueio HMM: Entropia de Shannon Crítica ({entropia} Bits). Mercado Aleatório."
+            
         resultado["no_call"] = {"ativo": nc_ativo, "motivo": motivo_nc}
         resultado["camadas"].append({
-            "camada": 1, "nome": "Segurança (NO CALL)",
+            "camada": 1, "nome": "Segurança e Entropia (NO CALL)",
             "resultado": f"Ativo={nc_ativo}", "detalhe": motivo_nc,
             "impacto": "BLOQUEIO" if nc_ativo else "APROVADO"
         })
+        
         if nc_ativo:
             return resultado
+            
         geometria = AnalisadorContextoAvancado.mapear_padroes_geometria(sub_pol)
         resultado["geometria"] = geometria
         resultado["camadas"].append({
@@ -257,6 +273,7 @@ class MotorAnalise:
             "resultado": geometria, "detalhe": "Padrão geométrico detectado",
             "impacto": "FORTE" if geometria in ["CICLO_FECHADO_VPPV", "CICLO_FECHADO_PVVP"] else "NEUTRO"
         })
+        
         expectativas = MotorContagensProjetivas.mapear_janela(sub_num, sub_pol, geometria)
         resultado["regras_posicionais"] = expectativas
         resultado["camadas"].append({
@@ -265,18 +282,21 @@ class MotorAnalise:
             "detalhe": [e["tipo_regra"] for e in expectativas] if expectativas else "Nenhuma",
             "impacto": "ALTO" if expectativas else "BAIXO"
         })
+        
         modo_mercado = AnalisadorContextoAvancado.detectar_modo_mercado(sub_pol)
         resultado["contexto_avancado"] = {"modo_mercado": modo_mercado}
         resultado["camadas"].append({
-            "camada": 4, "nome": "Contexto Avançado",
+            "camada": 4, "nome": "Contexto Avançado (HMM Oculto)",
             "resultado": f"Modo: {modo_mercado}", "detalhe": "Detecção de regime de mercado", "impacto": "MÉDIO"
         })
+        
         contexto_para_ia = {
             "geometria": geometria,
             "regras_posicionais": expectativas,
             "controlador_retardador": {},
             "contexto_avancado": resultado["contexto_avancado"]
         }
+        
         direcao_ia, conf_ia, raciocinio_ia = ia_modelo.predizer_proxima_casa(sub_num, sub_pol, contexto_para_ia)
         resultado["ia"] = {
             "direcao": direcao_ia,
@@ -284,28 +304,40 @@ class MotorAnalise:
             "raciocinio": raciocinio_ia
         }
         resultado["camadas"].append({
-            "camada": 5, "nome": "IA Probabilística",
+            "camada": 5, "nome": "IA Probabilística Padrão",
             "resultado": f"{direcao_ia} ({conf_ia}%)",
             "detalhe": raciocinio_ia,
             "impacto": "ALTO" if conf_ia >= 52 else "MÉDIO"
         })
+        
+        # Simulação Monte Carlo acionada
+        simulacao_mc = ia_modelo.simular_monte_carlo(sub_pol, simulacoes=3000)
+        resultado["monte_carlo"] = simulacao_mc
+        resultado["camadas"].append({
+            "camada": 6, "nome": "Simulação Monte Carlo (3000 Universos)",
+            "resultado": f"V: {simulacao_mc['V']}% | P: {simulacao_mc['P']}%",
+            "detalhe": "Projeção estocástica do próximo passo usando Cadeias de Markov",
+            "impacto": "ALTO"
+        })
+        
         streak, xadrez_len, xadrez_quebrou, exaustao = MotorAnalise._calcular_contexto_reversao(sub_pol)
         resultado["contexto_reversao"] = {
             "streak": streak, "xadrez_len": xadrez_len,
             "xadrez_quebrou": xadrez_quebrou, "exaustao": exaustao
         }
         resultado["camadas"].append({
-            "camada": 6, "nome": "Contexto de Reversão",
+            "camada": 7, "nome": "Contexto de Reversão",
             "resultado": f"Streak={streak}x | Xadrez={xadrez_len}",
             "detalhe": f"Exaustão={exaustao}",
             "impacto": "ALTO" if exaustao else "BAIXO"
         })
+        
         ctrl_ret = MotorAnalise._detectar_controlador_retardador(
             sub_num, sub_pol, expectativas, geometria, modo_mercado
         )
         resultado["controlador_retardador"] = ctrl_ret
         resultado["camadas"].append({
-            "camada": 7, "nome": "Controlador vs Retardador",
+            "camada": 8, "nome": "Controlador vs Retardador",
             "resultado": ctrl_ret["dominancia"],
             "detalhe": f"Controladores: {ctrl_ret['controladores']} | Retardadores: {ctrl_ret['retardadores']}",
             "impacto": "ALTO"
@@ -333,8 +365,8 @@ class MotorAnalise:
             controladores.append("Geometria forte")
         if expectativas:
             controladores.append("Regras posicionais ativas")
-        if modo_mercado == "CHUVA":
-            retardadores.append("Alta alternância (modo Chuva)")
+        if modo_mercado == "REGIME_RECOLHIMENTO":
+            retardadores.append("Alta alternância e caos (Regime Oculto HMM)")
         if len(controladores) > len(retardadores):
             dominancia = "CONTROLADOR"
         elif len(retardadores) > len(controladores):
@@ -696,6 +728,30 @@ class IAPreditivaV1:
                 bonus += 4
         return min(bonus, 22)
 
+    def simular_monte_carlo(self, ultimas_cores, simulacoes=3000):
+        if not ultimas_cores or len(ultimas_cores) < 2:
+            return {"V": 0.0, "P": 0.0, "B": 0.0}
+        
+        estado_inicial = (ultimas_cores[-2], ultimas_cores[-1])
+        resultados = {'V': 0, 'P': 0, 'B': 0}
+        
+        for _ in range(simulacoes):
+            transicoes_possiveis = self.modelo_transicao.get(estado_inicial)
+            if transicoes_possiveis:
+                prox = random.choice(transicoes_possiveis)
+                resultados[prox] += 1
+            else:
+                resultados[random.choice(['V', 'P'])] += 1
+                
+        total = sum(resultados.values())
+        if total == 0: return {"V": 0.0, "P": 0.0, "B": 0.0}
+        
+        return {
+            "V": round((resultados['V'] / total) * 100, 2),
+            "P": round((resultados['P'] / total) * 100, 2),
+            "B": round((resultados['B'] / total) * 100, 2)
+        }
+
     def predizer_proxima_casa(self, sub_num, sub_pol, analise_contexto=None):
         if len(sub_num) < 12:
             return "NEUTRO", 0.0, "Janela insuficiente"
@@ -992,10 +1048,11 @@ class AnalisadorContextoAvancado:
 
     @staticmethod
     def detectar_modo_mercado(sub_pol):
+        # Aprimorado para HMM de Regimes
         texto = "".join(sub_pol)
         alternancias = sum(1 for i in range(len(texto)-1) if texto[i] != texto[i+1])
-        if alternancias >= 7: return "CHUVA"
-        elif alternancias <= 3: return "RECUPERACAO"
+        if alternancias >= 7: return "REGIME_RECOLHIMENTO" # Alta aleatoriedade = HMM Recolhendo
+        elif alternancias <= 3: return "REGIME_PAGADOR" # Superfície estável = HMM Pagando
         return "NEUTRO"
 
 
@@ -1234,7 +1291,9 @@ class ProcessadorTipoB:
                 "justificativa": motivo_nc,
                 "no_call": True,
                 "regime_recencia": regime_rec,
-                "motivo_real": f"NO CALL pelo MotorNoCall: {motivo_nc}"
+                "motivo_real": f"NO CALL pelo MotorNoCall: {motivo_nc}",
+                "entropia": analise.get("entropia"),
+                "monte_carlo": analise.get("monte_carlo")
             }
         sinal = direcao_ia
         justificativa = f"IA Preditiva ({conf_ia:.1f}%)"
@@ -1267,11 +1326,25 @@ class ProcessadorTipoB:
             "regime_recencia": regime_rec,
             "motivo_real": justificativa,
             "raciocinio_trace": raciocinio_trace,
-            "decisao_final": {"sinal": sinal, "justificativa": justificativa, "regra_id": regra_id}
+            "decisao_final": {"sinal": sinal, "justificativa": justificativa, "regra_id": regra_id},
+            "entropia": analise.get("entropia"),
+            "monte_carlo": analise.get("monte_carlo")
         }
 
 
 class EngineMatematicoAvancado:
+    @staticmethod
+    def calcular_entropia_shannon(sub_pol):
+        if not sub_pol: return 0.0
+        total = len(sub_pol)
+        counts = {'V': sub_pol.count('V'), 'P': sub_pol.count('P'), 'B': sub_pol.count('B')}
+        entropia = 0.0
+        for cor, count in counts.items():
+            if count > 0:
+                p = count / total
+                entropia -= p * math.log2(p)
+        return round(entropia, 3)
+
     @staticmethod
     def calcular_raridade_sequencia(sub_pol):
         if not sub_pol:
@@ -1430,7 +1503,9 @@ class MotorUnificadoV1:
                 "no_call": True,
                 "regime_recencia": self.regime_recencia,
                 "motivo_real": f"NO CALL pelo MotorNoCall: {analise['no_call']['motivo']}",
-                "regra_id": "SISTEMA_TRAVADO"
+                "regra_id": "SISTEMA_TRAVADO",
+                "entropia": analise.get("entropia"),
+                "monte_carlo": analise.get("monte_carlo")
             }
         geometria = analise["geometria"]
         expectativas = analise["regras_posicionais"]
@@ -1475,14 +1550,15 @@ class MotorUnificadoV1:
             "no_call": False,
             "regime_recencia": self.regime_recencia,
             "raciocinio_trace": analise["camadas"],
-            "regra_id": regra_id_final
+            "regra_id": regra_id_final,
+            "entropia": analise.get("entropia"),
+            "monte_carlo": analise.get("monte_carlo")
         }
 
     def processar_feedback_real(self, sequencia_12, sinal_indicado, regra_id, numeros_saidos, classificacao):
         if self.ia is None:
             self.carregar_tudo()
 
-        # 1. Recuperar contexto do sinal gerado
         polaridades = ['B' if n == 0 else ('V' if 1 <= n <= 7 else 'P') for n in sequencia_12]
         analise = MotorAnalise.analisar_janela(sequencia_12, polaridades, self.ia)
         
@@ -1490,12 +1566,10 @@ class MotorUnificadoV1:
         geometria = analise.get("geometria", "ESTÁVEL")
         expectativas = analise.get("regras_posicionais", [])
         
-        # 2. Formatar classificação
         classificacao_limpa = classificacao.split(" ")[0].upper()
         if "LOSS" in classificacao_limpa or "FALHA" in classificacao_limpa:
             classificacao_limpa = "FALHA"
             
-        # 3. Reforço no Modelo (Reinforcement Learning)
         contexto_analise = {
             "geometria": geometria,
             "regras_posicionais": expectativas,
@@ -1511,7 +1585,6 @@ class MotorUnificadoV1:
             if classificacao_limpa in ["G0", "G1", "G2"]: 
                 self.ia.historico_regras[regra_id]["acertos"] += 1
                 
-        # 4. Injeção direta de recência e curto prazo
         dados_novos = []
         for n in numeros_saidos:
             if n == 0: cor = 'B'
@@ -1526,13 +1599,8 @@ class MotorUnificadoV1:
             "geometria": geometria
         }
         
-        # Injeta aprendizado forte (peso 4) para as memórias imediatas
         self.ia.injetar_aprendizado_imediato(dados_novos, 4, contexto_injecao)
-        
-        # 5. Salvar na base de dados longa e recalcular cadeias de longo prazo
         rel = adicionar_a_base_longo_prazo(dados_novos)
-        
-        # 6. Recarregar e salvar modelo atualizado
         self.carregar_tudo()
         
         return rel
