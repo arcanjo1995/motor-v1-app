@@ -53,8 +53,8 @@ if status_motor.get("ultima_atualizacao"):
 # ============================================================
 # INTERFACE PRINCIPAL
 # ============================================================
-st.title("🛡️ MOTOR V1 - Sistema de Sinais Avançado")
-st.caption("Arquitetura Unificada: Base de Longo Prazo, Entropia de Shannon, Monte Carlo e HMM Integrados")
+st.title("🛡️ MOTOR V1 - Sistema de Sinais")
+st.caption("Arquitetura Unificada: Base de Longo Prazo integrada à Recência Dinâmica com Prioridade de Filtros")
 
 aba_tipo_b, aba_feedback, aba_tipo_d, aba_padroes, aba_matematica = st.tabs([
     "🎯 TIPO B — Sinal Real",
@@ -114,16 +114,6 @@ with aba_tipo_b:
 
                         st.write(f"**Direcionamento Técnico:** {resultado.get('justificativa')}")
                         st.write(f"**Confiança Intrínseca da IA Preditiva:** {resultado.get('confianca_ia')}%")
-
-                    # EXIBIÇÃO DA ENTROPIA E MONTE CARLO
-                    col_m1, col_m2 = st.columns(2)
-                    with col_m1:
-                        entropia_val = resultado.get('entropia', 0)
-                        st.metric(label="Entropia de Shannon (Caos)", value=f"{entropia_val} Bits", delta="Alta Imprevisibilidade" if entropia_val > 1.45 else "Mercado Estruturado", delta_color="inverse")
-                    
-                    with col_m2:
-                        mc = resultado.get("monte_carlo", {"V": 0, "P": 0, "B": 0})
-                        st.metric(label="Monte Carlo (3.000 Simulações)", value=f"V: {mc['V']}% | P: {mc['P']}%")
 
                     if resultado.get("regime_recencia"):
                         with st.expander("📊 Regime de Recência Proporcional (Filtro Dinâmico)", expanded=True):
@@ -238,6 +228,10 @@ with aba_tipo_d:
         if btn_recencia:
             dados = LeitorXLS(caminho_temp).ler_e_validar()
             if dados and len(dados) >= 20:
+                # Salva fisicamente o arquivo para o motor lembrar nos próximos reboots
+                with open("base_recencia_ativa.xlsx", "wb") as f_rec:
+                    f_rec.write(arquivo_upload.getvalue())
+                    
                 with st.spinner("Injetando e ajustando pesos da recência..."):
                     resultado = motor.processar_recencia(dados)
                 st.success("✅ Recência processada e acoplada com multiplicador de alta frequência!")
