@@ -53,8 +53,8 @@ if status_motor.get("ultima_atualizacao"):
 # ============================================================
 # INTERFACE PRINCIPAL
 # ============================================================
-st.title("🛡️ MOTOR V1 - Sistema de Sinais")
-st.caption("Arquitetura Unificada: Base de Longo Prazo integrada à Recência Dinâmica com Prioridade de Filtros")
+st.title("🛡️ MOTOR V1 - Sistema de Sinais Avançado")
+st.caption("Arquitetura Unificada: Base de Longo Prazo, Entropia de Shannon, Monte Carlo e HMM Integrados")
 
 aba_tipo_b, aba_feedback, aba_tipo_d, aba_padroes, aba_matematica = st.tabs([
     "🎯 TIPO B — Sinal Real",
@@ -69,7 +69,8 @@ aba_tipo_b, aba_feedback, aba_tipo_d, aba_padroes, aba_matematica = st.tabs([
 # =========================================================================
 with aba_tipo_b:
     st.header("🎯 TIPO B - Gerar Sinal com Motor Unificado")
-    st.info("A recência assume prioridade operacional automática quando a confiança do regime estiver calculada em valores ≥ 55%.")
+    # Texto de informação alterado para refletir a nova realidade da IA!
+    st.info("O Juiz Hierárquico Preditivo está ativo. O sinal é gerado pela ponderação cruzada da IA, Geometria, Recência e Regras Posicionais.")
 
     entrada_numeros = st.text_input(
         "Digite os 12 últimos números da sequência separados por vírgula:",
