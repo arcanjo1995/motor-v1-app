@@ -86,8 +86,6 @@ def analisar_regime_recencia(dados_recencia):
             "confianca_regime": 0
         }
     
-    # ATUALIZAÇÃO CIRÚRGICA QUE VOCÊ PEDIU (E FUNCIONA!): O painel do Termômetro olha apenas para os últimos 100 giros.
-    # Assim, ele não dilui para 46% mesmo que você envie uma planilha com 500 resultados.
     janela_termometro = min(len(dados_recencia), 100)
     recorte_termometro = dados_recencia[-janela_termometro:]
     
@@ -264,19 +262,15 @@ class MotorAnalise:
             "contexto_reversao": {},
             "controlador_retardador": {}
         }
-        
         nc_ativo, motivo_nc = MotorNoCall.checar_no_call(sub_num, sub_pol)
-            
         resultado["no_call"] = {"ativo": nc_ativo, "motivo": motivo_nc}
         resultado["camadas"].append({
             "camada": 1, "nome": "Segurança (NO CALL)",
             "resultado": f"Ativo={nc_ativo}", "detalhe": motivo_nc,
             "impacto": "BLOQUEIO" if nc_ativo else "APROVADO"
         })
-        
         if nc_ativo:
             return resultado
-            
         geometria = AnalisadorContextoAvancado.mapear_padroes_geometria(sub_pol)
         resultado["geometria"] = geometria
         resultado["camadas"].append({
@@ -284,7 +278,6 @@ class MotorAnalise:
             "resultado": geometria, "detalhe": "Padrão geométrico detectado",
             "impacto": "FORTE" if geometria in ["CICLO_FECHADO_VPPV", "CICLO_FECHADO_PVVP"] else "NEUTRO"
         })
-        
         expectativas = MotorContagensProjetivas.mapear_janela(sub_num, sub_pol, geometria)
         resultado["regras_posicionais"] = expectativas
         resultado["camadas"].append({
@@ -293,21 +286,18 @@ class MotorAnalise:
             "detalhe": [e["tipo_regra"] for e in expectativas] if expectativas else "Nenhuma",
             "impacto": "ALTO" if expectativas else "BAIXO"
         })
-        
         modo_mercado = AnalisadorContextoAvancado.detectar_modo_mercado(sub_pol)
         resultado["contexto_avancado"] = {"modo_mercado": modo_mercado}
         resultado["camadas"].append({
             "camada": 4, "nome": "Contexto Avançado",
             "resultado": f"Modo: {modo_mercado}", "detalhe": "Detecção de regime de mercado", "impacto": "MÉDIO"
         })
-        
         contexto_para_ia = {
             "geometria": geometria,
             "regras_posicionais": expectativas,
             "controlador_retardador": {},
             "contexto_avancado": resultado["contexto_avancado"]
         }
-        
         direcao_ia, conf_ia, raciocinio_ia = ia_modelo.predizer_proxima_casa(sub_num, sub_pol, contexto_para_ia)
         resultado["ia"] = {
             "direcao": direcao_ia,
@@ -320,7 +310,6 @@ class MotorAnalise:
             "detalhe": raciocinio_ia,
             "impacto": "ALTO" if conf_ia >= 52 else "MÉDIO"
         })
-        
         streak, xadrez_len, xadrez_quebrou, exaustao = MotorAnalise._calcular_contexto_reversao(sub_pol)
         resultado["contexto_reversao"] = {
             "streak": streak, "xadrez_len": xadrez_len,
@@ -332,7 +321,6 @@ class MotorAnalise:
             "detalhe": f"Exaustão={exaustao}",
             "impacto": "ALTO" if exaustao else "BAIXO"
         })
-        
         ctrl_ret = MotorAnalise._detectar_controlador_retardador(
             sub_num, sub_pol, expectativas, geometria, modo_mercado
         )
@@ -1261,6 +1249,7 @@ class ProcessadorTipoB:
         contexto_exaustao = analise["contexto_reversao"]["exaustao"]
         modo_mercado = analise["contexto_avancado"].get("modo_mercado", "NEUTRO")
         raciocinio_trace = analise["camadas"]
+        
         if nc_ativo:
             return {
                 "sinal": "NO CALL",
@@ -1270,38 +1259,37 @@ class ProcessadorTipoB:
                 "motivo_real": f"NO CALL pelo MotorNoCall: {motivo_nc}",
                 "regra_id": "SISTEMA_TRAVADO"
             }
-        sinal = direcao_ia
-        justificativa = f"IA Preditiva ({conf_ia:.1f}%)"
-        regra_id = "IA_PREDITIVA"
-        if regime_rec and regime_rec["confianca_regime"] >= 55:
-            viés = regime_rec["viés_atual"]
-            modo = regime_rec["modo_dominante"]
-            if viés in ["VERMELHO", "PRETO"]:
-                sinal = viés
-                justificativa = f"Recência determina viés atual: {viés} | Modo: {modo}"
-                regra_id = "RECENCIA_REGIME_FORTE"
-            if modo == "STREAK_DOMINANTE" and regime_rec["streak_medio"] >= 4:
-                justificativa += " (Streak dominante na recência)"
-            elif modo == "XADREZ_DOMINANTE":
-                justificativa += " (Xadrez dominante na recência)"
-        if geometria in ["CICLO_FECHADO_VPPV", "CICLO_FECHADO_PVVP"]:
-            sinal = "PRETO" if geometria == "CICLO_FECHADO_VPPV" else "VERMELHO"
-            justificativa = f"Geometria forte + Recência ({regime_rec['viés_atual'] if regime_rec else 'N/A'})"
-            regra_id = "GEOMETRIA_FORTE"
-        if sinal != "NO CALL" and streak >= 6:
-            if direcao_ia != sinal:
-                sinal = "NO CALL"
-                justificativa = f"Veto de streak {streak}x"
-                regra_id = "VETO_STREAK"
+            
+        sinal_final, justificativa_final, regra_id_final = JuizHierarquicoModificado.arbitrar_sinal(
+            no_call_ativo=False, 
+            motivo_nc="", 
+            expectations=expectativas, 
+            inclinacao_num=None, 
+            geometria_mercado=geometria,
+            previsao_ia=(direcao_ia, conf_ia, raciocinio_ia), 
+            status_inversao=None, 
+            historico_regras=ia.historico_regras if ia else {},
+            modo_mercado=modo_mercado,
+            streak_atual=streak,
+            xadrez_len=xadrez_len,
+            xadrez_quebrou=xadrez_quebrou,
+            contexto_exaustao=contexto_exaustao
+        )
+
+        if sinal_final != "NO CALL" and streak >= 6:
+            sinal_final = "NO CALL"
+            justificativa_final = f"Veto de streak {streak}x (segurança anti-tendência)"
+            regra_id_final = "VETO_STREAK"
+            
         return {
-            "sinal": sinal,
-            "justificativa": justificativa,
+            "sinal": sinal_final,
+            "justificativa": justificativa_final,
             "confianca_ia": round(conf_ia, 2),
             "no_call": False,
             "regime_recencia": regime_rec,
-            "motivo_real": justificativa,
+            "motivo_real": justificativa_final,
             "raciocinio_trace": raciocinio_trace,
-            "decisao_final": {"sinal": sinal, "justificativa": justificativa, "regra_id": regra_id}
+            "decisao_final": {"sinal": sinal_final, "justificativa": justificativa_final, "regra_id": regra_id_final}
         }
 
 
@@ -1457,6 +1445,7 @@ class MotorUnificadoV1:
             self.carregar_tudo()
         polaridades = ['B' if n == 0 else ('V' if 1 <= n <= 7 else 'P') for n in sequencia_12]
         analise = MotorAnalise.analisar_janela(sequencia_12, polaridades, self.ia)
+        
         if analise["no_call"]["ativo"]:
             return {
                 "sinal": "NO CALL",
@@ -1466,42 +1455,41 @@ class MotorUnificadoV1:
                 "motivo_real": f"NO CALL pelo MotorNoCall: {analise['no_call']['motivo']}",
                 "regra_id": "SISTEMA_TRAVADO"
             }
+            
         geometria = analise["geometria"]
         expectativas = analise["regras_posicionais"]
         direcao_ia = analise["ia"]["direcao"]
         conf_ia = analise["ia"]["confianca"]
+        raciocinio_ia = analise["ia"]["raciocinio"]
         streak = analise["contexto_reversao"]["streak"]
-        confianca_regime = self.regime_recencia.get("confianca_regime", 0) if self.regime_recencia else 0
-        sinal_final = direcao_ia
-        justificativa_final = f"IA Preditiva Longo Prazo ({conf_ia:.1f}%)"
-        regra_id_final = "IA_PREDITIVA"
+        xadrez_len = analise["contexto_reversao"]["xadrez_len"]
+        xadrez_quebrou = analise["contexto_reversao"]["xadrez_quebrou"]
+        contexto_exaustao = analise["contexto_reversao"]["exaustao"]
+        modo_mercado = analise["contexto_avancado"].get("modo_mercado", "NEUTRO")
+        
+        # REMOVIDO OS DITADORES DE 55% AQUI!
+        # Agora o Tipo B usa o mesmo cérebro inteligente da Auditoria (Aba D):
+        sinal_final, justificativa_final, regra_id_final = JuizHierarquicoModificado.arbitrar_sinal(
+            no_call_ativo=False, 
+            motivo_nc="", 
+            expectations=expectativas, 
+            inclinacao_num=None, 
+            geometria_mercado=geometria,
+            previsao_ia=(direcao_ia, conf_ia, raciocinio_ia), 
+            status_inversao=None, 
+            historico_regras=self.ia.historico_regras if self.ia else {},
+            modo_mercado=modo_mercado,
+            streak_atual=streak,
+            xadrez_len=xadrez_len,
+            xadrez_quebrou=xadrez_quebrou,
+            contexto_exaustao=contexto_exaustao
+        )
 
-        if self.regime_recencia and confianca_regime >= 55:
-            viés = self.regime_recencia["viés_atual"]
-            modo = self.regime_recencia["modo_dominante"]
-            if viés in ["VERMELHO", "PRETO"]:
-                sinal_final = viés
-                justificativa_final = f"RECÊNCIA PRIORITÁRIA ({confianca_regime}% confiança): {viés} | Modo: {modo}"
-                regra_id_final = "RECENCIA_REGIME_FORTE"
-        elif expectativas:
-            count_v = sum(1 for e in expectativas if e.get("direcao") == "VERMELHO")
-            count_p = sum(1 for e in expectativas if e.get("direcao") == "PRETO")
-            if count_v > count_p:
-                sinal_final = "VERMELHO"
-                regra_id_final = "REGRA_POSICIONAL"
-            elif count_p > count_v:
-                sinal_final = "PRETO"
-                regra_id_final = "REGRA_POSICIONAL"
-        if geometria == "CICLO_FECHADO_VPPV":
-            sinal_final = "PRETO"
-            regra_id_final = "GEOMETRIA_FORTE"
-        elif geometria == "CICLO_FECHADO_PVVP":
-            sinal_final = "VERMELHO"
-            regra_id_final = "GEOMETRIA_FORTE"
         if sinal_final != "NO CALL" and streak >= 6:
             sinal_final = "NO CALL"
-            justificativa_final = f"Veto de streak {streak}x (segurança)"
+            justificativa_final = f"Veto de streak {streak}x (segurança anti-tendência)"
             regra_id_final = "VETO_STREAK"
+            
         return {
             "sinal": sinal_final,
             "justificativa": justificativa_final,
